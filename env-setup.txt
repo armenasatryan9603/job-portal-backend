@@ -1,0 +1,33 @@
+# Backend Environment Variables
+# Copy this content to .env and fill in your actual values
+
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/marketplace_db
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Server Configuration
+PORT=8080
+NODE_ENV=development
+
+# CORS Configuration
+CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+FRONTEND_URL=http://localhost:3000
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:8080/auth/google/callback
+
+# Payment Gateway Configuration (AmeriaBank)
+AMERIABANK_CLIENT_ID=your-ameriabank-client-id
+AMERIABANK_USERNAME=your-ameriabank-username
+AMERIABANK_PASSWORD=your-ameriabank-password
+AMERIABANK_VPOS_URL=https://services.ameriabank.am/VPOS/api/VPOS/InitPayment
+AMERIABANK_VPOS_STATUS_URL=https://services.ameriabank.am/VPOS/api/VPOS/GetPaymentDetails
+
+# Google Cloud Storage Configuration
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_BUCKET_NAME=job-portal-media-your-project-id
+GOOGLE_CLOUD_KEY_FILE=service-account-key.json

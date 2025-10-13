@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       Int                       @id @default(autoincrement())
+  role                     String
+  name                     String
+  email                    String?                   @unique
+  phone                    String?                   @unique
+  passwordHash             String
+  avatarUrl                String?
+  bio                      String?
+  creditBalance            Float                     @default(0)
+  verified                 Boolean                   @default(false)
+  otpCode                  String?
+  otpExpiresAt             DateTime?
+  createdAt                DateTime                  @default(now())
+  experienceYears          Int?
+  priceMin                 Float?
+  priceMax                 Float?
+  location                 String?
+  fcmToken                 String?
+  referralCode             String?                   @unique
+  referralCredits          Float                     @default(0)
+  referredBy               Int?
+  Cards                    Card[]
+  ConversationParticipants ConversationParticipant[]
+  MediaFiles               MediaFile[]               @relation("MediaUploader")
+  SentMessages             Message[]                 @relation("MessageSender")
+  Notifications            Notification[]
+  Orders                   Order[]                   @relation("ClientOrders")
+  Proposals                OrderProposal[]
+  referredRewards          ReferralReward[]          @relation("ReferredUser")
+  referralRewards          ReferralReward[]          @relation("ReferralRewards")
+  Reviews                  Review[]                  @relation("Reviewer")
+  SpecialistReviews        Review[]                  @relation("Specialist")
+  referrer                 User?                     @relation("UserReferrals", fields: [referredBy], references: [id])
+  referrals                User[]                    @relation("UserReferrals")
+  UserServices             UserService[]
+}
+
+model Service {
+  id             Int           @id @default(autoincrement())
+  name           String
+  description    String?
+  nameEn         String?
+  nameRu         String?
+  nameHy         String?
+  descriptionEn  String?
+  descriptionRu  String?
+  descriptionHy  String?
+  parentId       Int?
+  averagePrice   Float?
+  minPrice       Float?
+  maxPrice       Float?
+  features       String[]      @default([])
+  technologies   String[]      @default([])
+  completionRate Float?        @default(0)
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  Orders         Order[]
+  Parent         Service?      @relation("ServiceChildren", fields: [parentId], references: [id])
+  Children       Service[]     @relation("ServiceChildren")
+  UserServices   UserService[]
+
+  @@index([parentId])
+  @@index([isActive])
+}
+
+model UserService {
+  id                   Int      @id @default(autoincrement())
+  userId               Int
+  serviceId            Int
+  notificationsEnabled Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  Service              Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  User                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceId])
+  @@index([userId])
+  @@index([serviceId])
+}
+
+model Order {
+  id             Int             @id @default(autoincrement())
+  clientId       Int
+  serviceId      Int?
+  title          String?
+  description    String?
+  budget         Float?
+  availableDates String[]        @default([])
+  location       String?
+  skills         String[]        @default([])
+  status         String          @default("open")
+  createdAt      DateTime        @default(now())
+  Conversations  Conversation[]
+  MediaFiles     MediaFile[]
+  Client         User            @relation("ClientOrders", fields: [clientId], references: [id])
+  Service        Service?        @relation(fields: [serviceId], references: [id])
+  Proposals      OrderProposal[]
+  Reviews        Review[]
+}
+
+model OrderProposal {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  userId    Int
+  price     Float?
+  message   String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  Order     Order    @relation(fields: [orderId], references: [id])
+  User      User     @relation(fields: [userId], references: [id])
+}
+
+model Review {
+  id            Int            @id @default(autoincrement())
+  orderId       Int
+  reviewerId    Int
+  specialistId  Int?
+  rating        Int
+  comment       String?
+  createdAt     DateTime       @default(now())
+  feedbackType  String         @default("completed")
+  updatedAt     DateTime       @updatedAt
+  Order         Order          @relation(fields: [orderId], references: [id])
+  Reviewer      User           @relation("Reviewer", fields: [reviewerId], references: [id])
+  Specialist    User?          @relation("Specialist", fields: [specialistId], references: [id])
+  ReviewReasons ReviewReason[]
+
+  @@index([feedbackType])
+}
+
+model MediaFile {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  fileName   String
+  fileUrl    String
+  fileType   String
+  mimeType   String
+  fileSize   Int
+  uploadedBy Int
+  createdAt  DateTime @default(now())
+  Order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  User       User     @relation("MediaUploader", fields: [uploadedBy], references: [id])
+}
+
+model Card {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  paymentMethodId String   @unique
+  brand           String
+  last4           String
+  expMonth        Int
+  expYear         Int
+  holderName      String?
+  isDefault       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  User            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([paymentMethodId])
+}
+
+model PhoneVerification {
+  id            Int      @id @default(autoincrement())
+  phoneHash     String   @unique @map("phone_hash") @db.VarChar(64)
+  firstSignupAt DateTime @default(now()) @map("first_signup_at")
+  lastSignupAt  DateTime @default(now()) @map("last_signup_at")
+  signupCount   Int      @default(1) @map("signup_count")
+
+  @@index([phoneHash])
+  @@map("phone_verification")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+}
+
+model Conversation {
+  id           Int                       @id @default(autoincrement())
+  orderId      Int?
+  title        String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  status       String                    @default("active")
+  Order        Order?                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Participants ConversationParticipant[]
+  Messages     Message[]
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model ConversationParticipant {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  userId         Int
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  isActive       Boolean      @default(true)
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  User           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  senderId       Int
+  content        String
+  messageType    String       @default("text")
+  metadata       Json?
+  isEdited       Boolean      @default(false)
+  editedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  Sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+model OrderPricing {
+  id               Int      @id @default(autoincrement())
+  minBudget        Float
+  maxBudget        Float?
+  creditCost       Float
+  refundPercentage Float    @default(0.5)
+  description      String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([minBudget])
+  @@index([maxBudget])
+  @@index([isActive])
+}
+
+model ReferralReward {
+  id             Int       @id @default(autoincrement())
+  referrerId     Int
+  referredUserId Int
+  rewardAmount   Float
+  bonusAmount    Float     @default(0)
+  status         String    @default("pending")
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+  referredUser   User      @relation("ReferredUser", fields: [referredUserId], references: [id])
+  referrer       User      @relation("ReferralRewards", fields: [referrerId], references: [id])
+
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([status])
+}
+
+model Reason {
+  id            Int            @id @default(autoincrement())
+  code          String         @unique
+  nameEn        String
+  nameRu        String
+  nameHy        String
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  ReviewReasons ReviewReason[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model ReviewReason {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  reasonId  Int
+  createdAt DateTime @default(now())
+  reason    Reason   @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, reasonId])
+  @@index([reviewId])
+  @@index([reasonId])
+}

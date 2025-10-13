@@ -1,0 +1,440 @@
+
+> marketplace-backend@0.0.1 start:dev
+> nest start --watch
+
+[2J[3J[H[[90m1:15:57 PM[0m] Starting compilation in watch mode...
+
+[[90m1:15:59 PM[0m] Found 0 errors. Watching for file changes.
+
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [NestFactory] Starting Nest application...
+GOOGLE_CLOUD_PROJECT_ID splendid-petal-471416-f6
+GOOGLE_CLOUD_KEY_FILE service-account-key.json
+GOOGLE_CLOUD_BUCKET_NAME job-portal-media-splendid-petal-471416-f6
+Google Cloud Storage initialized successfully
+Using bucket: job-portal-media-splendid-petal-471416-f6
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [FirebaseNotificationService] ✅ Firebase Admin SDK initialized with default credentials
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] PassportModule dependencies initialized +3ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] StorageModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] JwtModule dependencies initialized +18ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] PhoneVerificationModule dependencies initialized +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] ReasonsModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] MediaFilesModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] CreditModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] UsersModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] ServicesModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] ReviewsModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] NotificationsModule dependencies initialized +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] ChatModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] OrdersModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] OrderPricingModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] ReferralsModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] OrderProposalsModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] HiringModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] AppController {/}: +3ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] AuthController {/auth}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/signup, POST} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/login, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/reset-password, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/send-otp, POST} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/verify-otp, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/reset-otp, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/profile, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/profile, PUT} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/auth/logout, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] PhoneVerificationController {/phone-verification}: +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/phone-verification/check/:phoneNumber, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/phone-verification/track, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/phone-verification/history/:phoneNumber, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] NotificationsController {/notifications}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/unread-count, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/:id/read, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/mark-all-read, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/clear-all, DELETE} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/notifications/fcm-token, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] OrdersController {/orders}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/create, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/create-with-media, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/search, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/client/:clientId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/service/:serviceId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/status/:status, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/available, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/my-orders, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/my-jobs, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/orders/:id/status, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] MediaFilesController {/media-files}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files/presigned-url, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files/upload, POST} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files/order/:orderId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/media-files/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] CreditController {/credit}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/credit/refill/initiate, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/credit/refill/webhook, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] UsersController {/users}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/search, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/password, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/credit, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/specialist-profile, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists/search, GET} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists/service/:serviceId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists/location/:location, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/specialists/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/services, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/services/:serviceId, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/services/:serviceId/notifications, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id/services, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/users/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] ServicesController {/services}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services, POST} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/root, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/parent/:parentId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/search, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/services/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] OrderProposalsController {/order-proposals}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/apply, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/search, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/order/:orderId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/user/:userId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/status/:status, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] ReviewsController {/reviews}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/search, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/order/:orderId, GET} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/reviewer/:reviewerId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/specialist/:specialistId, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/rating/average, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/rating/distribution, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/:id, PATCH} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/:id, DELETE} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reviews/feedback, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] ChatController {/chat}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/messages, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/messages, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/read, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/unread-count, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/conversation, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/participants, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/reject, POST} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/choose, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:conversationId/leave, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/cancel, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/complete, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] HiringController {/hiring}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/hiring/check-status, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/hiring, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] OrderPricingController {/order-pricing}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing/cost, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing/:id, PUT} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing/:id, DELETE} route +1ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/order-pricing/initialize-defaults, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] ReferralsController {/referrals}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/referrals/code, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/referrals/apply-code, POST} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/referrals/stats, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/referrals/rewards, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/referrals/share-link, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RoutesResolver] ReasonsController {/reasons}: +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reasons, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reasons/:id, GET} route +0ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [RouterExplorer] Mapped {/reasons/code/:code, GET} route +0ms
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+[Nest] 38253  - 10/10/2025, 1:16:00 PM     LOG [NestApplication] Nest application successfully started +274ms
+[Nest] 38253  - 10/10/2025, 1:16:00 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::8080 +1ms
+node:net:1939
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at Server.listen (node:net:2101:7)
+    at ExpressAdapter.listen (/Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/platform-express/adapters/express-adapter.js:127:32)
+    at /Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/core/nest-application.js:188:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (/Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/core/nest-application.js:178:16)
+    at async bootstrap (/Users/armenasatryan/Desktop/marketplace/backend/src/main.ts:29:3) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 8080
+}
+
+Node.js v22.15.0
+[2J[3J[H[[90m1:19:55 PM[0m] File change detected. Starting incremental compilation...
+
+[[90m1:19:55 PM[0m] Found 0 errors. Watching for file changes.
+
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [NestFactory] Starting Nest application...
+GOOGLE_CLOUD_PROJECT_ID splendid-petal-471416-f6
+GOOGLE_CLOUD_KEY_FILE service-account-key.json
+GOOGLE_CLOUD_BUCKET_NAME job-portal-media-splendid-petal-471416-f6
+Google Cloud Storage initialized successfully
+Using bucket: job-portal-media-splendid-petal-471416-f6
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [FirebaseNotificationService] ✅ Firebase Admin SDK initialized with default credentials
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] PassportModule dependencies initialized +3ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] StorageModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] JwtModule dependencies initialized +19ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] PhoneVerificationModule dependencies initialized +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] ReasonsModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] MediaFilesModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] CreditModule dependencies initialized +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] UsersModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] ServicesModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] ReviewsModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] NotificationsModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] ChatModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] OrdersModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] OrderPricingModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] ReferralsModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] OrderProposalsModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] HiringModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [InstanceLoader] AuthModule dependencies initialized +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] AppController {/}: +2ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] AuthController {/auth}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/signup, POST} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/login, POST} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/reset-password, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/send-otp, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/verify-otp, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/reset-otp, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/profile, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/profile, PUT} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/auth/logout, POST} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] PhoneVerificationController {/phone-verification}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/phone-verification/check/:phoneNumber, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/phone-verification/track, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/phone-verification/history/:phoneNumber, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] NotificationsController {/notifications}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/unread-count, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/:id/read, POST} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/mark-all-read, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/clear-all, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/notifications/fcm-token, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] OrdersController {/orders}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/create, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/create-with-media, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/search, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/client/:clientId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/service/:serviceId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/status/:status, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/available, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/my-orders, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/my-jobs, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/:id, PATCH} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/orders/:id/status, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] MediaFilesController {/media-files}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files/presigned-url, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files/upload, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files/order/:orderId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/media-files/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] CreditController {/credit}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/credit/refill/initiate, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/credit/refill/webhook, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] UsersController {/users}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/search, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/password, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/credit, PATCH} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/specialist-profile, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists/search, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists/service/:serviceId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists/location/:location, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/specialists/:id, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/services, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/services/:serviceId, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/services/:serviceId/notifications, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id/services, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/users/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] ServicesController {/services}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/root, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/parent/:parentId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/search, GET} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/:id, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/services/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] OrderProposalsController {/order-proposals}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/apply, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/search, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/order/:orderId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/user/:userId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/status/:status, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-proposals/:id, DELETE} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] ReviewsController {/reviews}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/search, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/order/:orderId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/reviewer/:reviewerId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/specialist/:specialistId, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/rating/average, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/rating/distribution, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/:id, PATCH} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reviews/feedback, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] ChatController {/chat}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/messages, GET} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/messages, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/read, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/unread-count, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/conversation, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:id/participants, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/reject, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/choose, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/conversations/:conversationId/leave, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/cancel, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/chat/orders/:orderId/complete, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] HiringController {/hiring}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/hiring/check-status, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/hiring, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] OrderPricingController {/order-pricing}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing/cost, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing/:id, PUT} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing/:id, DELETE} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/order-pricing/initialize-defaults, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] ReferralsController {/referrals}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/referrals/code, GET} route +1ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/referrals/apply-code, POST} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/referrals/stats, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/referrals/rewards, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/referrals/share-link, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RoutesResolver] ReasonsController {/reasons}: +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reasons, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reasons/:id, GET} route +0ms
+[Nest] 44290  - 10/10/2025, 1:19:55 PM     LOG [RouterExplorer] Mapped {/reasons/code/:code, GET} route +0ms
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+PrismaService: Connecting to database...
+PrismaService: Connected to database successfully
+[Nest] 44290  - 10/10/2025, 1:19:56 PM     LOG [NestApplication] Nest application successfully started +341ms
+[Nest] 44290  - 10/10/2025, 1:19:56 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::8080 +1ms
+node:net:1939
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at Server.listen (node:net:2101:7)
+    at ExpressAdapter.listen (/Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/platform-express/adapters/express-adapter.js:127:32)
+    at /Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/core/nest-application.js:188:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (/Users/armenasatryan/Desktop/marketplace/backend/node_modules/@nestjs/core/nest-application.js:178:16)
+    at async bootstrap (/Users/armenasatryan/Desktop/marketplace/backend/src/main.ts:29:3) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 8080
+}
+
+Node.js v22.15.0
