@@ -1,0 +1,69 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Build artifacts
+dist
+build
+coverage
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Sensitive files
+service-account-key.json
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test
+coverage
+*.spec.ts
+*.test.ts
+
+# Documentation
+*.md
+!README.md
+
+# Logs
+logs
+*.log
+server.log
+
+# Uploads (these will be created at runtime)
+uploads/
+
+# Misc
+.prettierrc
+.eslintrc.js
+eslint.config.mjs
+.editorconfig
+
+# Migration files (we only need schema)
+migrations/migrate-specialist-profiles.js
+
+# SQL seed files
+*.sql
+
+# Scripts
+scripts/
+

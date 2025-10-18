@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: job-portal-db
+    environment:
+      POSTGRES_USER: jobportal
+      POSTGRES_PASSWORD: jobportal123
+      POSTGRES_DB: jobportal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobportal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-portal-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jobportal:jobportal123@postgres:5432/jobportal
+      JWT_SECRET: local-jwt-secret-change-in-production
+      PORT: 8080
+      NODE_ENV: production
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001
+      # Add other environment variables as needed
+      # GOOGLE_CLIENT_ID: your-client-id
+      # GOOGLE_CLIENT_SECRET: your-client-secret
+      # GCS_BUCKET_NAME: your-bucket
+      # GCS_PROJECT_ID: your-project-id
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    command: sh -c "npx prisma migrate deploy && node dist/main"
+
+volumes:
+  postgres_data:
+
