@@ -47,8 +47,11 @@ jobs:
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest
 
       - name: Deploy to Cloud Run
+        env:
+          CLOUD_SQL_CONNECTION: ${{ secrets.CLOUD_SQL_CONNECTION_NAME }}
         run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
+          # Build the base deploy command
+          DEPLOY_CMD="gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --platform managed \
             --region ${{ env.REGION }} \
@@ -61,8 +64,16 @@ jobs:
             --port 8080 \
             --set-env-vars PORT=8080 \
             --set-env-vars NODE_ENV=production \
-            --set-env-vars DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            --set-env-vars JWT_SECRET="${{ secrets.JWT_SECRET }}"
+            --set-env-vars DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" \
+            --set-env-vars JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
+          
+          # Add Cloud SQL connection if provided
+          if [ ! -z "$CLOUD_SQL_CONNECTION" ]; then
+            DEPLOY_CMD="$DEPLOY_CMD --add-cloudsql-instances $CLOUD_SQL_CONNECTION"
+          fi
+          
+          # Execute deployment
+          eval $DEPLOY_CMD
 
       - name: Show service URL
         run: |
