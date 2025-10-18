@@ -58,12 +58,11 @@ jobs:
             --timeout 300 \
             --max-instances 10 \
             --min-instances 0 \
-            --set-env-vars DATABASE_URL=${{ secrets.DATABASE_URL }} \
-            --set-env-vars JWT_SECRET=${{ secrets.JWT_SECRET }} \
-            --set-env-vars GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }} \
-            --set-env-vars GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }} \
-            --set-secrets=GCS_SERVICE_ACCOUNT_KEY=gcs-service-account-key:latest \
-            --set-secrets=FIREBASE_SERVICE_ACCOUNT=firebase-service-account:latest
+            --port 8080 \
+            --set-env-vars PORT=8080 \
+            --set-env-vars NODE_ENV=production \
+            --set-env-vars DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            --set-env-vars JWT_SECRET="${{ secrets.JWT_SECRET }}"
 
       - name: Show service URL
         run: |

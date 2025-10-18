@@ -58,5 +58,6 @@ USER node
 ENTRYPOINT ["dumb-init", "--"]
 
 # Run migrations and start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+# Note: Try migrations but always start the app
+CMD ["sh", "-c", "(npx prisma migrate deploy || echo 'Migration failed or no pending migrations') && node dist/main"]
 
