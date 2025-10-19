@@ -9,12 +9,12 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
-  SERVICE_NAME: job-portal-api
+  SERVICE_NAME: job-portal-backend
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
       id-token: write
@@ -66,12 +66,12 @@ jobs:
             --set-env-vars NODE_ENV=production \
             --set-env-vars DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" \
             --set-env-vars JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
-          
+
           # Add Cloud SQL connection if provided
           if [ ! -z "$CLOUD_SQL_CONNECTION" ]; then
             DEPLOY_CMD="$DEPLOY_CMD --add-cloudsql-instances $CLOUD_SQL_CONNECTION"
           fi
-          
+
           # Execute deployment
           eval $DEPLOY_CMD
 
@@ -81,4 +81,3 @@ jobs:
             --platform managed \
             --region ${{ env.REGION }} \
             --format 'value(status.url)'
-
