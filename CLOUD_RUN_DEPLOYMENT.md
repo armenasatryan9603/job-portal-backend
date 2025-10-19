@@ -16,6 +16,7 @@ This guide explains how to deploy your NestJS application to Google Cloud Run us
 # Create a new project (or use existing one)
 gcloud projects create YOUR_PROJECT_ID
 
+#
 # Set the project
 gcloud config set project YOUR_PROJECT_ID
 
@@ -98,6 +99,7 @@ gcloud secrets add-iam-policy-binding firebase-service-account \
 Go to your GitHub repository → Settings → Secrets and variables → Actions, and add:
 
 Required secrets:
+
 - `GCP_PROJECT_ID`: Your Google Cloud Project ID
 - `GCP_SA_KEY`: Contents of the `github-sa-key.json` file
 - `DATABASE_URL`: PostgreSQL connection string (e.g., from Cloud SQL)
@@ -129,6 +131,7 @@ gcloud sql instances describe job-portal-db \
 ```
 
 Your `DATABASE_URL` should be:
+
 ```
 postgresql://jobportal:YOUR_SECURE_PASSWORD@/jobportal?host=/cloudsql/CONNECTION_NAME
 ```
@@ -166,30 +169,36 @@ gcloud run deploy job-portal-api \
 The following environment variables should be set in Cloud Run:
 
 ### Required
+
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET`: Secret for JWT tokens
 - `PORT`: 8080 (automatically set by Cloud Run)
 
 ### OAuth
+
 - `GOOGLE_CLIENT_ID`: Google OAuth client ID
 - `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
 
 ### Storage
+
 - `GCS_BUCKET_NAME`: Google Cloud Storage bucket name
 - `GCS_PROJECT_ID`: GCP Project ID
 
 ### CORS
+
 - `CORS_ORIGIN`: Comma-separated list of allowed origins
 
 ## Secrets Management
 
 Secrets are stored in Google Secret Manager and mounted to Cloud Run:
+
 - `gcs-service-account-key`: GCS service account credentials
 - `firebase-service-account`: Firebase admin SDK credentials
 
 ## Automatic Deployment
 
 Once configured, every push to the `main` branch will:
+
 1. Build a Docker image
 2. Push to Google Artifact Registry
 3. Deploy to Cloud Run
@@ -211,6 +220,7 @@ curl $SERVICE_URL/api/health
 ## Monitoring and Logs
 
 View logs:
+
 ```bash
 gcloud run services logs read job-portal-api \
   --region us-central1 \
@@ -218,6 +228,7 @@ gcloud run services logs read job-portal-api \
 ```
 
 View service details:
+
 ```bash
 gcloud run services describe job-portal-api \
   --region us-central1
@@ -234,20 +245,24 @@ gcloud run services describe job-portal-api \
 ## Troubleshooting
 
 ### Container fails to start
+
 Check logs: `gcloud run services logs read job-portal-api --region us-central1`
 
 ### Database connection issues
+
 - Ensure Cloud SQL instance is running
 - Verify DATABASE_URL format
 - Check Cloud SQL instance connection name
 - Ensure Cloud Run service account has Cloud SQL Client role
 
 ### Secret access denied
+
 - Verify secrets exist in Secret Manager
 - Check IAM permissions for Cloud Run service account
 - Ensure secrets are in the same project
 
 ### Build fails
+
 - Check Dockerfile syntax
 - Verify all dependencies in package.json
 - Ensure Prisma schema is valid
@@ -266,4 +281,3 @@ Check logs: `gcloud run services logs read job-portal-api --region us-central1`
 - [Cloud SQL for PostgreSQL](https://cloud.google.com/sql/docs/postgres)
 - [Secret Manager](https://cloud.google.com/secret-manager/docs)
 - [Artifact Registry](https://cloud.google.com/artifact-registry/docs)
-
