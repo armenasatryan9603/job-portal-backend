@@ -37,14 +37,14 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:${{ github.sha }} .
+          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:${{ github.sha }} \
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:latest
 
       - name: Push Docker image
         run: |
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:latest
 
       - name: Deploy to Cloud Run
         env:
@@ -52,18 +52,17 @@ jobs:
         run: |
           # Build the base deploy command
           DEPLOY_CMD="gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:${{ github.sha }} \
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --memory 1Gi \
-            --cpu 1 \
-            --timeout 300 \
+            --memory 2Gi \
+            --cpu 2 \
+            --timeout 600 \
             --max-instances 10 \
             --min-instances 0 \
             --port 8080 \
-            --set-env-vars PORT=8080 \
-            --set-env-vars NODE_ENV=production \
+            --set-env-vars PORT=8080,NODE_ENV=production \
             --set-env-vars DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" \
             --set-env-vars JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
 
