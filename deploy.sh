@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ========================================
-# Simple Cloud Run Deployment Script
+# Google Cloud Run Deployment Script
 # ========================================
 # This script builds and deploys your app to Google Cloud Run
 
