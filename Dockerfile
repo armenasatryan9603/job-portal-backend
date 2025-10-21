@@ -22,6 +22,9 @@ RUN npx prisma generate
 # Build the application
 RUN npm run build
 
+# Verify build output exists
+RUN ls -la /app/dist && echo "Build successful, dist directory exists"
+
 # Stage 2: Production stage
 FROM node:20-alpine AS production
 
@@ -42,6 +45,9 @@ RUN npm ci --only=production && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
+# Verify copied files
+RUN ls -la /app/dist && echo "Files copied successfully" && ls -la /app/dist/src || echo "src directory structure"
+
 # Create uploads directory
 RUN mkdir -p uploads/media
 
@@ -59,5 +65,5 @@ ENTRYPOINT ["dumb-init", "--"]
 
 # Run migrations and start the application
 # Note: Try migrations but always start the app
-CMD ["sh", "-c", "(npx prisma migrate deploy || echo 'Migration failed or no pending migrations') && node dist/main"]
+CMD ["sh", "-c", "(npx prisma migrate deploy || echo 'Migration failed or no pending migrations') && node dist/src/main"]
 
