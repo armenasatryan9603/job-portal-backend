@@ -8,7 +8,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: europe-west1
+  REGION: me-west1
   SERVICE_NAME: job-portal-backend
 
 jobs:

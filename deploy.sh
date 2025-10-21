@@ -16,7 +16,7 @@ NC='\033[0m'
 
 # Configuration
 PROJECT_ID="splendid-petal-471416-f6"
-REGION="europe-west1"
+REGION="me-west1"
 SERVICE_NAME="job-portal-backend"
 CLOUD_SQL_INSTANCE="job-portal"
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/job-portal-api/job-portal-api:latest"
