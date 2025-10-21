@@ -16,9 +16,9 @@ NC='\033[0m'
 
 # Configuration
 PROJECT_ID="splendid-petal-471416-f6"
-REGION="us-central1"
+REGION="europe-west1"
 SERVICE_NAME="job-portal-backend"
-CLOUD_SQL_INSTANCE="job-portal-db"
+CLOUD_SQL_INSTANCE="job-portal"
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/job-portal-api/job-portal-api:latest"
 
 echo -e "${GREEN}========================================${NC}"
