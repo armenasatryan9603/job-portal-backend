@@ -29,7 +29,27 @@ async function bootstrap() {
     console.log("CORS origins:", corsOrigins);
 
     app.enableCors({
-      origin: corsOrigins,
+      origin: (origin, callback) => {
+        // Mobile apps (React Native/Expo) don't send Origin header
+        // Allow requests without origin (native mobile apps)
+        if (!origin) {
+          console.log("✅ CORS: Allowing request without origin (mobile app)");
+          return callback(null, true);
+        }
+
+        // Check if origin is in allowed list or if wildcard is enabled
+        if (
+          corsOrigins.includes("*") ||
+          corsOrigins.includes(origin) ||
+          corsOrigins.some((allowed) => origin.startsWith(allowed))
+        ) {
+          console.log(`✅ CORS: Allowing origin: ${origin}`);
+          callback(null, true);
+        } else {
+          console.log(`❌ CORS: Blocking origin: ${origin}`);
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization", "Accept"],
       credentials: true,

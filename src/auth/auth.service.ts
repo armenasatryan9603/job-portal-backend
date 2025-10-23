@@ -1,37 +1,100 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import * as bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
-import { PhoneVerificationService } from '../phone-verification/phone-verification.service';
-import { ReferralsService } from '../referrals/referrals.service';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import * as bcrypt from "bcrypt";
+import { JwtService } from "@nestjs/jwt";
+import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
+import { ReferralsService } from "../referrals/referrals.service";
+import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 
 @Injectable()
 export class AuthService {
+  private snsClient: SNSClient | null = null;
+  private awsRegion: string;
+  private awsAccessKeyId: string;
+  private awsSecretAccessKey: string;
+  private snsEnabled: boolean;
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private phoneVerificationService: PhoneVerificationService,
-    private referralsService: ReferralsService,
-  ) {}
+    private referralsService: ReferralsService
+  ) {
+    // Initialize AWS SNS
+    this.awsRegion = process.env.AWS_REGION || "us-east-1";
+    this.awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID || "";
+    this.awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || "";
+    this.snsEnabled = !!this.awsAccessKeyId && !!this.awsSecretAccessKey;
+
+    if (this.snsEnabled) {
+      this.snsClient = new SNSClient({
+        region: this.awsRegion,
+        credentials: {
+          accessKeyId: this.awsAccessKeyId,
+          secretAccessKey: this.awsSecretAccessKey,
+        },
+      });
+      console.log("✅ AWS SNS service initialized");
+    } else {
+      console.log(
+        "⚠️  AWS SNS not configured - OTP will be logged to console only"
+      );
+    }
+  }
+
+  /**
+   * Send SMS via AWS SNS
+   */
+  private async sendSMS(phone: string, message: string): Promise<boolean> {
+    if (!this.snsClient) {
+      console.error("❌ AWS SNS client not initialized");
+      return false;
+    }
+
+    try {
+      // Clean phone number: ensure E.164 format
+      const cleanPhone = phone.replace(/[\s\-]/g, "");
+
+      const command = new PublishCommand({
+        Message: message,
+        PhoneNumber: cleanPhone,
+      });
+
+      const response = await this.snsClient.send(command);
+
+      if (response.MessageId) {
+        console.log(
+          `📱 SMS sent to ${phone} via AWS SNS (MessageId: ${response.MessageId})`
+        );
+        return true;
+      } else {
+        console.error("❌ AWS SNS error: No MessageId returned");
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ Failed to send SMS via AWS SNS:", error.message);
+      return false;
+    }
+  }
 
   async signup(
     name: string,
     email: string,
     password: string,
-    referralCode?: string,
+    referralCode?: string
   ) {
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
 
     if (existingUser) {
-      throw new UnauthorizedException('User already exists');
+      throw new UnauthorizedException("User already exists");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await this.prisma.user.create({
-      data: { name, email, passwordHash: hashedPassword, role: 'user' },
+      data: { name, email, passwordHash: hashedPassword, role: "user" },
     });
 
     // Apply referral code if provided
@@ -45,11 +108,11 @@ export class AuthService {
       try {
         referralResult = await this.referralsService.applyReferralCode(
           referralCode,
-          user.id,
+          user.id
         );
       } catch (error) {
         // Log error but don't fail signup if referral fails
-        console.error('Referral code application failed:', error);
+        console.error("Referral code application failed:", error);
       }
     }
 
@@ -65,10 +128,10 @@ export class AuthService {
 
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw new UnauthorizedException("Invalid credentials");
 
     const passwordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
+    if (!passwordValid) throw new UnauthorizedException("Invalid credentials");
 
     const payload = { sub: user.id, email: user.email, role: user.role };
     const token = this.jwtService.sign(payload);
@@ -78,7 +141,7 @@ export class AuthService {
   async resetPassword(email: string, newPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -88,13 +151,13 @@ export class AuthService {
       data: { passwordHash: hashedPassword },
     });
 
-    return { message: 'Password updated successfully' };
+    return { message: "Password updated successfully" };
   }
 
   async getUserById(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
     return user;
   }
@@ -109,11 +172,11 @@ export class AuthService {
       avatarUrl?: string;
       location?: string;
       role?: string;
-    },
+    }
   ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -136,7 +199,7 @@ export class AuthService {
   async updateRole(userId: number, role: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException("User not found");
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -179,22 +242,34 @@ export class AuthService {
       },
       create: {
         phone,
-        name: '',
-        passwordHash: 'temp_password',
-        role: 'user',
+        name: "",
+        passwordHash: "temp_password",
+        role: "user",
         otpCode: otp,
         otpExpiresAt: expiresAt,
       },
     });
 
-    // In production, you would send SMS here using a service like Twilio, AWS SNS, etc.
-    console.log(`OTP for ${phone}: ${otp}`); // For development only
+    // Send SMS if Brevo is configured, otherwise log to console
+    if (this.snsEnabled) {
+      const message = `Your verification code is: ${otp}. This code will expire in 5 minutes.`;
+      const smsSent = await this.sendSMS(phone, message);
+
+      if (!smsSent) {
+        // Fall back to console logging if SMS fails
+        console.log(`OTP for ${phone}: ${otp}`);
+        throw new Error("Failed to send verification code. Please try again.");
+      }
+    } else {
+      // Brevo not configured - log OTP to console
+      console.log(`OTP for ${phone}: ${otp}`);
+    }
 
     return {
       success: true,
-      message: 'OTP sent successfully',
+      message: "OTP sent successfully",
       // In development, return OTP for testing
-      ...(process.env.NODE_ENV === 'development' && { otp }),
+      ...(process.env.NODE_ENV === "development" && { otp }),
     };
   }
 
@@ -204,21 +279,21 @@ export class AuthService {
     });
 
     if (!user || !user.otpCode || !user.otpExpiresAt) {
-      throw new Error('Invalid phone number or OTP not requested');
+      throw new Error("Invalid phone number or OTP not requested");
     }
 
     if (user.otpCode !== otp) {
-      throw new Error('Invalid OTP');
+      throw new Error("Invalid OTP");
     }
 
     if (new Date() > user.otpExpiresAt) {
-      throw new Error('OTP has expired');
+      throw new Error("OTP has expired");
     }
 
     // Check phone verification before proceeding
     const phoneCheck =
       await this.phoneVerificationService.checkPhoneNumber(phone);
-    console.log('📱 Phone verification result:', phoneCheck);
+    console.log("📱 Phone verification result:", phoneCheck);
 
     // Clear OTP after successful verification and update name if provided
     const updateData: any = {
@@ -241,7 +316,7 @@ export class AuthService {
     // Generate JWT token
     const payload = {
       sub: updatedUser.id,
-      email: updatedUser.email || '', // Handle null email
+      email: updatedUser.email || "", // Handle null email
       role: updatedUser.role,
     };
     const token = this.jwtService.sign(payload);
@@ -250,7 +325,7 @@ export class AuthService {
       access_token: token,
       user: {
         id: updatedUser.id,
-        email: updatedUser.email || '', // Handle null email
+        email: updatedUser.email || "", // Handle null email
         name: updatedUser.name,
         phone: updatedUser.phone,
         avatarUrl: updatedUser.avatarUrl,
@@ -267,7 +342,7 @@ export class AuthService {
     // 3. Invalidate all user sessions
 
     return {
-      message: 'Logged out successfully',
+      message: "Logged out successfully",
       timestamp: new Date().toISOString(),
     };
   }
@@ -296,22 +371,34 @@ export class AuthService {
       },
       create: {
         phone,
-        name: '',
-        passwordHash: 'temp_password',
-        role: 'user',
+        name: "",
+        passwordHash: "temp_password",
+        role: "user",
         otpCode: otp,
         otpExpiresAt: expiresAt,
       },
     });
 
-    // In production, you would send SMS here using a service like Twilio, AWS SNS, etc.
-    console.log(`New OTP for ${phone}: ${otp}`); // For development only
+    // Send SMS if Brevo is configured, otherwise log to console
+    if (this.snsEnabled) {
+      const message = `Your new verification code is: ${otp}. This code will expire in 5 minutes.`;
+      const smsSent = await this.sendSMS(phone, message);
+
+      if (!smsSent) {
+        // Fall back to console logging if SMS fails
+        console.log(`New OTP for ${phone}: ${otp}`);
+        throw new Error("Failed to send verification code. Please try again.");
+      }
+    } else {
+      // Brevo not configured - log OTP to console
+      console.log(`New OTP for ${phone}: ${otp}`);
+    }
 
     return {
       success: true,
-      message: 'OTP reset and new OTP sent successfully',
+      message: "OTP reset and new OTP sent successfully",
       // In development, return OTP for testing
-      ...(process.env.NODE_ENV === 'development' && { otp }),
+      ...(process.env.NODE_ENV === "development" && { otp }),
     };
   }
 }
