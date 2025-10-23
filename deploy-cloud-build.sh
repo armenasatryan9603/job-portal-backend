@@ -2,8 +2,9 @@
 
 # ========================================
 # Google Cloud Run Deployment Script
+# Using Cloud Build (No local Docker required)
 # ========================================
-# This script builds and deploys your app to Google Cloud Run
+# This script builds your app in the cloud and deploys to Cloud Run
 
 set -e
 
@@ -23,6 +24,7 @@ IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/job-portal-api/job-portal-api
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}   Job Portal - Cloud Run Deploy${NC}"
+echo -e "${GREEN}   (Using Cloud Build)${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -57,20 +59,11 @@ echo ""
 echo -e "${YELLOW}📋 Setting GCP project...${NC}"
 gcloud config set project $PROJECT_ID
 
-# Build Docker image
+# Build and push image using Cloud Build
 echo ""
-echo -e "${YELLOW}🔨 Building Docker image...${NC}"
-docker build -t $IMAGE_NAME .
-
-# Configure Docker auth
-echo ""
-echo -e "${YELLOW}🔐 Configuring Docker authentication...${NC}"
-gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
-
-# Push image
-echo ""
-echo -e "${YELLOW}📤 Pushing image to Artifact Registry...${NC}"
-docker push $IMAGE_NAME
+echo -e "${YELLOW}🔨 Building Docker image with Cloud Build...${NC}"
+echo -e "${BLUE}(This builds in the cloud - no local Docker needed!)${NC}"
+gcloud builds submit --tag $IMAGE_NAME
 
 # Deploy to Cloud Run
 echo ""
@@ -111,3 +104,4 @@ echo ""
 echo -e "${YELLOW}🔍 Test health endpoint:${NC}"
 echo "   curl $SERVICE_URL/health"
 echo ""
+

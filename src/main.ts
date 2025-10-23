@@ -39,10 +39,10 @@ async function bootstrap() {
 
     const port = process.env.PORT ?? 8080;
     // Cloud Run requires binding to 0.0.0.0 (all interfaces)
-    app.listen(port, () => console.log(`Listening on ${port}`));
+    await app.listen(port, "0.0.0.0");
 
     console.log(`✅ Application is running on port ${port}`);
-    console.log(`🔗 Health check: http://localhost:${port}/health`);
+    console.log(`🔗 Health check: http://0.0.0.0:${port}/health`);
   } catch (error) {
     console.error("❌ Failed to start application:", error);
     process.exit(1);
