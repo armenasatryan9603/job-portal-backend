@@ -97,6 +97,47 @@ export class GcsService {
   }
 
   /**
+   * Upload a file directly to Google Cloud Storage
+   */
+  async uploadFile(
+    buffer: Buffer,
+    fileName: string,
+    mimeType: string,
+    orderId: number
+  ): Promise<string> {
+    try {
+      console.log(
+        `Uploading file: ${fileName}, mimeType: ${mimeType}, orderId: ${orderId}`
+      );
+
+      // Generate unique filename
+      const fileExtension = extname(fileName);
+      const uniqueFileName = `orders/${orderId}/${uuidv4()}${fileExtension}`;
+      console.log(`Generated unique filename: ${uniqueFileName}`);
+
+      // Get bucket and file references
+      const bucket = this.storage.bucket(this.bucketName);
+      const file = bucket.file(uniqueFileName);
+
+      // Upload the file
+      await file.save(buffer, {
+        metadata: {
+          contentType: mimeType,
+        },
+      });
+
+      // Return the public URL for the file
+      const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${uniqueFileName}`;
+      console.log(`Successfully uploaded file: ${uniqueFileName}`);
+
+      return publicUrl;
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      throw new Error(`Failed to upload file: ${error.message}`);
+    }
+  }
+
+  /**
    * Delete a file from Google Cloud Storage
    */
   async deleteFile(fileName: string): Promise<boolean> {
