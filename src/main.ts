@@ -18,10 +18,8 @@ async function bootstrap() {
     app.use(express.json({ limit: "10mb" }));
     app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-    // Serve static files from uploads directory
-    app.useStaticAssets(join(__dirname, "..", "uploads"), {
-      prefix: "/uploads/",
-    });
+    // Note: Static file serving removed for serverless deployment
+    // Files are now served directly from Google Cloud Storage
 
     // Enable CORS
     const corsOrigins = process.env.CORS_ORIGIN
