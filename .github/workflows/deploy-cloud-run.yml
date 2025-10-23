@@ -50,8 +50,7 @@ jobs:
         env:
           CLOUD_SQL_CONNECTION: ${{ secrets.CLOUD_SQL_CONNECTION_NAME }}
         run: |
-          # Build the base deploy command
-          DEPLOY_CMD="gcloud run deploy ${{ env.SERVICE_NAME }} \
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/job-portal-api/job-portal-api:${{ github.sha }} \
             --platform managed \
             --region ${{ env.REGION }} \
@@ -62,17 +61,10 @@ jobs:
             --max-instances 10 \
             --min-instances 0 \
             --port 8080 \
-            --set-env-vars PORT=8080,NODE_ENV=production \
-            --set-env-vars DATABASE_URL=\"${{ secrets.DATABASE_URL }}\" \
-            --set-env-vars JWT_SECRET=\"${{ secrets.JWT_SECRET }}\""
-
-          # Add Cloud SQL connection if provided
-          if [ ! -z "$CLOUD_SQL_CONNECTION" ]; then
-            DEPLOY_CMD="$DEPLOY_CMD --add-cloudsql-instances $CLOUD_SQL_CONNECTION"
-          fi
-
-          # Execute deployment
-          eval $DEPLOY_CMD
+            --add-cloudsql-instances="${CLOUD_SQL_CONNECTION}" \
+            --set-env-vars="NODE_ENV=production,GOOGLE_CLOUD_PROJECT_ID=${{ env.PROJECT_ID }},GOOGLE_CLOUD_BUCKET_NAME=job-portal-media" \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET }}"
 
       - name: Show service URL
         run: |
