@@ -59,8 +59,6 @@ model Service {
   averagePrice   Float?
   minPrice       Float?
   maxPrice       Float?
-  features       String[]      @default([])
-  technologies   String[]      @default([])
   completionRate Float?        @default(0)
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
@@ -69,9 +67,73 @@ model Service {
   Parent         Service?      @relation("ServiceChildren", fields: [parentId], references: [id])
   Children       Service[]     @relation("ServiceChildren")
   UserServices   UserService[]
+  ServiceFeatures ServiceFeature[]
+  ServiceTechnologies ServiceTechnology[]
 
   @@index([parentId])
   @@index([isActive])
+}
+
+model Feature {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  nameEn        String?
+  nameRu        String?
+  nameHy        String?
+  description   String?
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  ServiceFeatures ServiceFeature[]
+
+  @@index([isActive])
+}
+
+model Technology {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  nameEn        String?
+  nameRu        String?
+  nameHy        String?
+  description   String?
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  ServiceTechnologies ServiceTechnology[]
+
+  @@index([isActive])
+}
+
+model ServiceFeature {
+  id        Int      @id @default(autoincrement())
+  serviceId Int
+  featureId Int
+  createdAt DateTime @default(now())
+  Service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  Feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, featureId])
+  @@index([serviceId])
+  @@index([featureId])
+}
+
+model ServiceTechnology {
+  id           Int        @id @default(autoincrement())
+  serviceId    Int
+  technologyId Int
+  createdAt    DateTime   @default(now())
+  Service      Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  Technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, technologyId])
+  @@index([serviceId])
+  @@index([technologyId])
 }
 
 model UserService {

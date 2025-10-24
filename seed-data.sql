@@ -10,8 +10,15 @@ DELETE FROM "Review";
 DELETE FROM "OrderProposal";
 DELETE FROM "Order";
 DELETE FROM "Card";
+DELETE FROM "ServiceTechnology";
+DELETE FROM "ServiceFeature";
+DELETE FROM "Technology";
+DELETE FROM "Feature";
+DELETE FROM "UserService";
 DELETE FROM "Service";
+DELETE FROM "ReferralReward";
 DELETE FROM "User";
+DELETE FROM "OrderPricing";
 
 -- Reset sequences
 ALTER SEQUENCE "User_id_seq" RESTART WITH 1;
@@ -24,19 +31,41 @@ ALTER SEQUENCE "Card_id_seq" RESTART WITH 1;
 ALTER SEQUENCE "Conversation_id_seq" RESTART WITH 1;
 ALTER SEQUENCE "ConversationParticipant_id_seq" RESTART WITH 1;
 ALTER SEQUENCE "Message_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "UserService_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "OrderPricing_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "ReferralReward_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "Feature_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "Technology_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "ServiceFeature_id_seq" RESTART WITH 1;
+ALTER SEQUENCE "ServiceTechnology_id_seq" RESTART WITH 1;
 
--- Fix sequence values to match actual data (prevents P2002 unique constraint errors)
--- This ensures sequences are properly synchronized with existing data
-SELECT setval('"Conversation_id_seq"', (SELECT MAX(id) FROM "Conversation"));
-SELECT setval('"ConversationParticipant_id_seq"', (SELECT MAX(id) FROM "ConversationParticipant"));
-SELECT setval('"Message_id_seq"', (SELECT MAX(id) FROM "Message"));
-SELECT setval('"OrderProposal_id_seq"', (SELECT MAX(id) FROM "OrderProposal"));
-SELECT setval('"Review_id_seq"', (SELECT MAX(id) FROM "Review"));
-SELECT setval('"MediaFile_id_seq"', (SELECT MAX(id) FROM "MediaFile"));
-SELECT setval('"Card_id_seq"', (SELECT MAX(id) FROM "Card"));
-SELECT setval('"Order_id_seq"', (SELECT MAX(id) FROM "Order"));
-SELECT setval('"User_id_seq"', (SELECT MAX(id) FROM "User"));
-SELECT setval('"Service_id_seq"', (SELECT MAX(id) FROM "Service"));
+-- Sequences are already reset to start from 1 above
+
+-- Insert Features
+INSERT INTO "Feature" (name, "nameEn", "nameRu", "nameHy", description, "descriptionEn", "descriptionRu", "descriptionHy", "isActive", "createdAt", "updatedAt") VALUES
+('Responsive Design', 'Responsive Design', 'Адаптивный дизайн', 'Ադապտիվ դիզայն', 'Mobile-friendly design that works on all devices', 'Mobile-friendly design that works on all devices', 'Мобильный дизайн, который работает на всех устройствах', 'Բջջային դիզայն, որը աշխատում է բոլոր սարքերում', true, NOW(), NOW()),
+('SEO Optimization', 'SEO Optimization', 'SEO оптимизация', 'SEO օպտիմիզացում', 'Search engine optimization for better visibility', 'Search engine optimization for better visibility', 'Оптимизация поисковых систем для лучшей видимости', 'Որոնման համակարգերի օպտիմիզացում ավելի լավ տեսանելիության համար', true, NOW(), NOW()),
+('Payment Integration', 'Payment Integration', 'Интеграция платежей', 'Վճարումների ինտեգրացիա', 'Secure payment processing with multiple gateways', 'Secure payment processing with multiple gateways', 'Безопасная обработка платежей с несколькими шлюзами', 'Անվտանգ վճարումների մշակում բազմաթիվ դարպասներով', true, NOW(), NOW()),
+('User Authentication', 'User Authentication', 'Аутентификация пользователей', 'Օգտագործողների իսկության ստուգում', 'Secure login and user management system', 'Secure login and user management system', 'Безопасная система входа и управления пользователями', 'Անվտանգ մուտքի և օգտագործողների կառավարման համակարգ', true, NOW(), NOW()),
+('Real-time Updates', 'Real-time Updates', 'Обновления в реальном времени', 'Ժամանակակից թարմացումներ', 'Live updates and notifications', 'Live updates and notifications', 'Живые обновления и уведомления', 'Կենդանի թարմացումներ և ծանուցումներ', true, NOW(), NOW()),
+('Admin Dashboard', 'Admin Dashboard', 'Панель администратора', 'Ադմինիստրատորի վահանակ', 'Comprehensive admin panel for management', 'Comprehensive admin panel for management', 'Комплексная панель администратора для управления', 'Ընդհանուր ադմինիստրատորի վահանակ կառավարման համար', true, NOW(), NOW()),
+('Analytics & Reporting', 'Analytics & Reporting', 'Аналитика и отчетность', 'Վերլուծություն և հաշվետվություն', 'Detailed analytics and business intelligence', 'Detailed analytics and business intelligence', 'Детальная аналитика и бизнес-аналитика', 'Մանրամասն վերլուծություն և բիզնես-վերլուծություն', true, NOW(), NOW()),
+('Content Management', 'Content Management', 'Управление контентом', 'Բովանդակության կառավարում', 'Easy content creation and editing system', 'Easy content creation and editing system', 'Простая система создания и редактирования контента', 'Հեշտ բովանդակության ստեղծման և խմբագրման համակարգ', true, NOW(), NOW());
+
+-- Insert Technologies
+INSERT INTO "Technology" (name, "nameEn", "nameRu", "nameHy", description, "descriptionEn", "descriptionRu", "descriptionHy", "isActive", "createdAt", "updatedAt") VALUES
+('React', 'React', 'React', 'React', 'Modern JavaScript library for building user interfaces', 'Modern JavaScript library for building user interfaces', 'Современная JavaScript библиотека для создания пользовательских интерфейсов', 'Ժամանակակից JavaScript գրադարան օգտագործողի ինտերֆեյսներ ստեղծելու համար', true, NOW(), NOW()),
+('Node.js', 'Node.js', 'Node.js', 'Node.js', 'JavaScript runtime for server-side development', 'JavaScript runtime for server-side development', 'JavaScript среда выполнения для серверной разработки', 'JavaScript կատարման միջավայր սերվերային մշակման համար', true, NOW(), NOW()),
+('TypeScript', 'TypeScript', 'TypeScript', 'TypeScript', 'Typed superset of JavaScript for better development', 'Typed superset of JavaScript for better development', 'Типизированное надмножество JavaScript для лучшей разработки', 'JavaScript-ի տիպիզացված գերբազմություն ավելի լավ մշակման համար', true, NOW(), NOW()),
+('PostgreSQL', 'PostgreSQL', 'PostgreSQL', 'PostgreSQL', 'Advanced open-source relational database', 'Advanced open-source relational database', 'Передовая открытая реляционная база данных', 'Ընդլայնված բաց կոդով ռելացիոն տվյալների բազա', true, NOW(), NOW()),
+('MongoDB', 'MongoDB', 'MongoDB', 'MongoDB', 'NoSQL document database for flexible data storage', 'NoSQL document database for flexible data storage', 'NoSQL документная база данных для гибкого хранения данных', 'NoSQL փաստաթղթային տվյալների բազա ճկուն տվյալների պահպանման համար', true, NOW(), NOW()),
+('AWS', 'AWS', 'AWS', 'AWS', 'Amazon Web Services cloud platform', 'Amazon Web Services cloud platform', 'Облачная платформа Amazon Web Services', 'Amazon Web Services ամպային հարթակ', true, NOW(), NOW()),
+('Docker', 'Docker', 'Docker', 'Docker', 'Containerization platform for application deployment', 'Containerization platform for application deployment', 'Платформа контейнеризации для развертывания приложений', 'Կոնտեյներացման հարթակ հավելվածների տեղակայման համար', true, NOW(), NOW()),
+('Figma', 'Figma', 'Figma', 'Figma', 'Collaborative design tool for UI/UX', 'Collaborative design tool for UI/UX', 'Инструмент совместного дизайна для UI/UX', 'UI/UX համագործակցային դիզայնի գործիք', true, NOW(), NOW()),
+('Adobe Creative Suite', 'Adobe Creative Suite', 'Adobe Creative Suite', 'Adobe Creative Suite', 'Professional design and creative software', 'Professional design and creative software', 'Профессиональное программное обеспечение для дизайна и творчества', 'Պրոֆեսիոնալ դիզայնի և ստեղծագործական ծրագրակազմ', true, NOW(), NOW()),
+('Google Analytics', 'Google Analytics', 'Google Analytics', 'Google Analytics', 'Web analytics service for tracking and reporting', 'Web analytics service for tracking and reporting', 'Веб-аналитический сервис для отслеживания и отчетности', 'Վեբ վերլուծական ծառայություն հետևման և հաշվետվության համար', true, NOW(), NOW()),
+('Stripe', 'Stripe', 'Stripe', 'Stripe', 'Payment processing platform for online businesses', 'Payment processing platform for online businesses', 'Платформа обработки платежей для онлайн-бизнеса', 'Վճարումների մշակման հարթակ առցանց բիզնեսի համար', true, NOW(), NOW()),
+('Mailchimp', 'Mailchimp', 'Mailchimp', 'Mailchimp', 'Email marketing and automation platform', 'Email marketing and automation platform', 'Платформа email-маркетинга и автоматизации', 'Email մարքեթինգի և ավտոմատացման հարթակ', true, NOW(), NOW());
 
 -- Insert Services (hierarchical structure)
 INSERT INTO "Service" (name, description, "nameEn", "nameRu", "nameHy", "descriptionEn", "descriptionRu", "descriptionHy", "parentId", "averagePrice", "minPrice", "maxPrice", "updatedAt") VALUES
@@ -76,6 +105,152 @@ INSERT INTO "Service" (name, description, "nameEn", "nameRu", "nameHy", "descrip
 ('Copywriting', 'Sales copy and marketing materials', 'Copywriting', 'Копирайтинг', 'Կոպիրայթինգ', 'Sales copy and marketing materials', 'Продающие тексты и маркетинговые материалы', 'Վաճառքի տեքստեր և մարքեթինգային նյութեր', 5, 40.00, 20.00, 80.00, NOW()),
 ('Technical Writing', 'Documentation and technical content', 'Technical Writing', 'Техническое письмо', 'Տեխնիկական գրում', 'Documentation and technical content', 'Документация и технический контент', 'Փաստաթղթավորում և տեխնիկական բովանդակություն', 5, 45.00, 25.00, 85.00, NOW());
 
+-- Insert ServiceFeature relationships
+INSERT INTO "ServiceFeature" ("serviceId", "featureId", "createdAt") VALUES
+-- Web Development features
+(6, 1, NOW()), -- Responsive Design
+(6, 2, NOW()), -- SEO Optimization
+(6, 3, NOW()), -- Payment Integration
+(6, 4, NOW()), -- User Authentication
+(6, 5, NOW()), -- Real-time Updates
+(6, 6, NOW()), -- Admin Dashboard
+(6, 7, NOW()), -- Analytics & Reporting
+(6, 8, NOW()), -- Content Management
+
+-- Mobile Development features
+(7, 1, NOW()), -- Responsive Design
+(7, 4, NOW()), -- User Authentication
+(7, 5, NOW()), -- Real-time Updates
+(7, 6, NOW()), -- Admin Dashboard
+(7, 7, NOW()), -- Analytics & Reporting
+
+-- Backend Development features
+(8, 3, NOW()), -- Payment Integration
+(8, 4, NOW()), -- User Authentication
+(8, 5, NOW()), -- Real-time Updates
+(8, 6, NOW()), -- Admin Dashboard
+(8, 7, NOW()), -- Analytics & Reporting
+
+-- DevOps features
+(9, 6, NOW()), -- Admin Dashboard
+(9, 7, NOW()), -- Analytics & Reporting
+
+-- Data Science features
+(10, 6, NOW()), -- Admin Dashboard
+(10, 7, NOW()), -- Analytics & Reporting
+
+-- UI/UX Design features
+(11, 1, NOW()), -- Responsive Design
+(11, 8, NOW()), -- Content Management
+
+-- Graphic Design features
+(12, 8, NOW()), -- Content Management
+
+-- Web Design features
+(13, 1, NOW()), -- Responsive Design
+(13, 2, NOW()), -- SEO Optimization
+(13, 8, NOW()), -- Content Management
+
+-- Print Design features
+(14, 8, NOW()), -- Content Management
+
+-- Digital Marketing features
+(15, 2, NOW()), -- SEO Optimization
+(15, 7, NOW()), -- Analytics & Reporting
+(15, 8, NOW()), -- Content Management
+
+-- SEO features
+(16, 2, NOW()), -- SEO Optimization
+(16, 7, NOW()), -- Analytics & Reporting
+
+-- Social Media Marketing features
+(17, 7, NOW()), -- Analytics & Reporting
+(17, 8, NOW()), -- Content Management
+
+-- Content Marketing features
+(18, 2, NOW()), -- SEO Optimization
+(18, 7, NOW()), -- Analytics & Reporting
+(18, 8, NOW()), -- Content Management
+
+-- Business Consulting features
+(19, 6, NOW()), -- Admin Dashboard
+(19, 7, NOW()), -- Analytics & Reporting
+
+-- Project Management features
+(20, 6, NOW()), -- Admin Dashboard
+(20, 7, NOW()), -- Analytics & Reporting
+
+-- Financial Consulting features
+(21, 6, NOW()), -- Admin Dashboard
+(21, 7, NOW()), -- Analytics & Reporting
+
+-- Content Writing features
+(22, 8, NOW()), -- Content Management
+
+-- Copywriting features
+(23, 8, NOW()), -- Content Management
+
+-- Technical Writing features
+(24, 8, NOW()); -- Content Management
+
+-- Insert ServiceTechnology relationships
+INSERT INTO "ServiceTechnology" ("serviceId", "technologyId", "createdAt") VALUES
+-- Web Development technologies
+(6, 1, NOW()), -- React
+(6, 2, NOW()), -- Node.js
+(6, 3, NOW()), -- TypeScript
+(6, 4, NOW()), -- PostgreSQL
+(6, 10, NOW()), -- Stripe
+
+-- Mobile Development technologies
+(7, 1, NOW()), -- React
+(7, 2, NOW()), -- Node.js
+(7, 3, NOW()), -- TypeScript
+(7, 4, NOW()), -- PostgreSQL
+
+-- Backend Development technologies
+(8, 2, NOW()), -- Node.js
+(8, 3, NOW()), -- TypeScript
+(8, 4, NOW()), -- PostgreSQL
+(8, 5, NOW()), -- MongoDB
+
+-- DevOps technologies
+(9, 6, NOW()), -- AWS
+(9, 7, NOW()), -- Docker
+
+-- Data Science technologies
+(10, 4, NOW()), -- PostgreSQL
+(10, 5, NOW()), -- MongoDB
+(10, 6, NOW()), -- AWS
+
+-- UI/UX Design technologies
+(11, 8, NOW()), -- Figma
+
+-- Graphic Design technologies
+(12, 9, NOW()), -- Adobe Creative Suite
+
+-- Web Design technologies
+(13, 1, NOW()), -- React
+(13, 8, NOW()), -- Figma
+
+-- Print Design technologies
+(14, 9, NOW()), -- Adobe Creative Suite
+
+-- Digital Marketing technologies
+(15, 10, NOW()), -- Google Analytics
+(15, 12, NOW()), -- Mailchimp
+
+-- SEO technologies
+(16, 10, NOW()), -- Google Analytics
+
+-- Social Media Marketing technologies
+(17, 10, NOW()), -- Google Analytics
+(17, 12, NOW()), -- Mailchimp
+
+-- Content Marketing technologies
+(18, 10, NOW()), -- Google Analytics
+(18, 12, NOW()); -- Mailchimp
+
 -- Insert Users (mix of clients and specialists)
 INSERT INTO "User" (role, name, email, phone, "passwordHash", "avatarUrl", bio, "creditBalance", verified, "experienceYears", "priceMin", "priceMax", location, "createdAt") VALUES
 -- Test User Armen (for comprehensive testing)
@@ -100,8 +275,7 @@ INSERT INTO "User" (role, name, email, phone, "passwordHash", "avatarUrl", bio, 
 ('specialist', 'Amanda White', 'amanda.white@email.com', '+1-555-0208', '$2b$10$example.hash.13', 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150', 'Project manager with expertise in agile methodologies and team leadership.', 0.00, false, 5, 40.00, 80.00, 'Denver, CO', NOW() - INTERVAL '10 days');
 
 -- Insert UserService relationships (specialists and their services)
--- Note: We'll insert these after getting the actual user IDs
--- For now, we'll use a different approach with subqueries
+-- Alex Chen (Full-stack developer) - Web Development, Mobile Development, Backend Development
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 6, true, NOW() - INTERVAL '45 days', NOW() FROM "User" u WHERE u.email = 'alex.chen@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
@@ -109,11 +283,13 @@ SELECT u.id, 7, true, NOW() - INTERVAL '45 days', NOW() FROM "User" u WHERE u.em
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 8, true, NOW() - INTERVAL '45 days', NOW() FROM "User" u WHERE u.email = 'alex.chen@email.com';
 
+-- Maria Rodriguez (UI/UX Designer) - UI/UX Design, Graphic Design
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 11, true, NOW() - INTERVAL '40 days', NOW() FROM "User" u WHERE u.email = 'maria.rodriguez@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 12, true, NOW() - INTERVAL '40 days', NOW() FROM "User" u WHERE u.email = 'maria.rodriguez@email.com';
 
+-- James Taylor (Digital Marketing Expert) - Digital Marketing, SEO, Social Media Marketing
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 15, true, NOW() - INTERVAL '35 days', NOW() FROM "User" u WHERE u.email = 'james.taylor@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
@@ -121,28 +297,33 @@ SELECT u.id, 16, true, NOW() - INTERVAL '35 days', NOW() FROM "User" u WHERE u.e
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 17, true, NOW() - INTERVAL '35 days', NOW() FROM "User" u WHERE u.email = 'james.taylor@email.com';
 
-INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
-SELECT u.id, 21, true, NOW() - INTERVAL '30 days', NOW() FROM "User" u WHERE u.email = 'lisa.wang@email.com';
+-- Lisa Wang (Content Writer) - Content Writing, Copywriting, Technical Writing
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 22, true, NOW() - INTERVAL '30 days', NOW() FROM "User" u WHERE u.email = 'lisa.wang@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 23, true, NOW() - INTERVAL '30 days', NOW() FROM "User" u WHERE u.email = 'lisa.wang@email.com';
+INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
+SELECT u.id, 24, true, NOW() - INTERVAL '30 days', NOW() FROM "User" u WHERE u.email = 'lisa.wang@email.com';
 
+-- Robert Kim (DevOps Engineer) - DevOps, Backend Development
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 9, true, NOW() - INTERVAL '25 days', NOW() FROM "User" u WHERE u.email = 'robert.kim@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 8, true, NOW() - INTERVAL '25 days', NOW() FROM "User" u WHERE u.email = 'robert.kim@email.com';
 
+-- Jennifer Lee (Data Scientist) - Data Science, Web Development
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 10, true, NOW() - INTERVAL '20 days', NOW() FROM "User" u WHERE u.email = 'jennifer.lee@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 6, true, NOW() - INTERVAL '20 days', NOW() FROM "User" u WHERE u.email = 'jennifer.lee@email.com';
 
+-- Michael Garcia (Graphic Designer) - Graphic Design, Web Design
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 12, true, NOW() - INTERVAL '15 days', NOW() FROM "User" u WHERE u.email = 'michael.garcia@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 13, true, NOW() - INTERVAL '15 days', NOW() FROM "User" u WHERE u.email = 'michael.garcia@email.com';
 
+-- Amanda White (Project Manager) - Business Consulting, Project Management
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
 SELECT u.id, 19, true, NOW() - INTERVAL '10 days', NOW() FROM "User" u WHERE u.email = 'amanda.white@email.com';
 INSERT INTO "UserService" ("userId", "serviceId", "notificationsEnabled", "createdAt", "updatedAt") 
@@ -241,74 +422,74 @@ SELECT u.id, 22, 'Sales Copy for Landing Page', 'Write compelling sales copy for
 INSERT INTO "OrderProposal" ("orderId", "userId", price, message, status, "createdAt") VALUES
 -- Proposals for Armen's orders (comprehensive testing)
 -- Armen's E-commerce Platform (Order 1)
-(1, 6, 7000.00, 'Hi Armen! I can deliver a comprehensive e-commerce platform with all the advanced features you need. I have extensive experience with React, Node.js, and payment integrations.', 'pending', NOW() - INTERVAL '1 day'),
-(1, 7, 7200.00, 'Hello Armen! I specialize in e-commerce solutions and can provide a scalable platform with modern UI/UX design and advanced features.', 'pending', NOW() - INTERVAL '1 day'),
+(1, 8, 7000.00, 'Hi Armen! I can deliver a comprehensive e-commerce platform with all the advanced features you need. I have extensive experience with React, Node.js, and payment integrations.', 'pending', NOW() - INTERVAL '1 day'),
+(1, 9, 7200.00, 'Hello Armen! I specialize in e-commerce solutions and can provide a scalable platform with modern UI/UX design and advanced features.', 'pending', NOW() - INTERVAL '1 day'),
 (1, 8, 6800.00, 'Hi! I can create a robust e-commerce platform with excellent performance and security features. Let''s discuss your specific requirements.', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Armen's Mobile App (Order 2)
-(2, 6, 11000.00, 'Hi Armen! I can develop your mobile app for both iOS and Android with modern UI/UX and real-time features. I have extensive experience with React Native.', 'accepted', NOW() - INTERVAL '1 day'),
-(2, 7, 11500.00, 'Hello Armen! I specialize in mobile app UI/UX design and can create an intuitive user experience for your startup app.', 'pending', NOW() - INTERVAL '1 day'),
+(2, 8, 11000.00, 'Hi Armen! I can develop your mobile app for both iOS and Android with modern UI/UX and real-time features. I have extensive experience with React Native.', 'accepted', NOW() - INTERVAL '1 day'),
+(2, 9, 11500.00, 'Hello Armen! I specialize in mobile app UI/UX design and can create an intuitive user experience for your startup app.', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Armen's Brand Identity (Order 3)
-(3, 7, 1800.00, 'Hi Armen! I can create a complete brand identity package that perfectly represents your new company. I have extensive experience in branding and logo design.', 'accepted', NOW() - INTERVAL '1 day'),
-(3, 12, 1900.00, 'Hello Armen! I specialize in brand identity design and can create a professional brand package for your company.', 'pending', NOW() - INTERVAL '1 day'),
+(3, 9, 1800.00, 'Hi Armen! I can create a complete brand identity package that perfectly represents your new company. I have extensive experience in branding and logo design.', 'accepted', NOW() - INTERVAL '1 day'),
+(3, 14, 1900.00, 'Hello Armen! I specialize in brand identity design and can create a professional brand package for your company.', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Armen's Digital Marketing (Order 4)
-(4, 8, 2800.00, 'Hi Armen! I can create a comprehensive digital marketing strategy for your business including SEO, social media, and content marketing.', 'pending', NOW() - INTERVAL '1 day'),
-(4, 9, 2900.00, 'Hello Armen! I specialize in digital marketing and can help you reach your target audience effectively.', 'pending', NOW() - INTERVAL '1 day'),
+(4, 10, 2800.00, 'Hi Armen! I can create a comprehensive digital marketing strategy for your business including SEO, social media, and content marketing.', 'pending', NOW() - INTERVAL '1 day'),
+(4, 10, 2900.00, 'Hello Armen! I specialize in digital marketing and can help you reach your target audience effectively.', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Armen's Business Strategy (Order 5)
-(5, 9, 1400.00, 'Hi Armen! I can provide strategic business consultation for scaling your startup, including market analysis and growth strategy.', 'accepted', NOW() - INTERVAL '1 day'),
-(5, 13, 1450.00, 'Hello Armen! I specialize in business strategy and project management, and can help you scale your startup effectively.', 'pending', NOW() - INTERVAL '1 day'),
+(5, 11, 1400.00, 'Hi Armen! I can provide strategic business consultation for scaling your startup, including market analysis and growth strategy.', 'accepted', NOW() - INTERVAL '1 day'),
+(5, 15, 1450.00, 'Hello Armen! I specialize in business strategy and project management, and can help you scale your startup effectively.', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Test data for User 15 (chat action buttons testing)
--- User 15's Test Order (Order 17)
-(17, 1, 4500.00, 'I would like to apply for this project', 'pending', NOW() - INTERVAL '1 day'),
+-- User 15's Test Order (Order 6)
+(6, 1, 4500.00, 'I would like to apply for this project', 'pending', NOW() - INTERVAL '1 day'),
 
 -- Other proposals
--- Proposals for Order 6 (E-commerce Website)
-(6, 6, 4500.00, 'I can deliver a modern e-commerce website with all the features you need. I have extensive experience with React and Node.js.', 'pending', NOW() - INTERVAL '4 days'),
-(6, 6, 4800.00, 'I specialize in e-commerce solutions and can provide a scalable platform with advanced features.', 'pending', NOW() - INTERVAL '3 days'),
+-- Proposals for Order 7 (E-commerce Website)
+(7, 8, 4500.00, 'I can deliver a modern e-commerce website with all the features you need. I have extensive experience with React and Node.js.', 'pending', NOW() - INTERVAL '4 days'),
+(7, 8, 4800.00, 'I specialize in e-commerce solutions and can provide a scalable platform with advanced features.', 'pending', NOW() - INTERVAL '3 days'),
 
--- Proposals for Order 2 (Corporate Website Redesign)
-(2, 6, 2800.00, 'I can help redesign your website with modern technologies and ensure mobile responsiveness.', 'accepted', NOW() - INTERVAL '2 days'),
+-- Proposals for Order 8 (Corporate Website Redesign)
+(8, 8, 2800.00, 'I can help redesign your website with modern technologies and ensure mobile responsiveness.', 'accepted', NOW() - INTERVAL '2 days'),
 
--- Proposals for Order 3 (Mobile App)
-(3, 6, 7500.00, 'I have experience building restaurant apps with ordering and delivery features.', 'pending', NOW() - INTERVAL '1 day'),
+-- Proposals for Order 9 (Mobile App)
+(9, 8, 7500.00, 'I have experience building restaurant apps with ordering and delivery features.', 'pending', NOW() - INTERVAL '1 day'),
 
--- Proposals for Order 4 (Brand Identity)
-(4, 7, 1400.00, 'I can create a comprehensive brand identity that reflects your business values.', 'accepted', NOW() - INTERVAL '9 days'),
+-- Proposals for Order 10 (Brand Identity)
+(10, 9, 1400.00, 'I can create a comprehensive brand identity that reflects your business values.', 'accepted', NOW() - INTERVAL '9 days'),
 
--- Proposals for Order 5 (Website UI/UX)
-(5, 7, 2200.00, 'I specialize in SaaS UI/UX design and can create an intuitive user experience.', 'pending', NOW() - INTERVAL '1 day'),
+-- Proposals for Order 11 (Website UI/UX)
+(11, 9, 2200.00, 'I specialize in SaaS UI/UX design and can create an intuitive user experience.', 'pending', NOW() - INTERVAL '1 day'),
 
--- Proposals for Order 6 (Digital Marketing)
-(6, 8, 1800.00, 'I can create a comprehensive digital marketing strategy to boost your product visibility.', 'pending', NOW() - INTERVAL '3 days'),
+-- Proposals for Order 12 (Digital Marketing)
+(12, 10, 1800.00, 'I can create a comprehensive digital marketing strategy to boost your product visibility.', 'pending', NOW() - INTERVAL '3 days'),
 
--- Proposals for Order 7 (SEO)
-(7, 8, 1100.00, 'I have a proven track record of improving website rankings through SEO optimization.', 'accepted', NOW() - INTERVAL '5 days'),
+-- Proposals for Order 13 (SEO)
+(13, 10, 1100.00, 'I have a proven track record of improving website rankings through SEO optimization.', 'accepted', NOW() - INTERVAL '5 days'),
 
--- Proposals for Order 8 (Business Strategy)
-(8, 9, 900.00, 'I can provide strategic guidance to help scale your startup effectively.', 'accepted', NOW() - INTERVAL '7 days'),
+-- Proposals for Order 14 (Business Strategy)
+(14, 11, 900.00, 'I can provide strategic guidance to help scale your startup effectively.', 'accepted', NOW() - INTERVAL '7 days'),
 
--- Proposals for Order 9 (Project Management)
-(9, 13, 700.00, 'I can set up efficient project management processes and recommend the best tools for your team.', 'pending', NOW() - INTERVAL '6 days'),
+-- Proposals for Order 15 (Project Management)
+(15, 15, 700.00, 'I can set up efficient project management processes and recommend the best tools for your team.', 'pending', NOW() - INTERVAL '6 days'),
 
--- Proposals for Order 10 (Content Marketing)
-(10, 9, 850.00, 'I can develop a content strategy that aligns with your business goals and target audience.', 'accepted', NOW() - INTERVAL '8 days'),
+-- Proposals for Order 16 (Content Marketing)
+(16, 11, 850.00, 'I can develop a content strategy that aligns with your business goals and target audience.', 'accepted', NOW() - INTERVAL '8 days'),
 
--- Proposals for Order 11 (Sales Copy)
-(11, 9, 450.00, 'I specialize in conversion-focused copywriting and can create compelling sales copy for your landing page.', 'pending', NOW() - INTERVAL '11 days');
+-- Proposals for Order 17 (Sales Copy)
+(17, 11, 450.00, 'I specialize in conversion-focused copywriting and can create compelling sales copy for your landing page.', 'pending', NOW() - INTERVAL '11 days');
 
 -- Insert Reviews
-INSERT INTO "Review" ("orderId", "reviewerId", "specialistId", rating, comment, "createdAt") VALUES
+INSERT INTO "Review" ("orderId", "reviewerId", "specialistId", rating, comment, "createdAt", "updatedAt") VALUES
 -- Reviews for Armen's completed orders
-(3, 1, 7, 5, 'Excellent work! The brand identity perfectly captures my company values. Maria was very professional and creative. Highly recommended!', NOW() - INTERVAL '1 day'),
-(5, 1, 9, 5, 'Outstanding business strategy consultation! Lisa provided valuable insights that helped me identify key growth opportunities. Will definitely work together again.', NOW() - INTERVAL '1 day'),
+(3, 1, 9, 5, 'Excellent work! The brand identity perfectly captures my company values. Maria was very professional and creative. Highly recommended!', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
+(5, 1, 11, 5, 'Outstanding business strategy consultation! Lisa provided valuable insights that helped me identify key growth opportunities. Will definitely work together again.', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
 -- Reviews for other completed orders
-(4, 4, 7, 5, 'Excellent work! The brand identity perfectly captures our company values. Very professional and creative.', NOW() - INTERVAL '2 days'),
-(8, 3, 9, 4, 'Great strategic advice that helped us identify key growth opportunities. Highly recommended!', NOW() - INTERVAL '1 day'),
-(10, 5, 9, 5, 'Outstanding content strategy. The content pieces are engaging and well-researched. Will definitely work together again.', NOW() - INTERVAL '3 days');
+(10, 6, 9, 5, 'Excellent work! The brand identity perfectly captures our company values. Very professional and creative.', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
+(14, 5, 11, 4, 'Great strategic advice that helped us identify key growth opportunities. Highly recommended!', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
+(16, 7, 11, 5, 'Outstanding content strategy. The content pieces are engaging and well-researched. Will definitely work together again.', NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days');
 
 -- Insert Media Files
 INSERT INTO "MediaFile" ("orderId", "fileName", "fileUrl", "fileType", "mimeType", "fileSize", "uploadedBy", "createdAt") VALUES
@@ -398,18 +579,18 @@ INSERT INTO "MediaFile" ("orderId", "fileName", "fileUrl", "fileType", "mimeType
 -- Armen's transactions (comprehensive testing)
 UPDATE "User" SET "creditBalance" = "creditBalance" - 2000.00 WHERE id = 1; -- Armen paid for brand identity
 UPDATE "User" SET "creditBalance" = "creditBalance" - 1500.00 WHERE id = 1; -- Armen paid for business strategy
-UPDATE "User" SET "creditBalance" = "creditBalance" + 1800.00 WHERE id = 7; -- Maria earned from Armen's brand identity
-UPDATE "User" SET "creditBalance" = "creditBalance" + 1400.00 WHERE id = 9; -- Lisa earned from Armen's business strategy
+UPDATE "User" SET "creditBalance" = "creditBalance" + 1800.00 WHERE id = 9; -- Maria earned from Armen's brand identity
+UPDATE "User" SET "creditBalance" = "creditBalance" + 1400.00 WHERE id = 11; -- Lisa earned from Armen's business strategy
 
 -- Other transactions
-UPDATE "User" SET "creditBalance" = "creditBalance" - 1500.00 WHERE id = 4; -- Paid for brand identity
-UPDATE "User" SET "creditBalance" = "creditBalance" - 1000.00 WHERE id = 3; -- Paid for business strategy
-UPDATE "User" SET "creditBalance" = "creditBalance" - 900.00 WHERE id = 5; -- Paid for content marketing
+UPDATE "User" SET "creditBalance" = "creditBalance" - 1500.00 WHERE id = 6; -- Paid for brand identity
+UPDATE "User" SET "creditBalance" = "creditBalance" - 1000.00 WHERE id = 5; -- Paid for business strategy
+UPDATE "User" SET "creditBalance" = "creditBalance" - 900.00 WHERE id = 7; -- Paid for content marketing
 
 -- Add some earnings to specialists
-UPDATE "User" SET "creditBalance" = "creditBalance" + 1400.00 WHERE id = 7; -- Earned from brand identity
-UPDATE "User" SET "creditBalance" = "creditBalance" + 1000.00 WHERE id = 9; -- Earned from business strategy
-UPDATE "User" SET "creditBalance" = "creditBalance" + 900.00 WHERE id = 9; -- Earned from content marketing
+UPDATE "User" SET "creditBalance" = "creditBalance" + 1400.00 WHERE id = 9; -- Earned from brand identity
+UPDATE "User" SET "creditBalance" = "creditBalance" + 1000.00 WHERE id = 11; -- Earned from business strategy
+UPDATE "User" SET "creditBalance" = "creditBalance" + 900.00 WHERE id = 11; -- Earned from content marketing
 
 -- Insert Conversations (chat rooms)
 INSERT INTO "Conversation" (id, "orderId", title, status, "createdAt", "updatedAt") VALUES
@@ -659,11 +840,11 @@ INSERT INTO "ReferralReward" ("referrerId", "referredUserId", "rewardAmount", "b
 -- Update user credit balances to reflect referral rewards
 UPDATE "User" SET "creditBalance" = "creditBalance" + 20.0, "referralCredits" = 20.0 WHERE "id" = 1;
 UPDATE "User" SET "creditBalance" = "creditBalance" + 10.0, "referralCredits" = 10.0 WHERE "id" = 2;
-UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 4;
-UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 5;
 UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 6;
 UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 7;
+UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 8;
+UPDATE "User" SET "creditBalance" = "creditBalance" + 5.0 WHERE "id" = 9;
 
 -- Set referredBy for referred users
-UPDATE "User" SET "referredBy" = 1 WHERE "id" IN (4, 5, 7);
-UPDATE "User" SET "referredBy" = 2 WHERE "id" = 6;
+UPDATE "User" SET "referredBy" = 1 WHERE "id" IN (6, 7, 8);
+UPDATE "User" SET "referredBy" = 2 WHERE "id" = 9;

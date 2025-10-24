@@ -2,9 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import * as bcrypt from 'bcrypt';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import * as bcrypt from "bcrypt";
 
 @Injectable()
 export class UsersService {
@@ -31,7 +31,7 @@ export class UsersService {
           verified: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.user.count({ where }),
     ]);
@@ -51,7 +51,7 @@ export class UsersService {
 
   async findOne(id: number) {
     if (!id || isNaN(id) || id <= 0) {
-      throw new BadRequestException('Invalid user ID');
+      throw new BadRequestException("Invalid user ID");
     }
 
     const user = await this.prisma.user.findUnique({
@@ -69,12 +69,12 @@ export class UsersService {
         createdAt: true,
         Orders: {
           take: 5,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           include: {},
         },
         Reviews: {
           take: 5,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           include: {
             Order: true,
           },
@@ -99,7 +99,7 @@ export class UsersService {
       avatarUrl?: string;
       role?: string;
       verified?: boolean;
-    },
+    }
   ) {
     // Check if user exists
     const existingUser = await this.prisma.user.findUnique({
@@ -117,7 +117,7 @@ export class UsersService {
       });
 
       if (emailExists) {
-        throw new BadRequestException('Email already exists');
+        throw new BadRequestException("Email already exists");
       }
     }
 
@@ -157,7 +157,7 @@ export class UsersService {
 
     if (ordersCount > 0 || reviewsCount > 0) {
       throw new BadRequestException(
-        'Cannot delete user with existing orders or reviews. Consider deactivating instead.',
+        "Cannot delete user with existing orders or reviews. Consider deactivating instead."
       );
     }
 
@@ -192,7 +192,7 @@ export class UsersService {
     const newBalance = user.creditBalance + amount;
 
     if (newBalance < 0) {
-      throw new BadRequestException('Insufficient credit balance');
+      throw new BadRequestException("Insufficient credit balance");
     }
 
     return this.prisma.user.update({
@@ -214,9 +214,9 @@ export class UsersService {
       this.prisma.user.findMany({
         where: {
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-            { bio: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+            { bio: { contains: query, mode: "insensitive" } },
           ],
         },
         skip,
@@ -233,14 +233,14 @@ export class UsersService {
           verified: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.user.count({
         where: {
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-            { bio: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+            { bio: { contains: query, mode: "insensitive" } },
           ],
         },
       }),
@@ -268,7 +268,7 @@ export class UsersService {
       priceMin?: number;
       priceMax?: number;
       location?: string;
-    },
+    }
   ) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
@@ -286,7 +286,7 @@ export class UsersService {
       user.priceMax ||
       user.location
     ) {
-      throw new BadRequestException('User already has specialist profile data');
+      throw new BadRequestException("User already has specialist profile data");
     }
 
     // If serviceId is provided, check if service exists
@@ -297,7 +297,7 @@ export class UsersService {
 
       if (!service) {
         throw new BadRequestException(
-          `Service with ID ${specialistData.serviceId} not found`,
+          `Service with ID ${specialistData.serviceId} not found`
         );
       }
     }
@@ -306,7 +306,7 @@ export class UsersService {
     if (specialistData.priceMin && specialistData.priceMax) {
       if (specialistData.priceMin > specialistData.priceMax) {
         throw new BadRequestException(
-          'Minimum price cannot be greater than maximum price',
+          "Minimum price cannot be greater than maximum price"
         );
       }
     }
@@ -329,10 +329,10 @@ export class UsersService {
     limit: number = 10,
     serviceId?: number,
     location?: string,
-    currentUserId?: number,
+    currentUserId?: number
   ) {
     try {
-      console.log('getSpecialists called with:', {
+      console.log("getSpecialists called with:", {
         page,
         limit,
         serviceId,
@@ -340,7 +340,7 @@ export class UsersService {
       });
 
       // Build where clause
-      const whereClause: any = { role: 'specialist' };
+      const whereClause: any = { role: "specialist" };
 
       if (serviceId) {
         whereClause.UserServices = {
@@ -353,7 +353,7 @@ export class UsersService {
       if (location) {
         whereClause.location = {
           contains: location,
-          mode: 'insensitive',
+          mode: "insensitive",
         };
       }
 
@@ -388,7 +388,7 @@ export class UsersService {
           Reviews: {
             take: 5,
             orderBy: {
-              createdAt: 'desc',
+              createdAt: "desc",
             },
             include: {
               Order: true,
@@ -396,11 +396,11 @@ export class UsersService {
           },
         },
         orderBy: {
-          createdAt: 'desc',
+          createdAt: "desc",
         },
       });
 
-      console.log('Found specialists:', specialists.length);
+      console.log("Found specialists:", specialists.length);
 
       // Check hired status for each specialist if currentUserId is provided
       // Removed isHired logic - will be checked per order in hiring dialog
@@ -449,9 +449,9 @@ export class UsersService {
         },
       };
     } catch (error) {
-      console.error('Error in getSpecialists:', error);
-      console.error('Error details:', error.message);
-      console.error('Error stack:', error.stack);
+      console.error("Error in getSpecialists:", error);
+      console.error("Error details:", error.message);
+      console.error("Error stack:", error.stack);
       throw error;
     }
   }
@@ -477,11 +477,11 @@ export class UsersService {
 
   async getSpecialistById(id: number) {
     const user = await this.prisma.user.findUnique({
-      where: { id, role: 'specialist' },
+      where: { id, role: "specialist" },
       include: {
         Proposals: {
           take: 10,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           include: {
             Order: {
               include: {
@@ -531,7 +531,7 @@ export class UsersService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 10,
     });
 
@@ -575,11 +575,11 @@ export class UsersService {
       priceMin?: number;
       priceMax?: number;
       location?: string;
-    },
+    }
   ) {
     // Check if user exists and is a specialist
     const existingUser = await this.prisma.user.findUnique({
-      where: { id, role: 'specialist' },
+      where: { id, role: "specialist" },
     });
 
     if (!existingUser) {
@@ -595,7 +595,7 @@ export class UsersService {
 
         if (!service) {
           throw new BadRequestException(
-            `Service with ID ${specialistData.serviceId} not found`,
+            `Service with ID ${specialistData.serviceId} not found`
           );
         }
       }
@@ -607,7 +607,7 @@ export class UsersService {
 
     if (priceMin && priceMax && priceMin > priceMax) {
       throw new BadRequestException(
-        'Minimum price cannot be greater than maximum price',
+        "Minimum price cannot be greater than maximum price"
       );
     }
 
@@ -630,11 +630,11 @@ export class UsersService {
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         where: {
-          role: 'specialist',
+          role: "specialist",
           OR: [
-            { location: { contains: query, mode: 'insensitive' } },
-            { name: { contains: query, mode: 'insensitive' } },
-            { bio: { contains: query, mode: 'insensitive' } },
+            { location: { contains: query, mode: "insensitive" } },
+            { name: { contains: query, mode: "insensitive" } },
+            { bio: { contains: query, mode: "insensitive" } },
           ],
         },
         skip,
@@ -646,15 +646,15 @@ export class UsersService {
             },
           },
         },
-        orderBy: { id: 'desc' },
+        orderBy: { id: "desc" },
       }),
       this.prisma.user.count({
         where: {
-          role: 'specialist',
+          role: "specialist",
           OR: [
-            { location: { contains: query, mode: 'insensitive' } },
-            { name: { contains: query, mode: 'insensitive' } },
-            { bio: { contains: query, mode: 'insensitive' } },
+            { location: { contains: query, mode: "insensitive" } },
+            { name: { contains: query, mode: "insensitive" } },
+            { bio: { contains: query, mode: "insensitive" } },
           ],
         },
       }),
@@ -679,7 +679,7 @@ export class UsersService {
           averageRating: Math.round(averageRating * 10) / 10,
           reviewCount: reviews.length,
         };
-      }),
+      })
     );
 
     return {
@@ -698,7 +698,7 @@ export class UsersService {
   async getSpecialistsByService(
     serviceId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.getSpecialists(page, limit, serviceId);
   }
@@ -706,7 +706,7 @@ export class UsersService {
   async getSpecialistsByLocation(
     location: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.getSpecialists(page, limit, undefined, location);
   }
@@ -715,7 +715,7 @@ export class UsersService {
   async addUserService(
     userId: number,
     serviceId: number,
-    notificationsEnabled: boolean = true,
+    notificationsEnabled: boolean = true
   ) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
@@ -744,7 +744,7 @@ export class UsersService {
     });
 
     if (existingUserService) {
-      throw new BadRequestException('User service already exists');
+      throw new BadRequestException("User service already exists");
     }
 
     // Create user service
@@ -774,7 +774,7 @@ export class UsersService {
     });
 
     if (!userService) {
-      throw new NotFoundException('User service not found');
+      throw new NotFoundException("User service not found");
     }
 
     // Delete user service
@@ -787,13 +787,13 @@ export class UsersService {
       },
     });
 
-    return { message: 'User service removed successfully' };
+    return { message: "User service removed successfully" };
   }
 
   async updateUserServiceNotifications(
     userId: number,
     serviceId: number,
-    notificationsEnabled: boolean,
+    notificationsEnabled: boolean
   ) {
     // Check if user service exists
     const userService = await this.prisma.userService.findUnique({
@@ -806,7 +806,7 @@ export class UsersService {
     });
 
     if (!userService) {
-      throw new NotFoundException('User service not found');
+      throw new NotFoundException("User service not found");
     }
 
     // Update notifications setting
@@ -849,9 +849,6 @@ export class UsersService {
             averagePrice: true,
             minPrice: true,
             maxPrice: true,
-            features: true,
-            technologies: true,
-            completionRate: true,
             isActive: true,
             createdAt: true,
             updatedAt: true,
@@ -859,7 +856,7 @@ export class UsersService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
 

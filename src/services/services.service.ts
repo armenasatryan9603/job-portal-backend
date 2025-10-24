@@ -2,39 +2,86 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
   // Helper method to transform service data based on language
-  private transformServiceForLanguage(service: any, language: string = 'en') {
+  private transformServiceForLanguage(service: any, language: string = "en") {
     const languageMap = {
-      en: { name: 'nameEn', description: 'descriptionEn' },
-      ru: { name: 'nameRu', description: 'descriptionRu' },
-      hy: { name: 'nameHy', description: 'descriptionHy' },
+      en: {
+        name: "nameEn",
+        description: "descriptionEn",
+      },
+      ru: {
+        name: "nameRu",
+        description: "descriptionRu",
+      },
+      hy: {
+        name: "nameHy",
+        description: "descriptionHy",
+      },
     };
 
-    const langFields = languageMap[language] || languageMap['en'];
+    const langFields = languageMap[language] || languageMap["en"];
+
+    // Transform features
+    const features = service.ServiceFeatures
+      ? service.ServiceFeatures.map((sf: any) => {
+          const feature = sf.Feature;
+          return {
+            id: feature.id,
+            name: feature.name,
+            description: feature.description,
+          };
+        })
+      : [];
+
+    // Transform technologies
+    const technologies = service.ServiceTechnologies
+      ? service.ServiceTechnologies.map((st: any) => {
+          const technology = st.Technology;
+          return {
+            id: technology.id,
+            name: technology.name,
+            description: technology.description,
+          };
+        })
+      : [];
 
     return {
       ...service,
       name: service[langFields.name] || service.name,
       description: service[langFields.description] || service.description,
+      features,
+      technologies,
     };
   }
 
   async create(createServiceDto: {
     name: string;
     description?: string;
+    nameEn?: string;
+    nameRu?: string;
+    nameHy?: string;
+    descriptionEn?: string;
+    descriptionRu?: string;
+    descriptionHy?: string;
     parentId?: number;
     averagePrice?: number;
     minPrice?: number;
     maxPrice?: number;
     features?: string[];
+    featuresEn?: string[];
+    featuresRu?: string[];
+    featuresHy?: string[];
     technologies?: string[];
+    technologiesEn?: string[];
+    technologiesRu?: string[];
+    technologiesHy?: string[];
     completionRate?: number;
     isActive?: boolean;
   }) {
@@ -46,7 +93,7 @@ export class ServicesService {
 
       if (!parent) {
         throw new BadRequestException(
-          `Parent service with ID ${createServiceDto.parentId} not found`,
+          `Parent service with ID ${createServiceDto.parentId} not found`
         );
       }
     }
@@ -64,7 +111,7 @@ export class ServicesService {
     page: number = 1,
     limit: number = 10,
     parentId?: number,
-    language: string = 'en',
+    language: string = "en"
   ) {
     const skip = (page - 1) * limit;
     const where = parentId !== undefined ? { parentId } : {};
@@ -77,13 +124,23 @@ export class ServicesService {
         include: {
           Parent: true,
           Children: true,
+          ServiceFeatures: {
+            include: {
+              Feature: true,
+            },
+          },
+          ServiceTechnologies: {
+            include: {
+              Technology: true,
+            },
+          },
           _count: {
             select: {
               Orders: true,
             },
           },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { name: "asc" },
       }),
       this.prisma.service.count({ where }),
     ]);
@@ -110,12 +167,12 @@ export class ServicesService {
           specialistCount,
           recentOrders,
         };
-      }),
+      })
     );
 
     // Transform services for the specified language
     const transformedServices = servicesWithStats.map((service) =>
-      this.transformServiceForLanguage(service, language),
+      this.transformServiceForLanguage(service, language)
     );
 
     return {
@@ -131,15 +188,25 @@ export class ServicesService {
     };
   }
 
-  async findOne(id: number, language: string = 'en') {
+  async findOne(id: number, language: string = "en") {
     const service = await this.prisma.service.findUnique({
       where: { id },
       include: {
         Parent: true,
         Children: true,
+        ServiceFeatures: {
+          include: {
+            Feature: true,
+          },
+        },
+        ServiceTechnologies: {
+          include: {
+            Technology: true,
+          },
+        },
         Orders: {
           take: 10,
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           include: {
             Client: {
               select: {
@@ -184,15 +251,27 @@ export class ServicesService {
     updateServiceDto: {
       name?: string;
       description?: string;
+      nameEn?: string;
+      nameRu?: string;
+      nameHy?: string;
+      descriptionEn?: string;
+      descriptionRu?: string;
+      descriptionHy?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;
       maxPrice?: number;
       features?: string[];
+      featuresEn?: string[];
+      featuresRu?: string[];
+      featuresHy?: string[];
       technologies?: string[];
+      technologiesEn?: string[];
+      technologiesRu?: string[];
+      technologiesHy?: string[];
       completionRate?: number;
       isActive?: boolean;
-    },
+    }
   ) {
     // Check if service exists
     const existingService = await this.prisma.service.findUnique({
@@ -206,7 +285,7 @@ export class ServicesService {
     // If parentId is being updated, check if parent exists and prevent circular reference
     if (updateServiceDto.parentId !== undefined) {
       if (updateServiceDto.parentId === id) {
-        throw new BadRequestException('Service cannot be its own parent');
+        throw new BadRequestException("Service cannot be its own parent");
       }
 
       if (updateServiceDto.parentId !== null) {
@@ -216,18 +295,18 @@ export class ServicesService {
 
         if (!parent) {
           throw new BadRequestException(
-            `Parent service with ID ${updateServiceDto.parentId} not found`,
+            `Parent service with ID ${updateServiceDto.parentId} not found`
           );
         }
 
         // Check for circular reference
         const isCircular = await this.checkCircularReference(
           id,
-          updateServiceDto.parentId,
+          updateServiceDto.parentId
         );
         if (isCircular) {
           throw new BadRequestException(
-            'Cannot set parent: would create circular reference',
+            "Cannot set parent: would create circular reference"
           );
         }
       }
@@ -260,7 +339,7 @@ export class ServicesService {
 
     if (childrenCount > 0) {
       throw new BadRequestException(
-        'Cannot delete service with child services. Please delete or reassign child services first.',
+        "Cannot delete service with child services. Please delete or reassign child services first."
       );
     }
 
@@ -272,7 +351,7 @@ export class ServicesService {
 
     if (specialistCount > 0 || ordersCount > 0) {
       throw new BadRequestException(
-        'Cannot delete service with associated specialist profiles or orders. Please reassign them first.',
+        "Cannot delete service with associated specialist profiles or orders. Please reassign them first."
       );
     }
 
@@ -281,7 +360,7 @@ export class ServicesService {
     });
   }
 
-  async getRootServices(language: string = 'en') {
+  async getRootServices(language: string = "en") {
     const services = await this.prisma.service.findMany({
       where: { parentId: null, isActive: true },
       include: {
@@ -289,7 +368,7 @@ export class ServicesService {
           where: { isActive: true },
         },
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
     });
 
     // Add computed fields to each service
@@ -314,27 +393,27 @@ export class ServicesService {
           specialistCount,
           recentOrders,
         };
-      }),
+      })
     );
 
     // Transform services for the specified language
     return servicesWithStats.map((service) =>
-      this.transformServiceForLanguage(service, language),
+      this.transformServiceForLanguage(service, language)
     );
   }
 
-  async getChildServices(parentId: number, language: string = 'en') {
+  async getChildServices(parentId: number, language: string = "en") {
     const services = await this.prisma.service.findMany({
       where: { parentId },
       include: {
         Parent: true,
       },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
     });
 
     // Transform services for the specified language
     return services.map((service) =>
-      this.transformServiceForLanguage(service, language),
+      this.transformServiceForLanguage(service, language)
     );
   }
 
@@ -342,7 +421,7 @@ export class ServicesService {
     query: string,
     page: number = 1,
     limit: number = 10,
-    language: string = 'en',
+    language: string = "en"
   ) {
     const skip = (page - 1) * limit;
 
@@ -350,8 +429,8 @@ export class ServicesService {
       this.prisma.service.findMany({
         where: {
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
           ],
         },
         skip,
@@ -365,13 +444,13 @@ export class ServicesService {
             },
           },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { name: "asc" },
       }),
       this.prisma.service.count({
         where: {
           OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
+            { name: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
           ],
         },
       }),
@@ -379,7 +458,7 @@ export class ServicesService {
 
     // Transform services for the specified language
     const transformedServices = services.map((service) =>
-      this.transformServiceForLanguage(service, language),
+      this.transformServiceForLanguage(service, language)
     );
 
     return {
@@ -397,7 +476,7 @@ export class ServicesService {
 
   private async checkCircularReference(
     serviceId: number,
-    parentId: number,
+    parentId: number
   ): Promise<boolean> {
     let currentParentId = parentId;
 

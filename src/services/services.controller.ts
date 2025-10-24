@@ -8,11 +8,11 @@ import {
   Delete,
   Query,
   UseGuards,
-} from '@nestjs/common';
-import { ServicesService } from './services.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+} from "@nestjs/common";
+import { ServicesService } from "./services.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller('services')
+@Controller("services")
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
@@ -23,53 +23,65 @@ export class ServicesController {
     createServiceDto: {
       name: string;
       description?: string;
+      nameEn?: string;
+      nameRu?: string;
+      nameHy?: string;
+      descriptionEn?: string;
+      descriptionRu?: string;
+      descriptionHy?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;
       maxPrice?: number;
       features?: string[];
+      featuresEn?: string[];
+      featuresRu?: string[];
+      featuresHy?: string[];
       technologies?: string[];
+      technologiesEn?: string[];
+      technologiesRu?: string[];
+      technologiesHy?: string[];
       completionRate?: number;
       isActive?: boolean;
-    },
+    }
   ) {
     return this.servicesService.create(createServiceDto);
   }
 
   @Get()
   async findAll(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-    @Query('parentId') parentId?: string,
-    @Query('language') language: string = 'en',
+    @Query("page") page: string = "1",
+    @Query("limit") limit: string = "10",
+    @Query("parentId") parentId?: string,
+    @Query("language") language: string = "en"
   ) {
     return this.servicesService.findAll(
       parseInt(page),
       parseInt(limit),
       parentId ? parseInt(parentId) : undefined,
-      language,
+      language
     );
   }
 
-  @Get('root')
-  async getRootServices(@Query('language') language: string = 'en') {
+  @Get("root")
+  async getRootServices(@Query("language") language: string = "en") {
     return this.servicesService.getRootServices(language);
   }
 
-  @Get('parent/:parentId')
+  @Get("parent/:parentId")
   async getChildServices(
-    @Param('parentId') parentId: string,
-    @Query('language') language: string = 'en',
+    @Param("parentId") parentId: string,
+    @Query("language") language: string = "en"
   ) {
     return this.servicesService.getChildServices(+parentId, language);
   }
 
-  @Get('search')
+  @Get("search")
   async searchServices(
-    @Query('q') query: string,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-    @Query('language') language: string = 'en',
+    @Query("q") query: string,
+    @Query("page") page: string = "1",
+    @Query("limit") limit: string = "10",
+    @Query("language") language: string = "en"
   ) {
     if (!query) {
       return {
@@ -89,42 +101,54 @@ export class ServicesController {
       query,
       parseInt(page),
       parseInt(limit),
-      language,
+      language
     );
   }
 
-  @Get(':id')
+  @Get(":id")
   async findOne(
-    @Param('id') id: string,
-    @Query('language') language: string = 'en',
+    @Param("id") id: string,
+    @Query("language") language: string = "en"
   ) {
     return this.servicesService.findOne(+id, language);
   }
 
-  @Patch(':id')
+  @Patch(":id")
   @UseGuards(JwtAuthGuard)
   async update(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body()
     updateServiceDto: {
       name?: string;
       description?: string;
+      nameEn?: string;
+      nameRu?: string;
+      nameHy?: string;
+      descriptionEn?: string;
+      descriptionRu?: string;
+      descriptionHy?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;
       maxPrice?: number;
       features?: string[];
+      featuresEn?: string[];
+      featuresRu?: string[];
+      featuresHy?: string[];
       technologies?: string[];
+      technologiesEn?: string[];
+      technologiesRu?: string[];
+      technologiesHy?: string[];
       completionRate?: number;
       isActive?: boolean;
-    },
+    }
   ) {
     return this.servicesService.update(+id, updateServiceDto);
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  async remove(@Param('id') id: string) {
+  async remove(@Param("id") id: string) {
     return this.servicesService.remove(+id);
   }
 }
