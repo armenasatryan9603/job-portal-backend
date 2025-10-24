@@ -55,6 +55,7 @@ model Service {
   descriptionEn  String?
   descriptionRu  String?
   descriptionHy  String?
+  imageUrl       String?
   parentId       Int?
   averagePrice   Float?
   minPrice       Float?

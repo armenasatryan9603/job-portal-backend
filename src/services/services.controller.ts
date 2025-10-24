@@ -29,6 +29,7 @@ export class ServicesController {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      imageUrl?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;
@@ -127,6 +128,7 @@ export class ServicesController {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      imageUrl?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;

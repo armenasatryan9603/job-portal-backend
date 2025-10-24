@@ -70,6 +70,7 @@ export class ServicesService {
     descriptionEn?: string;
     descriptionRu?: string;
     descriptionHy?: string;
+    imageUrl?: string;
     parentId?: number;
     averagePrice?: number;
     minPrice?: number;
@@ -257,6 +258,7 @@ export class ServicesService {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      imageUrl?: string;
       parentId?: number;
       averagePrice?: number;
       minPrice?: number;
