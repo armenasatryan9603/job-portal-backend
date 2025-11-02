@@ -4,15 +4,16 @@ import * as bcrypt from "bcrypt";
 import { JwtService } from "@nestjs/jwt";
 import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
 import { ReferralsService } from "../referrals/referrals.service";
-import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
+import { UniClient } from "uni-sdk";
 
 @Injectable()
 export class AuthService {
-  private snsClient: SNSClient | null = null;
-  private awsRegion: string;
-  private awsAccessKeyId: string;
-  private awsSecretAccessKey: string;
-  private snsEnabled: boolean;
+  private unimtxClient: UniClient | null = null;
+  private unimtxAccessKeyId: string;
+  private unimtxAccessKeySecret: string;
+  private unimtxTemplateId: string;
+  private unimtxSenderId: string;
+  private smsEnabled: boolean;
 
   constructor(
     private prisma: PrismaService,
@@ -20,34 +21,32 @@ export class AuthService {
     private phoneVerificationService: PhoneVerificationService,
     private referralsService: ReferralsService
   ) {
-    // Initialize AWS SNS
-    this.awsRegion = process.env.AWS_REGION || "us-east-1";
-    this.awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID || "";
-    this.awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || "";
-    this.snsEnabled = !!this.awsAccessKeyId && !!this.awsSecretAccessKey;
+    // Initialize Unimtx SMS
+    this.unimtxAccessKeyId = process.env.UNIMTX_ACCESS_KEY_ID || "";
+    this.unimtxAccessKeySecret = process.env.UNIMTX_ACCESS_KEY_SECRET || "";
+    this.unimtxTemplateId = process.env.UNIMTX_TEMPLATE_ID || "f781135d";
+    this.unimtxSenderId = process.env.UNIMTX_SENDER_ID || "asdf";
+    this.smsEnabled = !!this.unimtxAccessKeyId && !!this.unimtxAccessKeySecret;
 
-    if (this.snsEnabled) {
-      this.snsClient = new SNSClient({
-        region: this.awsRegion,
-        credentials: {
-          accessKeyId: this.awsAccessKeyId,
-          secretAccessKey: this.awsSecretAccessKey,
-        },
+    if (this.smsEnabled) {
+      this.unimtxClient = new UniClient({
+        accessKeyId: this.unimtxAccessKeyId,
+        accessKeySecret: this.unimtxAccessKeySecret,
       });
-      console.log("✅ AWS SNS service initialized");
+      console.log("✅ Unimtx SMS service initialized");
     } else {
       console.log(
-        "⚠️  AWS SNS not configured - OTP will be logged to console only"
+        "⚠️  Unimtx SMS not configured - OTP will be logged to console only"
       );
     }
   }
 
   /**
-   * Send SMS via AWS SNS
+   * Send SMS via Unimtx
    */
   private async sendSMS(phone: string, message: string): Promise<boolean> {
-    if (!this.snsClient) {
-      console.error("❌ AWS SNS client not initialized");
+    if (!this.unimtxClient) {
+      console.error("❌ Unimtx client not initialized");
       return false;
     }
 
@@ -55,24 +54,31 @@ export class AuthService {
       // Clean phone number: ensure E.164 format
       const cleanPhone = phone.replace(/[\s\-]/g, "");
 
-      const command = new PublishCommand({
-        Message: message,
-        PhoneNumber: cleanPhone,
+      const response = await this.unimtxClient.messages.send({
+        to: cleanPhone,
+        text: message,
       });
 
-      const response = await this.snsClient.send(command);
-
-      if (response.MessageId) {
+      if (
+        response &&
+        ((response as any).id ||
+          (response as any).messageId ||
+          (response as any).message_id)
+      ) {
+        const messageId =
+          (response as any).id ||
+          (response as any).messageId ||
+          (response as any).message_id;
         console.log(
-          `📱 SMS sent to ${phone} via AWS SNS (MessageId: ${response.MessageId})`
+          `📱 SMS sent to ${phone} via Unimtx (MessageId: ${messageId})`
         );
         return true;
       } else {
-        console.error("❌ AWS SNS error: No MessageId returned");
+        console.error("❌ Unimtx error: No MessageId returned");
         return false;
       }
     } catch (error) {
-      console.error("❌ Failed to send SMS via AWS SNS:", error.message);
+      console.error("❌ Failed to send SMS via Unimtx:", error.message);
       return false;
     }
   }
@@ -228,66 +234,96 @@ export class AuthService {
   }
 
   async sendOTP(phone: string) {
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Clean phone number: ensure E.164 format
+    const cleanPhone = phone.replace(/[\s\-]/g, "");
 
-    // Store OTP in database with expiration (5 minutes)
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+    // Send OTP via Unimtx if configured, otherwise generate and store locally
+    if (this.smsEnabled && this.unimtxClient) {
+      try {
+        const response = await this.unimtxClient.otp.send({
+          to: cleanPhone,
+          templateId: this.unimtxTemplateId,
+          signature: this.unimtxSenderId,
+        });
 
-    await this.prisma.user.upsert({
-      where: { phone },
-      update: {
-        otpCode: otp,
-        otpExpiresAt: expiresAt,
-      },
-      create: {
-        phone,
-        name: "",
-        passwordHash: "temp_password",
-        role: "user",
-        otpCode: otp,
-        otpExpiresAt: expiresAt,
-      },
-    });
-
-    // Send SMS if Brevo is configured, otherwise log to console
-    if (this.snsEnabled) {
-      const message = `Your verification code is: ${otp}. This code will expire in 5 minutes.`;
-      const smsSent = await this.sendSMS(phone, message);
-
-      if (!smsSent) {
-        // Fall back to console logging if SMS fails
-        console.log(`OTP for ${phone}: ${otp}`);
+        // Check Unimtx response structure: code "0" means success
+        const responseData = response as any;
+        if (responseData && responseData.code === "0" && responseData.data) {
+          const messageId = responseData.data.id;
+          if (messageId) {
+            console.log(
+              `📱 OTP sent to ${phone} via Unimtx (MessageId: ${messageId})`
+            );
+            return {
+              success: true,
+              message: "OTP sent successfully",
+            };
+          } else {
+            throw new Error("No MessageId in Unimtx response data");
+          }
+        } else if (responseData && responseData.code !== "0") {
+          throw new Error(`Unimtx API error: code ${responseData.code}`);
+        } else {
+          throw new Error("Invalid response structure from Unimtx");
+        }
+      } catch (error) {
+        console.error("❌ Failed to send OTP via Unimtx:", error.message);
+        // Fall back to console logging
+        console.log(`OTP for ${phone}: ${error.message}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
     } else {
-      // Brevo not configured - log OTP to console
+      // Unimtx not configured - generate OTP and log to console
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
       console.log(`OTP for ${phone}: ${otp}`);
-    }
 
-    return {
-      success: true,
-      message: "OTP sent successfully",
-      // In development, return OTP for testing
-      ...(process.env.NODE_ENV === "development" && { otp }),
-    };
+      return {
+        success: true,
+        message: "OTP sent successfully",
+        // In development, return OTP for testing
+        ...(process.env.NODE_ENV === "development" && { otp }),
+      };
+    }
   }
 
   async verifyOTP(phone: string, otp: string, name?: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { phone },
-    });
+    // Clean phone number: ensure E.164 format
+    const cleanPhone = phone.replace(/[\s\-]/g, "");
 
-    if (!user || !user.otpCode || !user.otpExpiresAt) {
-      throw new Error("Invalid phone number or OTP not requested");
-    }
+    // Verify OTP via Unimtx if configured, otherwise use local verification
+    if (this.smsEnabled && this.unimtxClient) {
+      try {
+        const response = await this.unimtxClient.otp.verify({
+          to: cleanPhone,
+          code: otp,
+        });
 
-    if (user.otpCode !== otp) {
-      throw new Error("Invalid OTP");
-    }
+        if (!response.valid) {
+          throw new Error("Invalid OTP");
+        }
 
-    if (new Date() > user.otpExpiresAt) {
-      throw new Error("OTP has expired");
+        console.log(`✅ OTP verified successfully for ${phone} via Unimtx`);
+      } catch (error) {
+        console.error("❌ Failed to verify OTP via Unimtx:", error.message);
+        throw new Error("Invalid OTP");
+      }
+    } else {
+      // Fallback to local verification when Unimtx is not configured
+      const user = await this.prisma.user.findUnique({
+        where: { phone },
+      });
+
+      if (!user || !user.otpCode || !user.otpExpiresAt) {
+        throw new Error("Invalid phone number or OTP not requested");
+      }
+
+      if (user.otpCode !== otp) {
+        throw new Error("Invalid OTP");
+      }
+
+      if (new Date() > user.otpExpiresAt) {
+        throw new Error("OTP has expired");
+      }
     }
 
     // Check phone verification before proceeding
@@ -295,41 +331,57 @@ export class AuthService {
       await this.phoneVerificationService.checkPhoneNumber(phone);
     console.log("📱 Phone verification result:", phoneCheck);
 
-    // Clear OTP after successful verification and update name if provided
-    const updateData: any = {
-      otpCode: null,
-      otpExpiresAt: null,
-    };
-
-    if (name && name.trim()) {
-      updateData.name = name.trim();
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id: user.id },
-      data: updateData,
+    // Find or create user
+    let user = await this.prisma.user.findUnique({
+      where: { phone },
     });
+
+    if (!user) {
+      // Create new user if doesn't exist
+      user = await this.prisma.user.create({
+        data: {
+          phone,
+          name: name?.trim() || "",
+          passwordHash: "temp_password",
+          role: "user",
+        },
+      });
+    } else {
+      // Update existing user
+      const updateData: any = {};
+
+      if (name && name.trim()) {
+        updateData.name = name.trim();
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+        });
+      }
+    }
 
     // Track phone number for new account
     await this.phoneVerificationService.trackNewAccount(phone);
 
     // Generate JWT token
     const payload = {
-      sub: updatedUser.id,
-      email: updatedUser.email || "", // Handle null email
-      role: updatedUser.role,
+      sub: user.id,
+      email: user.email || "", // Handle null email
+      role: user.role,
     };
     const token = this.jwtService.sign(payload);
 
     return {
       access_token: token,
       user: {
-        id: updatedUser.id,
-        email: updatedUser.email || "", // Handle null email
-        name: updatedUser.name,
-        phone: updatedUser.phone,
-        avatarUrl: updatedUser.avatarUrl,
-        role: updatedUser.role,
+        id: user.id,
+        email: user.email || "", // Handle null email
+        name: user.name,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        role: user.role,
       },
     };
   }
@@ -380,7 +432,7 @@ export class AuthService {
     });
 
     // Send SMS if Brevo is configured, otherwise log to console
-    if (this.snsEnabled) {
+    if (this.smsEnabled) {
       const message = `Your new verification code is: ${otp}. This code will expire in 5 minutes.`;
       const smsSent = await this.sendSMS(phone, message);
 
