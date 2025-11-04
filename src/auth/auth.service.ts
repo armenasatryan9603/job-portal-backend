@@ -25,7 +25,8 @@ export class AuthService {
     this.unimtxAccessKeyId = process.env.UNIMTX_ACCESS_KEY_ID || "";
     this.unimtxAccessKeySecret = process.env.UNIMTX_ACCESS_KEY_SECRET || "";
     this.unimtxTemplateId = process.env.UNIMTX_TEMPLATE_ID || "f781135d";
-    this.unimtxSenderId = process.env.UNIMTX_SENDER_ID || "asdf";
+    this.unimtxSenderId = process.env.UNIMTX_SENDER_ID || "GorcKa";
+
     this.smsEnabled = !!this.unimtxAccessKeyId && !!this.unimtxAccessKeySecret;
 
     if (this.smsEnabled) {
