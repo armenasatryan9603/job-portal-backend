@@ -52,8 +52,23 @@ export class AuthService {
     }
 
     try {
-      // Clean phone number: ensure E.164 format
-      const cleanPhone = phone.replace(/[\s\-]/g, "");
+      // Clean phone number: remove spaces and dashes
+      let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+
+      // Format phone number: ensure E.164 format with country code
+      if (!cleanPhone.startsWith("+")) {
+        // If it starts with 0, remove it and add country code
+        if (cleanPhone.startsWith("0")) {
+          cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
+        } else if (cleanPhone.startsWith("374")) {
+          // Already has country code without +
+          cleanPhone = "+" + cleanPhone;
+        } else {
+          // Assume it's a local number, add country code
+          cleanPhone = "+374" + cleanPhone;
+        }
+      }
+      // If it already starts with +, keep it as is
 
       const response = await this.unimtxClient.messages.send({
         to: cleanPhone,
@@ -235,8 +250,23 @@ export class AuthService {
   }
 
   async sendOTP(phone: string) {
-    // Clean phone number: ensure E.164 format
-    const cleanPhone = phone.replace(/[\s\-]/g, "");
+    // Clean phone number: remove spaces and dashes
+    let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+
+    // Format phone number: ensure E.164 format with country code
+    if (!cleanPhone.startsWith("+")) {
+      // If it starts with 0, remove it and add country code
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
+      } else if (cleanPhone.startsWith("374")) {
+        // Already has country code without +
+        cleanPhone = "+" + cleanPhone;
+      } else {
+        // Assume it's a local number, add country code
+        cleanPhone = "+374" + cleanPhone;
+      }
+    }
+    // If it already starts with +, keep it as is
 
     // Send OTP via Unimtx if configured, otherwise generate and store locally
     if (this.smsEnabled && this.unimtxClient) {
@@ -289,7 +319,22 @@ export class AuthService {
 
   async verifyOTP(phone: string, otp: string, name?: string) {
     // Clean phone number: ensure E.164 format
-    const cleanPhone = phone.replace(/[\s\-]/g, "");
+    let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+
+    // Format phone number: ensure E.164 format with country code
+    if (!cleanPhone.startsWith("+")) {
+      // If it starts with 0, remove it and add country code
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
+      } else if (cleanPhone.startsWith("374")) {
+        // Already has country code without +
+        cleanPhone = "+" + cleanPhone;
+      } else {
+        // Assume it's a local number, add country code
+        cleanPhone = "+374" + cleanPhone;
+      }
+    }
+    // If it already starts with +, keep it as is
 
     // Verify OTP via Unimtx if configured, otherwise use local verification
     if (this.smsEnabled && this.unimtxClient) {
@@ -310,8 +355,9 @@ export class AuthService {
       }
     } else {
       // Fallback to local verification when Unimtx is not configured
+      // Use cleanPhone for consistency
       const user = await this.prisma.user.findUnique({
-        where: { phone },
+        where: { phone: cleanPhone },
       });
 
       if (!user || !user.otpCode || !user.otpExpiresAt) {
@@ -327,44 +373,65 @@ export class AuthService {
       }
     }
 
-    // Check phone verification before proceeding
-    const phoneCheck =
-      await this.phoneVerificationService.checkPhoneNumber(phone);
-    console.log("📱 Phone verification result:", phoneCheck);
-
-    // Find or create user
-    let user = await this.prisma.user.findUnique({
-      where: { phone },
-    });
-
-    if (!user) {
-      // Create new user if doesn't exist
-      user = await this.prisma.user.create({
-        data: {
-          phone,
-          name: name?.trim() || "",
-          passwordHash: "temp_password",
-          role: "user",
-        },
-      });
-    } else {
-      // Update existing user
-      const updateData: any = {};
-
-      if (name && name.trim()) {
-        updateData.name = name.trim();
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        user = await this.prisma.user.update({
-          where: { id: user.id },
-          data: updateData,
-        });
-      }
+    // Check phone verification before proceeding - use cleanPhone
+    try {
+      const phoneCheck =
+        await this.phoneVerificationService.checkPhoneNumber(cleanPhone);
+      console.log("📱 Phone verification result:", phoneCheck);
+    } catch (error) {
+      console.error("❌ Error checking phone number:", error.message);
+      // Continue anyway - don't fail the whole process
     }
 
-    // Track phone number for new account
-    await this.phoneVerificationService.trackNewAccount(phone);
+    // Find or create user - use cleanPhone for consistency
+    let user;
+    try {
+      user = await this.prisma.user.findUnique({
+        where: { phone: cleanPhone },
+      });
+
+      if (!user) {
+        // Create new user if doesn't exist
+        console.log(`📝 Creating new user with phone: ${cleanPhone}`);
+        user = await this.prisma.user.create({
+          data: {
+            phone: cleanPhone, // Use formatted phone number
+            name: name?.trim() || "",
+            passwordHash: "temp_password",
+            role: "user",
+          },
+        });
+        console.log(`✅ User created with ID: ${user.id}`);
+      } else {
+        console.log(`👤 Found existing user with ID: ${user.id}`);
+        // Update existing user
+        const updateData: any = {};
+
+        if (name && name.trim()) {
+          updateData.name = name.trim();
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: updateData,
+          });
+          console.log(`✅ User updated`);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error finding/creating user:", error.message);
+      console.error("❌ Error details:", error);
+      throw new Error(`Failed to create or update user: ${error.message}`);
+    }
+
+    // Track phone number for new account - use cleanPhone
+    try {
+      await this.phoneVerificationService.trackNewAccount(cleanPhone);
+    } catch (error) {
+      console.error("❌ Error tracking phone number:", error.message);
+      // Continue anyway - don't fail the whole process
+    }
 
     // Generate JWT token
     const payload = {
