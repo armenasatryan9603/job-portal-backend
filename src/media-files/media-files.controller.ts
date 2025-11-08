@@ -163,7 +163,7 @@ export class MediaFilesController {
     return this.mediaFilesService.getMediaFileById(id);
   }
 
-  // @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Delete(":id")
   async deleteMediaFile(@Param("id", ParseIntPipe) id: number, @Request() req) {
     return this.mediaFilesService.deleteMediaFile(id, req.user.userId);

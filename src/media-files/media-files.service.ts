@@ -2,12 +2,16 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { GcsService } from "../storage/gcs.service";
 
 @Injectable()
 export class MediaFilesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private gcsService: GcsService
+  ) {}
 
   async createMediaFile(
     orderId: number,
@@ -16,7 +20,7 @@ export class MediaFilesService {
     fileType: string,
     mimeType: string,
     fileSize: number,
-    uploadedBy: number,
+    uploadedBy: number
   ) {
     // Check if order exists
     const order = await this.prisma.order.findUnique({
@@ -77,7 +81,7 @@ export class MediaFilesService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
   }
@@ -107,7 +111,7 @@ export class MediaFilesService {
 
     if (!mediaFile) {
       throw new NotFoundException(
-        `Media file with ID ${mediaFileId} not found`,
+        `Media file with ID ${mediaFileId} not found`
       );
     }
 
@@ -117,12 +121,37 @@ export class MediaFilesService {
       mediaFile.uploadedBy !== userId
     ) {
       throw new BadRequestException(
-        'You are not authorized to delete this media file',
+        "You are not authorized to delete this media file"
       );
     }
 
-    return this.prisma.mediaFile.delete({
+    // Extract file path from fileUrl for GCS deletion
+    // fileUrl format: https://storage.googleapis.com/bucket-name/path/to/file.jpg
+    let filePath: string | null = null;
+    try {
+      const url = new URL(mediaFile.fileUrl);
+      // Remove leading slash from pathname
+      filePath = url.pathname.substring(1);
+    } catch (error) {
+      console.error("Error parsing fileUrl:", error);
+    }
+
+    // Delete from database first
+    const deletedMediaFile = await this.prisma.mediaFile.delete({
       where: { id: mediaFileId },
     });
+
+    // Delete from GCS if file path was extracted successfully
+    if (filePath) {
+      try {
+        await this.gcsService.deleteFile(filePath);
+        console.log(`File deleted from GCS: ${filePath}`);
+      } catch (error) {
+        console.error(`Failed to delete file from GCS: ${filePath}`, error);
+        // Don't throw error - file is already deleted from DB
+      }
+    }
+
+    return deletedMediaFile;
   }
 }

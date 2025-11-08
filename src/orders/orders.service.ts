@@ -2,15 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { MediaFilesService } from '../media-files/media-files.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { MediaFilesService } from "../media-files/media-files.service";
 
 @Injectable()
 export class OrdersService {
   constructor(
     private prisma: PrismaService,
-    private mediaFilesService: MediaFilesService,
+    private mediaFilesService: MediaFilesService
   ) {}
 
   async createOrder(
@@ -21,7 +21,7 @@ export class OrdersService {
     budget: number,
     availableDates?: string[],
     location?: string,
-    skills?: string[],
+    skills?: string[]
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
@@ -43,6 +43,19 @@ export class OrdersService {
       }
     }
 
+    // Ensure arrays are properly formatted
+    const formattedAvailableDates = Array.isArray(availableDates)
+      ? availableDates
+      : availableDates
+        ? [availableDates]
+        : [];
+
+    const formattedSkills = Array.isArray(skills)
+      ? skills
+      : skills
+        ? [skills]
+        : [];
+
     return this.prisma.order.create({
       data: {
         clientId,
@@ -50,10 +63,10 @@ export class OrdersService {
         title,
         description,
         budget,
-        availableDates: availableDates || [],
+        availableDates: formattedAvailableDates,
         location,
-        skills: skills || [],
-        status: 'open',
+        skills: formattedSkills,
+        status: "open",
       },
       include: {
         Client: {
@@ -79,7 +92,7 @@ export class OrdersService {
     limit: number = 10,
     status?: string,
     serviceId?: number,
-    clientId?: number,
+    clientId?: number
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -112,7 +125,7 @@ export class OrdersService {
           },
           Proposals: {
             take: 3,
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: "desc" },
             include: {},
           },
           _count: {
@@ -122,7 +135,7 @@ export class OrdersService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -160,7 +173,7 @@ export class OrdersService {
           },
         },
         Proposals: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
         Reviews: {
           include: {
@@ -173,10 +186,10 @@ export class OrdersService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
         MediaFiles: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
         _count: {
           select: {
@@ -202,7 +215,7 @@ export class OrdersService {
       description?: string;
       budget?: number;
       status?: string;
-    },
+    }
   ) {
     // Validate that id is a valid number
     if (!id || isNaN(id) || id <= 0) {
@@ -227,20 +240,20 @@ export class OrdersService {
 
         if (!service) {
           throw new BadRequestException(
-            `Service with ID ${updateOrderDto.serviceId} not found`,
+            `Service with ID ${updateOrderDto.serviceId} not found`
           );
         }
       }
     }
 
     // Validate status
-    const validStatuses = ['open', 'in_progress', 'completed', 'cancelled'];
+    const validStatuses = ["open", "in_progress", "completed", "cancelled"];
     if (
       updateOrderDto.status &&
       !validStatuses.includes(updateOrderDto.status)
     ) {
       throw new BadRequestException(
-        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`
       );
     }
 
@@ -289,7 +302,7 @@ export class OrdersService {
 
     if (proposalsCount > 0 || reviewsCount > 0) {
       throw new BadRequestException(
-        'Cannot delete order with existing proposals or reviews. Please handle them first.',
+        "Cannot delete order with existing proposals or reviews. Please handle them first."
       );
     }
 
@@ -301,7 +314,7 @@ export class OrdersService {
   async getOrdersByClient(
     clientId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, undefined, undefined, clientId);
   }
@@ -309,7 +322,7 @@ export class OrdersService {
   async getOrdersBySpecialist(
     specialistId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     const skip = (page - 1) * limit;
 
@@ -319,7 +332,7 @@ export class OrdersService {
           Proposals: {
             some: {
               userId: specialistId,
-              status: 'accepted',
+              status: "accepted",
             },
           },
         },
@@ -335,7 +348,7 @@ export class OrdersService {
           Proposals: {
             where: {
               userId: specialistId,
-              status: 'accepted',
+              status: "accepted",
             },
             include: {
               User: {
@@ -356,14 +369,14 @@ export class OrdersService {
         },
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({
         where: {
           Proposals: {
             some: {
               userId: specialistId,
-              status: 'accepted',
+              status: "accepted",
             },
           },
         },
@@ -386,7 +399,7 @@ export class OrdersService {
   async getOrdersByService(
     serviceId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, undefined, serviceId);
   }
@@ -394,7 +407,7 @@ export class OrdersService {
   async getOrdersByStatus(
     status: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, status);
   }
@@ -406,16 +419,16 @@ export class OrdersService {
       this.prisma.order.findMany({
         where: {
           OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
+            { title: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
             {
               Client: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
             {
               Service: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
           ],
@@ -438,21 +451,21 @@ export class OrdersService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({
         where: {
           OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { description: { contains: query, mode: 'insensitive' } },
+            { title: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
             {
               Client: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
             {
               Service: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
           ],
@@ -489,14 +502,14 @@ export class OrdersService {
     }
 
     if (order.clientId !== userId) {
-      throw new BadRequestException('You can only update your own orders');
+      throw new BadRequestException("You can only update your own orders");
     }
 
     // Validate status
-    const validStatuses = ['open', 'in_progress', 'completed', 'cancelled'];
+    const validStatuses = ["open", "in_progress", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       throw new BadRequestException(
-        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`
       );
     }
 
@@ -528,11 +541,11 @@ export class OrdersService {
     serviceId?: number,
     location?: string,
     budgetMin?: number,
-    budgetMax?: number,
+    budgetMax?: number
   ) {
     const skip = (page - 1) * limit;
     const where: any = {
-      status: 'open',
+      status: "open",
     };
 
     if (serviceId) {
@@ -561,7 +574,7 @@ export class OrdersService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({ where }),
     ]);
@@ -598,7 +611,7 @@ export class OrdersService {
       fileType: string;
       mimeType: string;
       fileSize: number;
-    }> = [],
+    }> = []
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
@@ -618,7 +631,7 @@ export class OrdersService {
           availableDates: availableDates || [],
           location,
           skills: skills || [],
-          status: 'open',
+          status: "open",
         },
         include: {
           Client: {
@@ -657,9 +670,9 @@ export class OrdersService {
             createdMediaFiles.push(createdMediaFile);
           } catch (error) {
             // If any media file creation fails, the transaction will be rolled back
-            console.error('Failed to create media file:', error);
+            console.error("Failed to create media file:", error);
             throw new BadRequestException(
-              `Failed to create media file: ${mediaFile.fileName}`,
+              `Failed to create media file: ${mediaFile.fileName}`
             );
           }
         }
@@ -684,15 +697,15 @@ export class OrdersService {
       fileType: string;
       mimeType: string;
       fileSize: number;
-    }>,
+    }>
   ) {
     for (const mediaFile of mediaFiles) {
       try {
         // Validate file type
-        const allowedTypes = ['image', 'video'];
+        const allowedTypes = ["image", "video"];
         if (!allowedTypes.includes(mediaFile.fileType)) {
           throw new BadRequestException(
-            `Invalid file type: ${mediaFile.fileType}. Allowed types: ${allowedTypes.join(', ')}`,
+            `Invalid file type: ${mediaFile.fileType}. Allowed types: ${allowedTypes.join(", ")}`
           );
         }
 
@@ -700,14 +713,14 @@ export class OrdersService {
         const maxSize = 50 * 1024 * 1024; // 50MB
         if (mediaFile.fileSize > maxSize) {
           throw new BadRequestException(
-            `File too large: ${mediaFile.fileName}. Maximum size: 50MB`,
+            `File too large: ${mediaFile.fileName}. Maximum size: 50MB`
           );
         }
 
         // Validate required fields
         if (!mediaFile.fileName || !mediaFile.fileUrl || !mediaFile.mimeType) {
           throw new BadRequestException(
-            `Missing required fields for media file: ${mediaFile.fileName}`,
+            `Missing required fields for media file: ${mediaFile.fileName}`
           );
         }
 
@@ -717,7 +730,7 @@ export class OrdersService {
           throw error;
         }
         throw new BadRequestException(
-          `Failed to validate media file: ${mediaFile.fileName}`,
+          `Failed to validate media file: ${mediaFile.fileName}`
         );
       }
     }
