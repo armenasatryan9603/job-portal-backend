@@ -15,7 +15,7 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { MediaFilesService } from "./media-files.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { GcsService } from "../storage/gcs.service";
+import { VercelBlobService } from "../storage/vercel-blob.service";
 import { memoryStorage } from "multer";
 import { extname } from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -24,7 +24,7 @@ import { v4 as uuidv4 } from "uuid";
 export class MediaFilesController {
   constructor(
     private readonly mediaFilesService: MediaFilesService,
-    private readonly gcsService: GcsService
+    private readonly vercelBlobService: VercelBlobService
   ) {}
 
   // @UseGuards(JwtAuthGuard)
@@ -40,7 +40,7 @@ export class MediaFilesController {
   ) {
     try {
       const { uploadUrl, fileUrl, fileName } =
-        await this.gcsService.generateSignedUploadUrl(
+        await this.vercelBlobService.generateSignedUploadUrl(
           body.fileName,
           body.mimeType,
           body.orderId
@@ -58,8 +58,8 @@ export class MediaFilesController {
     }
   }
 
-  // @UseGuards(JwtAuthGuard)
   @Post("upload")
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor("file", {
       storage: memoryStorage(),
@@ -87,44 +87,63 @@ export class MediaFilesController {
       },
     })
   )
-  async uploadMediaFile(
-    @Request() req,
-    @UploadedFile() file: any,
-    @Body()
-    body: {
-      orderId: string;
-      fileType: string;
-    }
-  ) {
+  async uploadMediaFile(@Request() req, @UploadedFile() file: any) {
     if (!file) {
       throw new BadRequestException("No file uploaded");
     }
 
-    const orderId = parseInt(body.orderId);
+    // Parse body fields from FormData (req.body is available with multer)
+    const orderId = req.body?.orderId
+      ? parseInt(req.body.orderId.toString())
+      : null;
+    const fileType = req.body?.fileType
+      ? req.body.fileType.toString()
+      : file.mimetype.startsWith("image/")
+        ? "image"
+        : "video";
 
-    // Generate unique filename for GCS
-    const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+    // Generate unique filename for Vercel Blob
+    // Use a temporary path if orderId is not provided
+    const pathPrefix = orderId ? `orders/${orderId}` : "temp";
+    const uniqueName = `${pathPrefix}/${uuidv4()}${extname(file.originalname)}`;
 
-    // Upload to Google Cloud Storage
-    const fileUrl = await this.gcsService.uploadFile(
+    // Upload to Vercel Blob
+    const fileUrl = await this.vercelBlobService.uploadFile(
       file.buffer,
       uniqueName,
       file.mimetype,
-      orderId
+      orderId || 0 // Pass 0 for temp uploads, but we won't create DB record
     );
 
-    const fileType =
-      body.fileType || (file.mimetype.startsWith("image/") ? "image" : "video");
+    // Get user ID from request (required since we have JwtAuthGuard)
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException("User not authenticated");
+    }
 
-    return this.mediaFilesService.createMediaFile(
-      orderId,
-      file.originalname,
+    // If orderId is provided, create MediaFile record immediately
+    // Otherwise, just return the fileUrl (will be created when order is created)
+    if (orderId) {
+      return this.mediaFilesService.createMediaFile(
+        orderId,
+        file.originalname,
+        fileUrl,
+        fileType,
+        file.mimetype,
+        file.size,
+        userId
+      );
+    }
+
+    // For temporary uploads (orderId is null), just return the file info
+    // The MediaFile record will be created when the order is created
+    return {
       fileUrl,
+      fileName: file.originalname,
       fileType,
-      file.mimetype,
-      file.size,
-      req.user?.userId || 1 // Use default user ID 1 if no auth
-    );
+      mimeType: file.mimetype,
+      fileSize: file.size,
+    };
   }
 
   // @UseGuards(JwtAuthGuard)

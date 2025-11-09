@@ -4,13 +4,13 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
-import { GcsService } from "../storage/gcs.service";
+import { VercelBlobService } from "../storage/vercel-blob.service";
 
 @Injectable()
 export class MediaFilesService {
   constructor(
     private prisma: PrismaService,
-    private gcsService: GcsService
+    private vercelBlobService: VercelBlobService
   ) {}
 
   async createMediaFile(
@@ -31,13 +31,15 @@ export class MediaFilesService {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
 
-    // Check if user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: uploadedBy },
-    });
+    // Check if user exists (skip check for default user ID 1 - used for unauthenticated uploads)
+    if (uploadedBy !== 1) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: uploadedBy },
+      });
 
-    if (!user) {
-      throw new NotFoundException(`User with ID ${uploadedBy} not found`);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${uploadedBy} not found`);
+      }
     }
 
     return this.prisma.mediaFile.create({
@@ -125,29 +127,23 @@ export class MediaFilesService {
       );
     }
 
-    // Extract file path from fileUrl for GCS deletion
-    // fileUrl format: https://storage.googleapis.com/bucket-name/path/to/file.jpg
-    let filePath: string | null = null;
-    try {
-      const url = new URL(mediaFile.fileUrl);
-      // Remove leading slash from pathname
-      filePath = url.pathname.substring(1);
-    } catch (error) {
-      console.error("Error parsing fileUrl:", error);
-    }
-
     // Delete from database first
     const deletedMediaFile = await this.prisma.mediaFile.delete({
       where: { id: mediaFileId },
     });
 
-    // Delete from GCS if file path was extracted successfully
-    if (filePath) {
+    // Delete from Vercel Blob using the full URL
+    if (deletedMediaFile.fileUrl) {
       try {
-        await this.gcsService.deleteFile(filePath);
-        console.log(`File deleted from GCS: ${filePath}`);
+        await this.vercelBlobService.deleteFile(deletedMediaFile.fileUrl);
+        console.log(
+          `File deleted from Vercel Blob: ${deletedMediaFile.fileUrl}`
+        );
       } catch (error) {
-        console.error(`Failed to delete file from GCS: ${filePath}`, error);
+        console.error(
+          `Failed to delete file from Vercel Blob: ${deletedMediaFile.fileUrl}`,
+          error
+        );
         // Don't throw error - file is already deleted from DB
       }
     }

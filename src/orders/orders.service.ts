@@ -4,13 +4,13 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
-import { MediaFilesService } from "../media-files/media-files.service";
+import { OrderPricingService } from "../order-pricing/order-pricing.service";
 
 @Injectable()
 export class OrdersService {
   constructor(
     private prisma: PrismaService,
-    private mediaFilesService: MediaFilesService
+    private orderPricingService: OrderPricingService
   ) {}
 
   async createOrder(
@@ -123,6 +123,13 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
+          BannerImage: {
+            select: {
+              id: true,
+              fileUrl: true,
+              fileType: true,
+            },
+          },
           Proposals: {
             take: 3,
             orderBy: { createdAt: "desc" },
@@ -140,8 +147,21 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
+    // Calculate credit cost for each order
+    const ordersWithCreditCost = await Promise.all(
+      orders.map(async (order) => {
+        const creditCost = await this.orderPricingService.getCreditCost(
+          order.budget || 0
+        );
+        return {
+          ...order,
+          creditCost,
+        };
+      })
+    );
+
     return {
-      orders,
+      orders: ordersWithCreditCost,
       pagination: {
         page,
         limit,
@@ -191,6 +211,13 @@ export class OrdersService {
         MediaFiles: {
           orderBy: { createdAt: "desc" },
         },
+        BannerImage: {
+          select: {
+            id: true,
+            fileUrl: true,
+            fileType: true,
+          },
+        },
         _count: {
           select: {
             Proposals: true,
@@ -204,7 +231,56 @@ export class OrdersService {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    return order;
+    // Calculate credit cost for the order
+    const creditCost = await this.orderPricingService.getCreditCost(
+      order.budget || 0
+    );
+
+    return {
+      ...order,
+      creditCost,
+    };
+  }
+
+  async setBannerImage(orderId: number, mediaFileId: number) {
+    // Verify order exists
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Verify media file exists and belongs to this order
+    const mediaFile = await this.prisma.mediaFile.findFirst({
+      where: {
+        id: mediaFileId,
+        orderId: orderId,
+        fileType: "image", // Only images can be banner
+      },
+    });
+
+    if (!mediaFile) {
+      throw new NotFoundException(
+        `Media file with ID ${mediaFileId} not found or is not an image for this order`
+      );
+    }
+
+    // Update order with banner image
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: { bannerImageId: mediaFileId },
+      include: {
+        BannerImage: {
+          select: {
+            id: true,
+            fileUrl: true,
+            fileType: true,
+          },
+        },
+      },
+    });
   }
 
   async update(
@@ -383,8 +459,21 @@ export class OrdersService {
       }),
     ]);
 
+    // Calculate credit cost for each order
+    const ordersWithCreditCost = await Promise.all(
+      orders.map(async (order) => {
+        const creditCost = await this.orderPricingService.getCreditCost(
+          order.budget || 0
+        );
+        return {
+          ...order,
+          creditCost,
+        };
+      })
+    );
+
     return {
-      orders,
+      orders: ordersWithCreditCost,
       pagination: {
         page,
         limit,
@@ -473,8 +562,21 @@ export class OrdersService {
       }),
     ]);
 
+    // Calculate credit cost for each order
+    const ordersWithCreditCost = await Promise.all(
+      orders.map(async (order) => {
+        const creditCost = await this.orderPricingService.getCreditCost(
+          order.budget || 0
+        );
+        return {
+          ...order,
+          creditCost,
+        };
+      })
+    );
+
     return {
-      orders,
+      orders: ordersWithCreditCost,
       pagination: {
         page,
         limit,
@@ -651,23 +753,37 @@ export class OrdersService {
         },
       });
 
-      // Create media files if any
+      // Create media file records if any
       const createdMediaFiles: any[] = [];
       if (mediaFiles.length > 0) {
         for (const mediaFile of mediaFiles) {
           try {
-            const createdMediaFile = await tx.mediaFile.create({
-              data: {
-                orderId: order.id,
-                fileName: mediaFile.fileName,
+            // Check if media file already exists (shouldn't happen, but check anyway)
+            const existingMediaFile = await tx.mediaFile.findFirst({
+              where: {
                 fileUrl: mediaFile.fileUrl,
-                fileType: mediaFile.fileType,
-                mimeType: mediaFile.mimeType,
-                fileSize: mediaFile.fileSize,
-                uploadedBy: clientId,
+                orderId: order.id,
               },
             });
-            createdMediaFiles.push(createdMediaFile);
+
+            if (existingMediaFile) {
+              // Already exists, use it
+              createdMediaFiles.push(existingMediaFile);
+            } else {
+              // Create new media file record
+              const createdMediaFile = await tx.mediaFile.create({
+                data: {
+                  orderId: order.id,
+                  fileName: mediaFile.fileName,
+                  fileUrl: mediaFile.fileUrl,
+                  fileType: mediaFile.fileType,
+                  mimeType: mediaFile.mimeType,
+                  fileSize: mediaFile.fileSize,
+                  uploadedBy: clientId,
+                },
+              });
+              createdMediaFiles.push(createdMediaFile);
+            }
           } catch (error) {
             // If any media file creation fails, the transaction will be rolled back
             console.error("Failed to create media file:", error);
@@ -687,7 +803,7 @@ export class OrdersService {
 
   /**
    * Validate media files before creating the order
-   * Note: We don't check file accessibility via HTTP since GCS URLs require authentication
+   * Note: We don't check file accessibility via HTTP since files are stored in Vercel Blob
    * The files were just uploaded, so we trust they exist
    */
   private async validateMediaFiles(

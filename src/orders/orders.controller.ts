@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Request,
+  BadRequestException,
 } from "@nestjs/common";
 import { OrdersService } from "./orders.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -254,5 +255,28 @@ export class OrdersController {
       body.status,
       req.user.userId
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(":id/banner-image")
+  async setBannerImage(
+    @Param("id") id: string,
+    @Body() body: { mediaFileId: number },
+    @Request() req
+  ) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new Error(`Invalid order ID: ${id}`);
+    }
+
+    // Verify user is the owner of the order
+    const order = await this.ordersService.findOne(orderId);
+    if (order.clientId !== req.user.userId) {
+      throw new BadRequestException(
+        "You can only set banner image for your own orders"
+      );
+    }
+
+    return this.ordersService.setBannerImage(orderId, body.mediaFileId);
   }
 }

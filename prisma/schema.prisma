@@ -46,29 +46,29 @@ model User {
 }
 
 model Service {
-  id             Int           @id @default(autoincrement())
-  name           String
-  description    String?
-  nameEn         String?
-  nameRu         String?
-  nameHy         String?
-  descriptionEn  String?
-  descriptionRu  String?
-  descriptionHy  String?
-  imageUrl       String?
-  parentId       Int?
-  averagePrice   Float?
-  minPrice       Float?
-  maxPrice       Float?
-  completionRate Float?        @default(0)
-  isActive       Boolean       @default(true)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  Orders         Order[]
-  Parent         Service?      @relation("ServiceChildren", fields: [parentId], references: [id])
-  Children       Service[]     @relation("ServiceChildren")
-  UserServices   UserService[]
-  ServiceFeatures ServiceFeature[]
+  id                  Int                 @id @default(autoincrement())
+  name                String
+  description         String?
+  nameEn              String?
+  nameRu              String?
+  nameHy              String?
+  descriptionEn       String?
+  descriptionRu       String?
+  descriptionHy       String?
+  imageUrl            String?
+  parentId            Int?
+  averagePrice        Float?
+  minPrice            Float?
+  maxPrice            Float?
+  completionRate      Float?              @default(0)
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  Orders              Order[]
+  Parent              Service?            @relation("ServiceChildren", fields: [parentId], references: [id])
+  Children            Service[]           @relation("ServiceChildren")
+  UserServices        UserService[]
+  ServiceFeatures     ServiceFeature[]
   ServiceTechnologies ServiceTechnology[]
 
   @@index([parentId])
@@ -76,36 +76,36 @@ model Service {
 }
 
 model Feature {
-  id            Int            @id @default(autoincrement())
-  name          String         @unique
-  nameEn        String?
-  nameRu        String?
-  nameHy        String?
-  description   String?
-  descriptionEn String?
-  descriptionRu String?
-  descriptionHy String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  nameEn          String?
+  nameRu          String?
+  nameHy          String?
+  description     String?
+  descriptionEn   String?
+  descriptionRu   String?
+  descriptionHy   String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   ServiceFeatures ServiceFeature[]
 
   @@index([isActive])
 }
 
 model Technology {
-  id            Int            @id @default(autoincrement())
-  name          String         @unique
-  nameEn        String?
-  nameRu        String?
-  nameHy        String?
-  description   String?
-  descriptionEn String?
-  descriptionRu String?
-  descriptionHy String?
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                  Int                 @id @default(autoincrement())
+  name                String              @unique
+  nameEn              String?
+  nameRu              String?
+  nameHy              String?
+  description         String?
+  descriptionEn       String?
+  descriptionRu       String?
+  descriptionHy       String?
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
   ServiceTechnologies ServiceTechnology[]
 
   @@index([isActive])
@@ -163,9 +163,11 @@ model Order {
   location       String?
   skills         String[]        @default([])
   status         String          @default("open")
+  bannerImageId  Int? // ID of the MediaFile to use as banner
   createdAt      DateTime        @default(now())
   Conversations  Conversation[]
   MediaFiles     MediaFile[]
+  BannerImage    MediaFile?      @relation("BannerImage", fields: [bannerImageId], references: [id])
   Client         User            @relation("ClientOrders", fields: [clientId], references: [id])
   Service        Service?        @relation(fields: [serviceId], references: [id])
   Proposals      OrderProposal[]
@@ -213,6 +215,7 @@ model MediaFile {
   uploadedBy Int
   createdAt  DateTime @default(now())
   Order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  BannerFor  Order[]  @relation("BannerImage")
   User       User     @relation("MediaUploader", fields: [uploadedBy], references: [id])
 }
 

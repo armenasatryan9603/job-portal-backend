@@ -19,7 +19,7 @@ async function bootstrap() {
     app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
     // Note: Static file serving removed for serverless deployment
-    // Files are now served directly from Google Cloud Storage
+    // Files are now served directly from Vercel Blob
 
     // Enable CORS
     const corsOrigins = process.env.CORS_ORIGIN

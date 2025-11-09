@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
-import { GcsService } from './gcs.service';
+import { Module } from "@nestjs/common";
+import { VercelBlobService } from "./vercel-blob.service";
 
 @Module({
-  providers: [GcsService],
-  exports: [GcsService],
+  providers: [VercelBlobService],
+  exports: [VercelBlobService],
 })
 export class StorageModule {}
