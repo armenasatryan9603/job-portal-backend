@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma.service";
 import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
+import { OrderPricingService } from "../order-pricing/order-pricing.service";
 
 export interface GetMessagesDto {
   conversationId: number;
@@ -14,7 +15,8 @@ export interface GetMessagesDto {
 export class ChatService {
   constructor(
     private prisma: PrismaService,
-    private firebaseNotificationService: FirebaseNotificationService
+    private firebaseNotificationService: FirebaseNotificationService,
+    private orderPricingService: OrderPricingService
   ) {}
 
   /**
@@ -34,48 +36,52 @@ export class ChatService {
       title,
     });
 
+    // For order conversations, ensure we only have 2 participants (client and specialist)
+    if (orderId && allParticipants.length !== 2) {
+      throw new Error(
+        "Order conversations must have exactly 2 participants: client and specialist"
+      );
+    }
+
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Check if conversation already exists for this order
+        // Check if conversation already exists for this order AND these specific participants
         if (orderId) {
-          const existingConversation = await tx.conversation.findFirst({
+          // Find conversations for this order that have the exact same participants
+          const existingConversations = await tx.conversation.findMany({
             where: { orderId },
             include: {
-              Participants: true,
+              Participants: {
+                where: { isActive: true },
+              },
             },
           });
 
-          if (existingConversation) {
-            console.log(
-              `Found existing conversation ${existingConversation.id} for orderId ${orderId}`
-            );
+          // Check if any existing conversation has exactly the same participants
+          for (const existingConversation of existingConversations) {
+            const existingParticipantIds =
+              existingConversation.Participants.map((p) => p.userId).sort();
+            const expectedParticipantIds = [...allParticipants].sort();
 
-            // Check if current user is already a participant
-            const existingParticipant = existingConversation.Participants.find(
-              (p) => p.userId === userId && p.isActive
-            );
-
-            if (!existingParticipant) {
+            // Check if participants match exactly
+            if (
+              existingParticipantIds.length === expectedParticipantIds.length &&
+              existingParticipantIds.every(
+                (id, index) => id === expectedParticipantIds[index]
+              )
+            ) {
               console.log(
-                `Adding user ${userId} as participant to existing conversation ${existingConversation.id}`
+                `Found existing conversation ${existingConversation.id} for orderId ${orderId} with matching participants`
               );
-              await tx.conversationParticipant.create({
-                data: {
-                  conversationId: existingConversation.id,
-                  userId: userId,
-                  isActive: true,
-                },
-              });
-              console.log(
-                `✅ Added participant ${userId} to conversation ${existingConversation.id}`
-              );
-            } else {
-              console.log(
-                `User ${userId} is already a participant in conversation ${existingConversation.id}`
-              );
+              return this.getConversationById(existingConversation.id, tx);
             }
+          }
 
-            return this.getConversationById(existingConversation.id, tx);
+          // If we found conversations but none match, log a warning
+          if (existingConversations.length > 0) {
+            console.log(
+              `Found ${existingConversations.length} conversation(s) for orderId ${orderId}, but none match the expected participants. Creating new conversation.`
+            );
           }
         }
 
@@ -508,7 +514,7 @@ export class ChatService {
       throw new Error("Order not found");
     }
 
-    // Check if conversation already exists
+    // Check if conversation already exists for this order and specialist
     const existingConversation = await this.prisma.conversation.findFirst({
       where: {
         orderId,
@@ -517,6 +523,9 @@ export class ChatService {
         },
       },
       include: {
+        Participants: {
+          where: { isActive: true },
+        },
         Messages: {
           where: {
             senderId: specialistId,
@@ -529,83 +538,112 @@ export class ChatService {
       },
     });
 
+    // Verify existing conversation has exactly 2 participants (client and specialist)
     if (existingConversation) {
-      // Check if proposal message was already sent (first message from specialist)
-      const hasProposalMessage = existingConversation.Messages.length > 0;
+      const activeParticipants = existingConversation.Participants.filter(
+        (p) => p.isActive
+      );
 
-      // If no messages from specialist yet, send the proposal message
-      if (!hasProposalMessage) {
-        try {
-          const proposal = await this.prisma.orderProposal.findFirst({
-            where: {
-              orderId: orderId,
-              userId: specialistId,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          });
+      if (activeParticipants.length !== 2) {
+        console.warn(
+          `Existing conversation ${existingConversation.id} has ${activeParticipants.length} participants, expected 2. Creating new conversation.`
+        );
+        // Don't use this conversation, create a new one instead
+      } else {
+        // Verify both client and specialist are participants
+        const hasClient = activeParticipants.some(
+          (p) => p.userId === order.clientId
+        );
+        const hasSpecialist = activeParticipants.some(
+          (p) => p.userId === specialistId
+        );
 
-          if (proposal && proposal.message && proposal.message.trim()) {
-            // Retry logic to handle timing issues
-            let messageSent = false;
-            let retries = 3;
-            let delay = 500;
-
-            while (!messageSent && retries > 0) {
-              try {
-                // Wait a bit before retrying (except first attempt)
-                if (retries < 3) {
-                  await new Promise((resolve) => setTimeout(resolve, delay));
-                  delay *= 2;
-                }
-
-                const sentMessage = await this.sendMessage(specialistId, {
-                  conversationId: existingConversation.id,
-                  content: proposal.message,
-                  messageType: "text",
-                });
-                console.log(
-                  `✅ Sent proposal message to existing conversation ${existingConversation.id}. Message ID: ${sentMessage.id}`
-                );
-                messageSent = true;
-              } catch (messageError: any) {
-                console.error(
-                  `Failed to send proposal message to existing conversation (attempt ${4 - retries}/3):`,
-                  messageError?.message || messageError
-                );
-
-                // If it's a participant error, retry
-                if (
-                  messageError?.message?.includes("not a participant") ||
-                  messageError?.message?.includes("participant")
-                ) {
-                  retries--;
-                  if (retries === 0) {
-                    console.error(
-                      "Failed to send proposal message after all retries"
-                    );
-                  }
-                } else {
-                  // For other errors, don't retry
-                  retries = 0;
-                }
-              }
-            }
-          } else {
-            console.log(
-              `No proposal message found for orderId ${orderId} and specialistId ${specialistId}`
-            );
-          }
-        } catch (error) {
-          console.error(
-            "Error fetching or sending proposal message to existing conversation:",
-            error
+        if (!hasClient || !hasSpecialist) {
+          console.warn(
+            `Existing conversation ${existingConversation.id} doesn't have both client and specialist. Creating new conversation.`
           );
+          // Don't use this conversation, create a new one instead
+        } else {
+          // Check if proposal message was already sent (first message from specialist)
+          const hasProposalMessage = existingConversation.Messages.length > 0;
+
+          // If no messages from specialist yet, send the proposal message
+          if (!hasProposalMessage) {
+            try {
+              const proposal = await this.prisma.orderProposal.findFirst({
+                where: {
+                  orderId: orderId,
+                  userId: specialistId,
+                },
+                orderBy: {
+                  createdAt: "desc",
+                },
+              });
+
+              if (proposal && proposal.message && proposal.message.trim()) {
+                // Retry logic to handle timing issues
+                let messageSent = false;
+                let retries = 3;
+                let delay = 500;
+
+                while (!messageSent && retries > 0) {
+                  try {
+                    // Wait a bit before retrying (except first attempt)
+                    if (retries < 3) {
+                      await new Promise((resolve) =>
+                        setTimeout(resolve, delay)
+                      );
+                      delay *= 2;
+                    }
+
+                    const sentMessage = await this.sendMessage(specialistId, {
+                      conversationId: existingConversation.id,
+                      content: proposal.message,
+                      messageType: "text",
+                    });
+                    console.log(
+                      `✅ Sent proposal message to existing conversation ${existingConversation.id}. Message ID: ${sentMessage.id}`
+                    );
+                    messageSent = true;
+                  } catch (messageError: any) {
+                    console.error(
+                      `Failed to send proposal message to existing conversation (attempt ${4 - retries}/3):`,
+                      messageError?.message || messageError
+                    );
+
+                    // If it's a participant error, retry
+                    if (
+                      messageError?.message?.includes("not a participant") ||
+                      messageError?.message?.includes("participant")
+                    ) {
+                      retries--;
+                      if (retries === 0) {
+                        console.error(
+                          "Failed to send proposal message after all retries"
+                        );
+                      }
+                    } else {
+                      // For other errors, don't retry
+                      retries = 0;
+                    }
+                  }
+                }
+              } else {
+                console.log(
+                  `No proposal message found for orderId ${orderId} and specialistId ${specialistId}`
+                );
+              }
+            } catch (error) {
+              console.error(
+                "Error fetching or sending proposal message to existing conversation:",
+                error
+              );
+            }
+          }
+
+          return this.getConversationById(existingConversation.id);
         }
       }
-
-      return this.getConversationById(existingConversation.id);
     }
 
     // Create new conversation
@@ -828,16 +866,31 @@ export class ChatService {
       // Get all pending proposals for this order
       const pendingProposals = order.Proposals;
 
-      // Refund credits to all applicants
+      // Get pricing configuration to calculate refund amount
+      const orderBudget = order.budget || 0;
+      const pricingConfig =
+        await this.orderPricingService.getPricingConfig(orderBudget);
+      const creditCost = pricingConfig.creditCost;
+      const refundAmount = Math.round(
+        creditCost * pricingConfig.refundPercentage
+      );
+
+      console.log(
+        `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${pendingProposals.length} rejected proposals`
+      );
+
+      // Refund credits to all applicants using pricing table
       for (const proposal of pendingProposals) {
-        await tx.user.update({
-          where: { id: proposal.userId },
-          data: {
-            creditBalance: {
-              increment: 1, // Refund 1 credit
+        if (refundAmount > 0) {
+          await tx.user.update({
+            where: { id: proposal.userId },
+            data: {
+              creditBalance: {
+                increment: refundAmount,
+              },
             },
-          },
-        });
+          });
+        }
 
         // Update proposal status to rejected
         await tx.orderProposal.update({
@@ -906,20 +959,35 @@ export class ChatService {
         data: { status: "accepted" },
       });
 
-      // Reject all other proposals and refund their credits
+      // Reject all other proposals and refund their credits using pricing table
       const otherProposals = order.Proposals.filter(
         (p) => p.id !== chosenProposal.id
       );
 
+      // Get pricing configuration to calculate refund amount
+      const orderBudget = order.budget || 0;
+      const pricingConfig =
+        await this.orderPricingService.getPricingConfig(orderBudget);
+      const creditCost = pricingConfig.creditCost;
+      const refundAmount = Math.round(
+        creditCost * pricingConfig.refundPercentage
+      );
+
+      console.log(
+        `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${otherProposals.length} rejected proposals`
+      );
+
       for (const proposal of otherProposals) {
-        await tx.user.update({
-          where: { id: proposal.userId },
-          data: {
-            creditBalance: {
-              increment: 1, // Refund 1 credit
+        if (refundAmount > 0) {
+          await tx.user.update({
+            where: { id: proposal.userId },
+            data: {
+              creditBalance: {
+                increment: refundAmount,
+              },
             },
-          },
-        });
+          });
+        }
 
         await tx.orderProposal.update({
           where: { id: proposal.id },
