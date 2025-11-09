@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
-import { SendMessageDto } from './dto/send-message.dto';
-import { FirebaseNotificationService } from '../notifications/firebase-notification.service';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { CreateConversationDto } from "./dto/create-conversation.dto";
+import { SendMessageDto } from "./dto/send-message.dto";
+import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
 
 export interface GetMessagesDto {
   conversationId: number;
@@ -14,7 +14,7 @@ export interface GetMessagesDto {
 export class ChatService {
   constructor(
     private prisma: PrismaService,
-    private firebaseNotificationService: FirebaseNotificationService,
+    private firebaseNotificationService: FirebaseNotificationService
   ) {}
 
   /**
@@ -26,71 +26,134 @@ export class ChatService {
     // Ensure the current user is included in participants
     const allParticipants = [...new Set([userId, ...participantIds])];
 
-    return this.prisma.$transaction(async (tx) => {
-      // Check if conversation already exists for this order
-      if (orderId) {
-        const existingConversation = await tx.conversation.findFirst({
-          where: { orderId },
+    console.log("Creating conversation with participants:", {
+      userId,
+      participantIds,
+      allParticipants,
+      orderId,
+      title,
+    });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Check if conversation already exists for this order
+        if (orderId) {
+          const existingConversation = await tx.conversation.findFirst({
+            where: { orderId },
+            include: {
+              Participants: true,
+            },
+          });
+
+          if (existingConversation) {
+            console.log(
+              `Found existing conversation ${existingConversation.id} for orderId ${orderId}`
+            );
+
+            // Check if current user is already a participant
+            const existingParticipant = existingConversation.Participants.find(
+              (p) => p.userId === userId && p.isActive
+            );
+
+            if (!existingParticipant) {
+              console.log(
+                `Adding user ${userId} as participant to existing conversation ${existingConversation.id}`
+              );
+              await tx.conversationParticipant.create({
+                data: {
+                  conversationId: existingConversation.id,
+                  userId: userId,
+                  isActive: true,
+                },
+              });
+              console.log(
+                `✅ Added participant ${userId} to conversation ${existingConversation.id}`
+              );
+            } else {
+              console.log(
+                `User ${userId} is already a participant in conversation ${existingConversation.id}`
+              );
+            }
+
+            return this.getConversationById(existingConversation.id, tx);
+          }
+        }
+
+        // Create conversation
+        console.log("Creating new conversation...");
+        const conversation = await tx.conversation.create({
+          data: {
+            orderId,
+            title,
+            status: "active",
+          },
         });
+        console.log(`✅ Created conversation ${conversation.id}`);
 
-        if (existingConversation) {
-          // Check if current user is already a participant
-          const existingParticipant =
-            await tx.conversationParticipant.findFirst({
-              where: {
-                conversationId: existingConversation.id,
-                userId: userId,
-              },
-            });
-
-          if (!existingParticipant) {
+        // Add participants one by one to get better error messages
+        console.log(
+          `Adding ${allParticipants.length} participants to conversation ${conversation.id}`
+        );
+        for (const participantId of allParticipants) {
+          try {
             await tx.conversationParticipant.create({
               data: {
-                conversationId: existingConversation.id,
-                userId: userId,
+                conversationId: conversation.id,
+                userId: participantId,
+                isActive: true,
               },
             });
+            console.log(
+              `✅ Added participant ${participantId} to conversation ${conversation.id}`
+            );
+          } catch (error: any) {
+            // If it's a unique constraint error, participant already exists (shouldn't happen for new conversation)
+            if (error?.code === "P2002") {
+              console.warn(
+                `Participant ${participantId} already exists in conversation ${conversation.id}`
+              );
+            } else {
+              console.error(
+                `❌ Failed to add participant ${participantId} to conversation ${conversation.id}:`,
+                error
+              );
+              throw error; // Re-throw to rollback transaction
+            }
           }
-
-          return this.getConversationById(existingConversation.id);
         }
-      }
 
-      // Create conversation
-      const conversation = await tx.conversation.create({
-        data: {
-          orderId,
-          title,
-        },
+        console.log(
+          `✅ Successfully created conversation ${conversation.id} with ${allParticipants.length} participants`
+        );
+
+        // Return conversation with participants (use transaction client)
+        return this.getConversationById(conversation.id, tx);
       });
-
-      // Add participants
-      await tx.conversationParticipant.createMany({
-        data: allParticipants.map((participantId) => ({
-          conversationId: conversation.id,
-          userId: participantId,
-        })),
-      });
-
-      // Return conversation with participants
-      return this.getConversationById(conversation.id);
-    });
+    } catch (error) {
+      console.error("❌ Error creating conversation:", error);
+      throw error;
+    }
   }
 
   /**
    * Get conversation by ID with participants and last message
+   * @param conversationId - The ID of the conversation to retrieve
+   * @param tx - Optional transaction client (use when called from within a transaction)
    */
-  async getConversationById(conversationId: number) {
-    return this.prisma.conversation.findUnique({
+  async getConversationById(
+    conversationId: number,
+    tx?: any // Transaction client from Prisma
+  ) {
+    // Use transaction client if provided, otherwise use regular prisma client
+    const prismaClient = tx || this.prisma;
+
+    const conversation = await prismaClient.conversation.findUnique({
       where: { id: conversationId },
-      select: {
-        id: true,
-        orderId: true,
-        title: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
         Participants: {
+          where: {
+            isActive: true, // Only include active participants
+          },
           include: {
             User: {
               select: {
@@ -112,6 +175,25 @@ export class ChatService {
         },
       },
     });
+
+    if (!conversation) {
+      throw new Error(`Conversation with ID ${conversationId} not found`);
+    }
+
+    console.log(
+      `Retrieved conversation ${conversationId} with ${conversation.Participants.length} active participants`
+    );
+
+    return {
+      id: conversation.id,
+      orderId: conversation.orderId,
+      title: conversation.title,
+      status: conversation.status,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+      Participants: conversation.Participants,
+      Order: conversation.Order,
+    };
   }
 
   /**
@@ -120,7 +202,7 @@ export class ChatService {
   async getUserConversations(
     userId: number,
     page: number = 1,
-    limit: number = 20,
+    limit: number = 20
   ) {
     const skip = (page - 1) * limit;
 
@@ -153,7 +235,7 @@ export class ChatService {
           },
         },
         Messages: {
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 1,
           include: {
             Sender: {
@@ -179,7 +261,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       skip,
       take: limit,
     });
@@ -214,7 +296,7 @@ export class ChatService {
   async getMessages(
     conversationId: number,
     page: number = 1,
-    limit: number = 50,
+    limit: number = 50
   ) {
     const skip = (page - 1) * limit;
 
@@ -229,7 +311,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: "asc" },
       skip,
       take: limit,
     });
@@ -255,7 +337,7 @@ export class ChatService {
    * Send a message
    */
   async sendMessage(userId: number, dto: SendMessageDto) {
-    const { conversationId, content, messageType = 'text', metadata } = dto;
+    const { conversationId, content, messageType = "text", metadata } = dto;
 
     // Verify user is participant in conversation
     const participant = await this.prisma.conversationParticipant.findFirst({
@@ -267,7 +349,7 @@ export class ChatService {
     });
 
     if (!participant) {
-      throw new Error('User is not a participant in this conversation');
+      throw new Error("User is not a participant in this conversation");
     }
 
     // Create message
@@ -308,7 +390,7 @@ export class ChatService {
   private async sendMessageNotifications(
     conversationId: number,
     message: any,
-    senderId: number,
+    senderId: number
   ) {
     try {
       // Get all participants except the sender
@@ -339,16 +421,16 @@ export class ChatService {
               ? `${message.content.substring(0, 100)}...`
               : message.content,
             {
-              type: 'chat_message',
+              type: "chat_message",
               conversationId: conversationId.toString(),
               messageId: message.id.toString(),
               senderId: senderId.toString(),
-            },
+            }
           );
         }
       }
     } catch (error) {
-      console.error('Error sending message notifications:', error);
+      console.error("Error sending message notifications:", error);
     }
   }
 
@@ -389,7 +471,7 @@ export class ChatService {
           where: {
             senderId: { not: userId },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
           take: 1,
         },
       },
@@ -423,7 +505,7 @@ export class ChatService {
     });
 
     if (!order) {
-      throw new Error('Order not found');
+      throw new Error("Order not found");
     }
 
     // Check if conversation already exists
@@ -434,18 +516,245 @@ export class ChatService {
           some: { userId: specialistId, isActive: true },
         },
       },
+      include: {
+        Messages: {
+          where: {
+            senderId: specialistId,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: 1,
+        },
+      },
     });
 
     if (existingConversation) {
+      // Check if proposal message was already sent (first message from specialist)
+      const hasProposalMessage = existingConversation.Messages.length > 0;
+
+      // If no messages from specialist yet, send the proposal message
+      if (!hasProposalMessage) {
+        try {
+          const proposal = await this.prisma.orderProposal.findFirst({
+            where: {
+              orderId: orderId,
+              userId: specialistId,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          });
+
+          if (proposal && proposal.message && proposal.message.trim()) {
+            // Retry logic to handle timing issues
+            let messageSent = false;
+            let retries = 3;
+            let delay = 500;
+
+            while (!messageSent && retries > 0) {
+              try {
+                // Wait a bit before retrying (except first attempt)
+                if (retries < 3) {
+                  await new Promise((resolve) => setTimeout(resolve, delay));
+                  delay *= 2;
+                }
+
+                const sentMessage = await this.sendMessage(specialistId, {
+                  conversationId: existingConversation.id,
+                  content: proposal.message,
+                  messageType: "text",
+                });
+                console.log(
+                  `✅ Sent proposal message to existing conversation ${existingConversation.id}. Message ID: ${sentMessage.id}`
+                );
+                messageSent = true;
+              } catch (messageError: any) {
+                console.error(
+                  `Failed to send proposal message to existing conversation (attempt ${4 - retries}/3):`,
+                  messageError?.message || messageError
+                );
+
+                // If it's a participant error, retry
+                if (
+                  messageError?.message?.includes("not a participant") ||
+                  messageError?.message?.includes("participant")
+                ) {
+                  retries--;
+                  if (retries === 0) {
+                    console.error(
+                      "Failed to send proposal message after all retries"
+                    );
+                  }
+                } else {
+                  // For other errors, don't retry
+                  retries = 0;
+                }
+              }
+            }
+          } else {
+            console.log(
+              `No proposal message found for orderId ${orderId} and specialistId ${specialistId}`
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Error fetching or sending proposal message to existing conversation:",
+            error
+          );
+        }
+      }
+
       return this.getConversationById(existingConversation.id);
     }
 
     // Create new conversation
-    return this.createConversation(specialistId, {
+    console.log(
+      `Creating conversation for order ${orderId} with specialist ${specialistId} and client ${order.clientId}`
+    );
+    const conversation = await this.createConversation(specialistId, {
       orderId,
-      title: `Order: ${order.title || 'Untitled'}`,
+      title: `Order: ${order.title || "Untitled"}`,
       participantIds: [order.clientId],
     });
+
+    if (!conversation) {
+      throw new Error("Failed to create conversation");
+    }
+
+    console.log(
+      `✅ Conversation ${conversation.id} created successfully. Fetching proposal message...`
+    );
+
+    // Verify participants were created
+    const participants = await this.prisma.conversationParticipant.findMany({
+      where: {
+        conversationId: conversation.id,
+        isActive: true,
+      },
+    });
+    console.log(
+      `Verified: Conversation ${conversation.id} has ${participants.length} active participants:`,
+      participants.map((p) => ({ userId: p.userId, isActive: p.isActive }))
+    );
+
+    // Fetch the proposal message and send it as the first message in the conversation
+    try {
+      const proposal = await this.prisma.orderProposal.findFirst({
+        where: {
+          orderId: orderId,
+          userId: specialistId,
+        },
+        orderBy: {
+          createdAt: "desc", // Get most recent proposal
+        },
+      });
+
+      if (!proposal) {
+        console.warn(
+          `⚠️ No proposal found for orderId ${orderId} and specialistId ${specialistId}`
+        );
+        return conversation;
+      }
+
+      if (!proposal.message || !proposal.message.trim()) {
+        console.warn(
+          `⚠️ Proposal ${proposal.id} exists but has no message content`
+        );
+        return conversation;
+      }
+
+      console.log(
+        `Found proposal ${proposal.id} with message: "${proposal.message.substring(0, 50)}..."`
+      );
+
+      // Add a small delay to ensure participants are fully committed
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Retry logic to handle timing issues
+      let messageSent = false;
+      let retries = 3;
+      let delay = 500;
+
+      while (!messageSent && retries > 0) {
+        try {
+          // Wait a bit before retrying (except first attempt)
+          if (retries < 3) {
+            console.log(`Retrying message send (attempt ${4 - retries}/3)...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            delay *= 2;
+          }
+
+          // Verify participant exists before sending
+          const participantCheck =
+            await this.prisma.conversationParticipant.findFirst({
+              where: {
+                conversationId: conversation.id,
+                userId: specialistId,
+                isActive: true,
+              },
+            });
+
+          if (!participantCheck) {
+            throw new Error(
+              `Specialist ${specialistId} is not a participant in conversation ${conversation.id}`
+            );
+          }
+
+          console.log(
+            `Sending proposal message to conversation ${conversation.id}...`
+          );
+
+          // Send the proposal message as the first message in the conversation
+          const sentMessage = await this.sendMessage(specialistId, {
+            conversationId: conversation.id,
+            content: proposal.message,
+            messageType: "text",
+          });
+
+          console.log(
+            `✅ Successfully sent proposal message as first message in conversation ${conversation.id}. Message ID: ${sentMessage.id}`
+          );
+          messageSent = true;
+        } catch (messageError: any) {
+          console.error(
+            `❌ Failed to send proposal message (attempt ${4 - retries}/3):`,
+            {
+              error: messageError?.message || messageError,
+              code: messageError?.code,
+              conversationId: conversation.id,
+              specialistId: specialistId,
+            }
+          );
+
+          // If it's a participant error, retry
+          if (
+            messageError?.message?.includes("not a participant") ||
+            messageError?.message?.includes("participant") ||
+            messageError?.code === "P2003" // Foreign key constraint
+          ) {
+            retries--;
+            if (retries === 0) {
+              console.error(
+                `❌ Failed to send proposal message after all retries. Conversation ${conversation.id} was created but message was not sent.`
+              );
+            }
+          } else {
+            // For other errors, don't retry
+            console.error(
+              `❌ Non-retryable error when sending proposal message:`,
+              messageError
+            );
+            retries = 0;
+          }
+        }
+      }
+    } catch (error) {
+      // Log error but don't fail conversation creation if message sending fails
+      console.error("❌ Error fetching or sending proposal message:", error);
+    }
+
+    return conversation;
   }
 
   /**
@@ -453,7 +762,7 @@ export class ChatService {
    */
   async getConversationParticipants(
     conversationId: number,
-    currentUserId: number,
+    currentUserId: number
   ) {
     const participants = await this.prisma.conversationParticipant.findMany({
       where: {
@@ -506,14 +815,14 @@ export class ChatService {
         include: {
           Proposals: {
             where: {
-              status: 'pending',
+              status: "pending",
             },
           },
         },
       });
 
       if (!order) {
-        throw new Error('Order not found or you are not the owner');
+        throw new Error("Order not found or you are not the owner");
       }
 
       // Get all pending proposals for this order
@@ -533,27 +842,27 @@ export class ChatService {
         // Update proposal status to rejected
         await tx.orderProposal.update({
           where: { id: proposal.id },
-          data: { status: 'rejected' },
+          data: { status: "rejected" },
         });
       }
 
       // Update order status to closed
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'closed' },
+        data: { status: "closed" },
       });
 
       // Close all conversations related to this order
       await tx.conversation.updateMany({
         where: { orderId: orderId },
         data: {
-          status: 'closed',
+          status: "closed",
           updatedAt: new Date(),
         },
       });
 
       return {
-        message: 'Application rejected and credits refunded',
+        message: "Application rejected and credits refunded",
         refundedCredits: pendingProposals.length,
       };
     });
@@ -573,18 +882,18 @@ export class ChatService {
         include: {
           Proposals: {
             where: {
-              status: 'pending',
+              status: "pending",
             },
           },
         },
       });
 
       if (!order) {
-        throw new Error('Order not found or you are not the owner');
+        throw new Error("Order not found or you are not the owner");
       }
 
       if (order.Proposals.length === 0) {
-        throw new Error('No pending proposals found');
+        throw new Error("No pending proposals found");
       }
 
       // For now, we'll choose the first proposal
@@ -594,12 +903,12 @@ export class ChatService {
       // Update the chosen proposal to accepted
       await tx.orderProposal.update({
         where: { id: chosenProposal.id },
-        data: { status: 'accepted' },
+        data: { status: "accepted" },
       });
 
       // Reject all other proposals and refund their credits
       const otherProposals = order.Proposals.filter(
-        (p) => p.id !== chosenProposal.id,
+        (p) => p.id !== chosenProposal.id
       );
 
       for (const proposal of otherProposals) {
@@ -614,27 +923,21 @@ export class ChatService {
 
         await tx.orderProposal.update({
           where: { id: proposal.id },
-          data: { status: 'rejected' },
+          data: { status: "rejected" },
         });
       }
 
-      // Update order status to completed
+      // Update order status to in_progress (work has started, not completed yet)
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'completed' },
+        data: { status: "in_progress" },
       });
 
-      // Close all conversations related to this order
-      await tx.conversation.updateMany({
-        where: { orderId: orderId },
-        data: {
-          status: 'completed',
-          updatedAt: new Date(),
-        },
-      });
+      // Keep conversations active (don't close them - work is in progress)
+      // Conversations remain active so client and specialist can communicate during work
 
       return {
-        message: 'Application chosen successfully and order completed',
+        message: "Application chosen successfully and order is now in progress",
         chosenProposalId: chosenProposal.id,
         refundedCredits: otherProposals.length,
       };
@@ -655,47 +958,47 @@ export class ChatService {
         include: {
           Proposals: {
             where: {
-              status: 'accepted',
+              status: "accepted",
             },
           },
         },
       });
 
       if (!order) {
-        throw new Error('Order not found or you are not the owner');
+        throw new Error("Order not found or you are not the owner");
       }
 
       if (order.Proposals.length === 0) {
-        throw new Error('No accepted proposal found');
+        throw new Error("No accepted proposal found");
       }
 
       // Mark the accepted proposal as canceled
       await tx.orderProposal.updateMany({
         where: {
           orderId: orderId,
-          status: 'accepted',
+          status: "accepted",
         },
-        data: { status: 'canceled' },
+        data: { status: "canceled" },
       });
 
       // Update order status back to open
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'open' },
+        data: { status: "open" },
       });
 
       // Close all conversations related to this order
       await tx.conversation.updateMany({
         where: { orderId: orderId },
         data: {
-          status: 'closed',
+          status: "closed",
           updatedAt: new Date(),
         },
       });
 
       return {
         message:
-          'Application canceled, order reopened, and conversation closed',
+          "Application canceled, order reopened, and conversation closed",
       };
     });
   }
@@ -714,26 +1017,26 @@ export class ChatService {
       });
 
       if (!order) {
-        throw new Error('Order not found or you are not the owner');
+        throw new Error("Order not found or you are not the owner");
       }
 
       // Update order status to completed
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'completed' },
+        data: { status: "completed" },
       });
 
       // Close all conversations related to this order
       await tx.conversation.updateMany({
         where: { orderId: orderId },
         data: {
-          status: 'completed',
+          status: "completed",
           updatedAt: new Date(),
         },
       });
 
       return {
-        message: 'Order completed successfully',
+        message: "Order completed successfully",
       };
     });
   }

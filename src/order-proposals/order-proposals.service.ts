@@ -2,15 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { OrderPricingService } from '../order-pricing/order-pricing.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { OrderPricingService } from "../order-pricing/order-pricing.service";
 
 @Injectable()
 export class OrderProposalsService {
   constructor(
     private prisma: PrismaService,
-    private orderPricingService: OrderPricingService,
+    private orderPricingService: OrderPricingService
   ) {}
 
   async create(createOrderProposalDto: {
@@ -26,23 +26,23 @@ export class OrderProposalsService {
 
     if (!order) {
       throw new BadRequestException(
-        `Order with ID ${createOrderProposalDto.orderId} not found`,
+        `Order with ID ${createOrderProposalDto.orderId} not found`
       );
     }
 
     // Check if order is still open
-    if (order.status !== 'open') {
-      throw new BadRequestException('Cannot create proposal for closed order');
+    if (order.status !== "open") {
+      throw new BadRequestException("Cannot create proposal for closed order");
     }
 
     // Check if user exists and is a specialist
     const user = await this.prisma.user.findUnique({
-      where: { id: createOrderProposalDto.userId, role: 'specialist' },
+      where: { id: createOrderProposalDto.userId, role: "specialist" },
     });
 
     if (!user) {
       throw new BadRequestException(
-        `Specialist user with ID ${createOrderProposalDto.userId} not found`,
+        `Specialist user with ID ${createOrderProposalDto.userId} not found`
       );
     }
 
@@ -56,7 +56,7 @@ export class OrderProposalsService {
 
     if (existingProposal) {
       throw new BadRequestException(
-        'User already has a proposal for this order',
+        "User already has a proposal for this order"
       );
     }
 
@@ -99,173 +99,209 @@ export class OrderProposalsService {
     price?: number;
     message?: string;
   }) {
-    // Use transaction to ensure atomicity
-    return this.prisma.$transaction(async (tx) => {
-      // Check if order exists
-      const order = await tx.order.findUnique({
-        where: { id: createOrderProposalDto.orderId },
-      });
-
-      if (!order) {
-        throw new BadRequestException(
-          `Order with ID ${createOrderProposalDto.orderId} not found`,
-        );
-      }
-
-      // Get dynamic pricing based on order budget
-      const applicationCost = await this.orderPricingService.getCreditCost(
-        order.budget || 0,
-      );
-
-      // Check if order is still open
-      if (order.status !== 'open') {
-        throw new BadRequestException(
-          'Cannot create proposal for closed order',
-        );
-      }
-
-      // Check if user exists
-      const user = await tx.user.findUnique({
-        where: { id: createOrderProposalDto.userId },
-      });
-
-      if (!user) {
-        throw new BadRequestException(
-          `User with ID ${createOrderProposalDto.userId} not found`,
-        );
-      }
-
-      // Check if user has sufficient credits
-      console.log(
-        'User credit balance:',
-        user.creditBalance,
-        'Required:',
-        applicationCost,
-        'Order budget:',
-        order.budget,
-      );
-      if (user.creditBalance < applicationCost) {
-        throw new BadRequestException(
-          `Insufficient credit balance. Required: ${applicationCost} credits, Available: ${user.creditBalance} credits`,
-        );
-      }
-
-      // Check if user already has a proposal for this order
-      const existingProposal = await tx.orderProposal.findFirst({
-        where: {
-          orderId: createOrderProposalDto.orderId,
-          userId: createOrderProposalDto.userId,
-        },
-      });
-
-      if (existingProposal) {
-        throw new BadRequestException(
-          'User already has a proposal for this order',
-        );
-      }
-
-      // Deduct credits from user
-      console.log('Deducting credits from user...');
-      await tx.user.update({
-        where: { id: createOrderProposalDto.userId },
-        data: { creditBalance: { decrement: applicationCost } },
-      });
-
-      // Create the proposal
-      console.log('Creating proposal...');
-      const proposal = await tx.orderProposal.create({
-        data: {
-          orderId: createOrderProposalDto.orderId,
-          userId: createOrderProposalDto.userId,
-          message: createOrderProposalDto.message,
-          price: createOrderProposalDto.price,
-        },
-        include: {
-          Order: {
-            include: {
-              Client: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                  avatarUrl: true,
-                },
-              },
-            },
-          },
-          User: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              verified: true,
-            },
-          },
-        },
-      });
-
-      // Create conversation between client and specialist
-      console.log('Creating conversation...');
-
-      // Check if conversation already exists between client and specialist
-      const existingConversation = await tx.conversation.findFirst({
-        where: {
-          orderId: createOrderProposalDto.orderId,
-          Participants: {
-            some: {
-              userId: order.clientId,
-              isActive: true,
-            },
-          },
-          AND: {
-            Participants: {
-              some: {
-                userId: createOrderProposalDto.userId,
-                isActive: true,
-              },
-            },
-          },
-        },
-      });
-
-      if (!existingConversation) {
-        // Create new conversation
-        await tx.conversation.create({
-          data: {
-            orderId: createOrderProposalDto.orderId,
-            status: 'active',
-            Participants: {
-              create: [
-                {
-                  userId: order.clientId, // Client
-                  isActive: true,
-                },
-                {
-                  userId: createOrderProposalDto.userId, // Specialist
-                  isActive: true,
-                },
-              ],
-            },
-            Messages: {
-              create: {
-                content:
-                  createOrderProposalDto.message ||
-                  'I am interested in this project',
-                senderId: createOrderProposalDto.userId, // Specialist sends the message
-                messageType: 'text',
-              },
-            },
-          },
-        });
-        console.log('Conversation created successfully');
-      } else {
-        console.log('Conversation already exists');
-      }
-
-      console.log('Proposal created successfully:', proposal);
-      return proposal;
+    console.log("Starting createWithCreditDeduction:", {
+      orderId: createOrderProposalDto.orderId,
+      userId: createOrderProposalDto.userId,
+      hasMessage: !!createOrderProposalDto.message,
     });
+
+    try {
+      // Use transaction with timeout and retry logic
+      const maxRetries = 3;
+      let lastError: any;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Transaction attempt ${attempt}/${maxRetries}`);
+
+          // Use transaction with increased timeout (30 seconds) and isolation level
+          const result = await this.prisma.$transaction(
+            async (tx) => {
+              console.log("Transaction started");
+
+              // Check if order exists
+              console.log("Checking if order exists...");
+              const order = await tx.order.findUnique({
+                where: { id: createOrderProposalDto.orderId },
+              });
+
+              if (!order) {
+                throw new BadRequestException(
+                  `Order with ID ${createOrderProposalDto.orderId} not found`
+                );
+              }
+              console.log("Order found:", order.id, order.title);
+
+              // Get dynamic pricing based on order budget
+              console.log("Calculating credit cost...");
+              const applicationCost =
+                await this.orderPricingService.getCreditCost(order.budget || 0);
+              console.log("Application cost:", applicationCost);
+
+              // Check if order is still open
+              if (order.status !== "open") {
+                throw new BadRequestException(
+                  "Cannot create proposal for closed order"
+                );
+              }
+
+              // Check if user exists
+              console.log("Checking if user exists...");
+              const user = await tx.user.findUnique({
+                where: { id: createOrderProposalDto.userId },
+              });
+
+              if (!user) {
+                throw new BadRequestException(
+                  `User with ID ${createOrderProposalDto.userId} not found`
+                );
+              }
+              console.log("User found:", user.id, user.name);
+
+              // Check if user has sufficient credits
+              console.log(
+                "Credit check - Balance:",
+                user.creditBalance,
+                "Required:",
+                applicationCost
+              );
+              if (user.creditBalance < applicationCost) {
+                throw new BadRequestException(
+                  `Insufficient credit balance. Required: ${applicationCost} credits, Available: ${user.creditBalance} credits`
+                );
+              }
+
+              // Check if user already has a proposal for this order
+              console.log("Checking for existing proposal...");
+              const existingProposal = await tx.orderProposal.findFirst({
+                where: {
+                  orderId: createOrderProposalDto.orderId,
+                  userId: createOrderProposalDto.userId,
+                },
+              });
+
+              if (existingProposal) {
+                throw new BadRequestException(
+                  "User already has a proposal for this order"
+                );
+              }
+              console.log("No existing proposal found");
+
+              // Deduct credits from user
+              console.log("Deducting credits from user...");
+              await tx.user.update({
+                where: { id: createOrderProposalDto.userId },
+                data: { creditBalance: { decrement: applicationCost } },
+              });
+              console.log("Credits deducted successfully");
+
+              // Create the proposal
+              console.log("Creating proposal...");
+              const proposal = await tx.orderProposal.create({
+                data: {
+                  orderId: createOrderProposalDto.orderId,
+                  userId: createOrderProposalDto.userId,
+                  message: createOrderProposalDto.message,
+                  price: createOrderProposalDto.price,
+                },
+                include: {
+                  Order: {
+                    include: {
+                      Client: {
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                          avatarUrl: true,
+                        },
+                      },
+                    },
+                  },
+                  User: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true,
+                      avatarUrl: true,
+                      verified: true,
+                    },
+                  },
+                },
+              });
+              console.log(
+                "Proposal created successfully with ID:",
+                proposal.id
+              );
+
+              // Note: Conversation creation is handled by the frontend after proposal creation
+              // This prevents race conditions and duplicate conversation creation
+              console.log(
+                "Transaction completed successfully. Conversation will be created by frontend if needed."
+              );
+
+              return proposal;
+            },
+            {
+              maxWait: 10000, // Maximum time to wait for a transaction slot (10 seconds)
+              timeout: 30000, // Maximum time the transaction can run (30 seconds)
+            }
+          );
+
+          console.log("createWithCreditDeduction completed successfully");
+          return result;
+        } catch (error) {
+          lastError = error;
+
+          // If it's a transaction timeout error, retry
+          if (error?.code === "P2028" && attempt < maxRetries) {
+            const waitTime = attempt * 1000; // Exponential backoff: 1s, 2s, 3s
+            console.warn(
+              `Transaction timeout (attempt ${attempt}/${maxRetries}). Retrying in ${waitTime}ms...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+            continue;
+          }
+
+          // If it's not a timeout or we've exhausted retries, throw immediately
+          throw error;
+        }
+      }
+
+      // If we get here, all retries failed
+      throw lastError;
+    } catch (error) {
+      console.error("Error in createWithCreditDeduction service:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        code: error?.code,
+        meta: error?.meta,
+        stack: error?.stack,
+      });
+
+      // Re-throw HTTP exceptions as-is
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      // Handle Prisma errors
+      if (error?.code === "P2002") {
+        throw new BadRequestException(
+          "A proposal already exists for this order"
+        );
+      }
+
+      if (error?.code === "P2003") {
+        throw new BadRequestException("Invalid order or user reference");
+      }
+
+      // Wrap other errors
+      throw new BadRequestException(
+        error?.message || "Failed to create proposal. Please try again."
+      );
+    }
   }
 
   async findAll(
@@ -273,7 +309,7 @@ export class OrderProposalsService {
     limit: number = 10,
     status?: string,
     orderId?: number,
-    userId?: number,
+    userId?: number
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -318,7 +354,7 @@ export class OrderProposalsService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.orderProposal.count({ where }),
     ]);
@@ -380,7 +416,7 @@ export class OrderProposalsService {
       price?: number;
       message?: string;
       status?: string;
-    },
+    }
   ) {
     // Check if proposal exists
     const existingProposal = await this.prisma.orderProposal.findUnique({
@@ -393,44 +429,44 @@ export class OrderProposalsService {
 
     // Validate status
     const validStatuses = [
-      'pending',
-      'accepted',
-      'rejected',
-      'cancelled',
-      'specialist-canceled',
+      "pending",
+      "accepted",
+      "rejected",
+      "cancelled",
+      "specialist-canceled",
     ];
     if (
       updateOrderProposalDto.status &&
       !validStatuses.includes(updateOrderProposalDto.status)
     ) {
       throw new BadRequestException(
-        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`
       );
     }
 
     // If accepting a proposal, reject all other proposals for the same order
-    if (updateOrderProposalDto.status === 'accepted') {
+    if (updateOrderProposalDto.status === "accepted") {
       await this.prisma.orderProposal.updateMany({
         where: {
           orderId: existingProposal.orderId,
           id: { not: id },
-          status: 'pending',
+          status: "pending",
         },
-        data: { status: 'rejected' },
+        data: { status: "rejected" },
       });
 
       // Update the order status to in_progress
       await this.prisma.order.update({
         where: { id: existingProposal.orderId },
-        data: { status: 'in_progress' },
+        data: { status: "in_progress" },
       });
     }
 
     // If canceling a proposal, close the order to allow feedback
-    if (updateOrderProposalDto.status === 'specialist-canceled') {
+    if (updateOrderProposalDto.status === "specialist-canceled") {
       await this.prisma.order.update({
         where: { id: existingProposal.orderId },
-        data: { status: 'closed' },
+        data: { status: "closed" },
       });
     }
 
@@ -473,8 +509,8 @@ export class OrderProposalsService {
     }
 
     // Check if proposal is accepted
-    if (existingProposal.status === 'accepted') {
-      throw new BadRequestException('Cannot delete accepted proposal');
+    if (existingProposal.status === "accepted") {
+      throw new BadRequestException("Cannot delete accepted proposal");
     }
 
     return this.prisma.orderProposal.delete({
@@ -485,7 +521,7 @@ export class OrderProposalsService {
   async getProposalsByOrder(
     orderId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, undefined, orderId);
   }
@@ -493,7 +529,7 @@ export class OrderProposalsService {
   async getProposalsByUser(
     userId: number,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, undefined, undefined, userId);
   }
@@ -501,7 +537,7 @@ export class OrderProposalsService {
   async getProposalsByStatus(
     status: string,
     page: number = 1,
-    limit: number = 10,
+    limit: number = 10
   ) {
     return this.findAll(page, limit, status);
   }
@@ -513,20 +549,20 @@ export class OrderProposalsService {
       this.prisma.orderProposal.findMany({
         where: {
           OR: [
-            { message: { contains: query, mode: 'insensitive' } },
+            { message: { contains: query, mode: "insensitive" } },
             {
               Order: {
-                title: { contains: query, mode: 'insensitive' },
+                title: { contains: query, mode: "insensitive" },
               },
             },
             {
               Order: {
-                description: { contains: query, mode: 'insensitive' },
+                description: { contains: query, mode: "insensitive" },
               },
             },
             {
               User: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
           ],
@@ -556,25 +592,25 @@ export class OrderProposalsService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.orderProposal.count({
         where: {
           OR: [
-            { message: { contains: query, mode: 'insensitive' } },
+            { message: { contains: query, mode: "insensitive" } },
             {
               Order: {
-                title: { contains: query, mode: 'insensitive' },
+                title: { contains: query, mode: "insensitive" },
               },
             },
             {
               Order: {
-                description: { contains: query, mode: 'insensitive' },
+                description: { contains: query, mode: "insensitive" },
               },
             },
             {
               User: {
-                name: { contains: query, mode: 'insensitive' },
+                name: { contains: query, mode: "insensitive" },
               },
             },
           ],
