@@ -13,10 +13,14 @@ import { ChatService } from './chat.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PusherService } from './pusher.service';
 
 @Controller('chat')
 export class ChatController {
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    private pusherService: PusherService,
+  ) {}
 
   /**
    * Create a new conversation
@@ -185,5 +189,51 @@ export class ChatController {
   ) {
     const userId = req.user.userId;
     return this.chatService.completeOrder(orderId, userId);
+  }
+
+  /**
+   * Get Pusher configuration (public key and cluster)
+   */
+  @Get('pusher/config')
+  async getPusherConfig() {
+    return {
+      key: process.env.PUSHER_KEY || '',
+      cluster: process.env.PUSHER_CLUSTER || 'eu',
+    };
+  }
+
+  /**
+   * Authenticate Pusher channel subscription
+   */
+  @Post('pusher/auth')
+  @UseGuards(JwtAuthGuard)
+  async authenticatePusher(
+    @Request() req,
+    @Body() body: { socket_id: string; channel_name: string },
+  ) {
+    const userId = req.user.userId;
+    const { socket_id, channel_name } = body;
+
+    // Validate channel name format (e.g., "private-conversation-123" or "conversation-123")
+    if (
+      channel_name.startsWith('private-conversation-') ||
+      channel_name.startsWith('conversation-')
+    ) {
+      const conversationId = parseInt(
+        channel_name.replace('private-conversation-', '').replace('conversation-', ''),
+      );
+
+      // Verify user is participant
+      const participants = await this.chatService.getConversationParticipants(
+        conversationId,
+        userId,
+      );
+
+      if (!participants || participants.length === 0) {
+        throw new Error('Not authorized for this channel');
+      }
+    }
+
+    return this.pusherService.authenticate(socket_id, channel_name, userId);
   }
 }

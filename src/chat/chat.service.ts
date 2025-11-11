@@ -4,6 +4,7 @@ import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
+import { PusherService } from "./pusher.service";
 
 export interface GetMessagesDto {
   conversationId: number;
@@ -16,7 +17,8 @@ export class ChatService {
   constructor(
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
-    private orderPricingService: OrderPricingService
+    private orderPricingService: OrderPricingService,
+    private pusherService: PusherService
   ) {}
 
   /**
@@ -383,6 +385,38 @@ export class ChatService {
       where: { id: conversationId },
       data: { updatedAt: new Date() },
     });
+
+    // Emit real-time event via Pusher
+    try {
+      // Emit to conversation channel
+      await this.pusherService.trigger(
+        `conversation-${conversationId}`,
+        "new-message",
+        message
+      );
+
+      // Also update conversation list for all participants
+      const participants = await this.prisma.conversationParticipant.findMany({
+        where: { conversationId, isActive: true },
+        select: { userId: true },
+      });
+
+      // Emit conversation update to each participant
+      for (const participant of participants) {
+        await this.pusherService.trigger(
+          `user-${participant.userId}`,
+          "conversation-updated",
+          {
+            conversationId,
+            lastMessage: message,
+            updatedAt: new Date().toISOString(),
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error emitting Pusher event:", error);
+      // Don't fail the request if Pusher fails
+    }
 
     // Send push notifications to other participants
     await this.sendMessageNotifications(conversationId, message, userId);
@@ -1049,10 +1083,10 @@ export class ChatService {
         data: { status: "canceled" },
       });
 
-      // Update order status back to open
+      // Update order status to closed to allow feedback submission
       await tx.order.update({
         where: { id: orderId },
-        data: { status: "open" },
+        data: { status: "closed" },
       });
 
       // Close all conversations related to this order
@@ -1065,8 +1099,7 @@ export class ChatService {
       });
 
       return {
-        message:
-          "Application canceled, order reopened, and conversation closed",
+        message: "Application canceled, order closed, and conversation closed",
       };
     });
   }
