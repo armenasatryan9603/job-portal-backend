@@ -249,7 +249,7 @@ export class AuthService {
     };
   }
 
-  async sendOTP(phone: string) {
+  async sendOTP(phone: string, isSimulator: boolean = false) {
     // Clean phone number: remove spaces and dashes
     let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
 
@@ -267,6 +267,37 @@ export class AuthService {
       }
     }
     // If it already starts with +, keep it as is
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store OTP in database with expiration (5 minutes)
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await this.prisma.user.upsert({
+      where: { phone: cleanPhone },
+      update: {
+        otpCode: otp,
+        otpExpiresAt: expiresAt,
+      },
+      create: {
+        phone: cleanPhone,
+        name: "",
+        passwordHash: "temp_password",
+        role: "user",
+        otpCode: otp,
+        otpExpiresAt: expiresAt,
+      },
+    });
+
+    // If simulator mode, skip sending real SMS and just log
+    if (isSimulator) {
+      console.log(`🧪 [SIMULATOR] OTP for ${phone}: ${otp}`);
+      return {
+        success: true,
+        message: "OTP sent successfully (simulator mode)",
+        otp: otp, // Return OTP for simulator
+      };
+    }
 
     // Send OTP via Unimtx if configured, otherwise generate and store locally
     if (this.smsEnabled && this.unimtxClient) {
@@ -300,12 +331,11 @@ export class AuthService {
       } catch (error) {
         console.error("❌ Failed to send OTP via Unimtx:", error.message);
         // Fall back to console logging
-        console.log(`OTP for ${phone}: ${error.message}`);
+        console.log(`OTP for ${phone}: ${otp}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
     } else {
-      // Unimtx not configured - generate OTP and log to console
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      // Unimtx not configured - log OTP to console
       console.log(`OTP for ${phone}: ${otp}`);
 
       return {
@@ -317,7 +347,7 @@ export class AuthService {
     }
   }
 
-  async verifyOTP(phone: string, otp: string, name?: string) {
+  async verifyOTP(phone: string, otp: string, name?: string, isSimulator: boolean = false) {
     // Clean phone number: ensure E.164 format
     let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
 
@@ -336,8 +366,12 @@ export class AuthService {
     }
     // If it already starts with +, keep it as is
 
-    // Verify OTP via Unimtx if configured, otherwise use local verification
-    if (this.smsEnabled && this.unimtxClient) {
+    // If simulator mode, skip Unimtx verification and use local verification
+    if (isSimulator) {
+      console.log(`🧪 [SIMULATOR] Verifying OTP locally for ${phone}`);
+      // Fall through to local verification below
+    } else if (this.smsEnabled && this.unimtxClient) {
+      // Verify OTP via Unimtx if configured and not simulator
       try {
         const response = await this.unimtxClient.otp.verify({
           to: cleanPhone,
@@ -353,7 +387,10 @@ export class AuthService {
         console.error("❌ Failed to verify OTP via Unimtx:", error.message);
         throw new Error("Invalid OTP");
       }
-    } else {
+    }
+
+    // Local verification (used for simulator or when Unimtx is not configured)
+    if (isSimulator || !this.smsEnabled || !this.unimtxClient) {
       // Fallback to local verification when Unimtx is not configured
       // Use cleanPhone for consistency
       const user = await this.prisma.user.findUnique({
@@ -467,10 +504,24 @@ export class AuthService {
     };
   }
 
-  async resetOTP(phone: string) {
+  async resetOTP(phone: string, isSimulator: boolean = false) {
+    // Clean phone number: remove spaces and dashes
+    let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
+
+    // Format phone number: ensure E.164 format with country code
+    if (!cleanPhone.startsWith("+")) {
+      if (cleanPhone.startsWith("0")) {
+        cleanPhone = "+374" + cleanPhone.substring(1);
+      } else if (cleanPhone.startsWith("374")) {
+        cleanPhone = "+" + cleanPhone;
+      } else {
+        cleanPhone = "+374" + cleanPhone;
+      }
+    }
+
     // Clear existing OTP for the phone number
     await this.prisma.user.updateMany({
-      where: { phone },
+      where: { phone: cleanPhone },
       data: {
         otpCode: null,
         otpExpiresAt: null,
@@ -484,13 +535,13 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
     await this.prisma.user.upsert({
-      where: { phone },
+      where: { phone: cleanPhone },
       update: {
         otpCode: otp,
         otpExpiresAt: expiresAt,
       },
       create: {
-        phone,
+        phone: cleanPhone,
         name: "",
         passwordHash: "temp_password",
         role: "user",
@@ -499,19 +550,50 @@ export class AuthService {
       },
     });
 
-    // Send SMS if Brevo is configured, otherwise log to console
-    if (this.smsEnabled) {
-      const message = `Your new verification code is: ${otp}. This code will expire in 5 minutes.`;
-      const smsSent = await this.sendSMS(phone, message);
+    // If simulator mode, skip sending real SMS and just log
+    if (isSimulator) {
+      console.log(`🧪 [SIMULATOR] Reset OTP for ${phone}: ${otp}`);
+      return {
+        success: true,
+        message: "OTP reset and new OTP sent successfully (simulator mode)",
+        otp: otp, // Return OTP for simulator
+      };
+    }
 
-      if (!smsSent) {
-        // Fall back to console logging if SMS fails
-        console.log(`New OTP for ${phone}: ${otp}`);
+    // Send SMS if configured, otherwise log to console
+    if (this.smsEnabled && this.unimtxClient) {
+      try {
+        const response = await this.unimtxClient.otp.send({
+          to: cleanPhone,
+          templateId: this.unimtxTemplateId,
+          signature: this.unimtxSenderId,
+        });
+
+        const responseData = response as any;
+        if (responseData && responseData.code === "0" && responseData.data) {
+          const messageId = responseData.data.id;
+          if (messageId) {
+            console.log(
+              `📱 Reset OTP sent to ${phone} via Unimtx (MessageId: ${messageId})`
+            );
+            return {
+              success: true,
+              message: "OTP reset and new OTP sent successfully",
+            };
+          } else {
+            throw new Error("No MessageId in Unimtx response data");
+          }
+        } else {
+          throw new Error(`Unimtx API error: code ${responseData?.code}`);
+        }
+      } catch (error) {
+        console.error("❌ Failed to send reset OTP via Unimtx:", error.message);
+        console.log(`Reset OTP for ${phone}: ${otp}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
     } else {
-      // Brevo not configured - log OTP to console
-      console.log(`New OTP for ${phone}: ${otp}`);
+      // Not configured - log OTP to console
+      console.log(`Reset OTP for ${phone}: ${otp}`);
     }
 
     return {

@@ -44,18 +44,18 @@ export class AuthController {
   }
 
   @Post('send-otp')
-  async sendOTP(@Body() body: { phone: string }) {
-    return this.authService.sendOTP(body.phone);
+  async sendOTP(@Body() body: { phone: string; isSimulator?: boolean }) {
+    return this.authService.sendOTP(body.phone, body.isSimulator);
   }
 
   @Post('verify-otp')
-  async verifyOTP(@Body() body: { phone: string; otp: string; name?: string }) {
-    return this.authService.verifyOTP(body.phone, body.otp, body.name);
+  async verifyOTP(@Body() body: { phone: string; otp: string; name?: string; isSimulator?: boolean }) {
+    return this.authService.verifyOTP(body.phone, body.otp, body.name, body.isSimulator);
   }
 
   @Post('reset-otp')
-  async resetOTP(@Body() body: { phone: string }) {
-    return this.authService.resetOTP(body.phone);
+  async resetOTP(@Body() body: { phone: string; isSimulator?: boolean }) {
+    return this.authService.resetOTP(body.phone, body.isSimulator);
   }
 
   @Get('profile')
