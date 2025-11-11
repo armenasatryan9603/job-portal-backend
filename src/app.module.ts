@@ -18,6 +18,7 @@ import { OrderPricingModule } from './order-pricing/order-pricing.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReasonsModule } from './reasons/reasons.module';
+import { TranslationsModule } from './translations/translations.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ReasonsModule } from './reasons/reasons.module';
     ReferralsModule,
     NotificationsModule,
     ReasonsModule,
+    TranslationsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
