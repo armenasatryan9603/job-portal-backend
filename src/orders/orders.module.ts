@@ -5,9 +5,10 @@ import { OrdersController } from "./orders.controller";
 import { AuthModule } from "../auth/auth.module"; // needed for JwtAuthGuard
 import { MediaFilesModule } from "../media-files/media-files.module";
 import { OrderPricingModule } from "../order-pricing/order-pricing.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
-  imports: [AuthModule, MediaFilesModule, OrderPricingModule], // so we can use JwtAuthGuard, MediaFilesService, and OrderPricingService
+  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, and NotificationsService
   controllers: [OrdersController],
   providers: [OrdersService, PrismaService],
 })

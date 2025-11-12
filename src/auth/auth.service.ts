@@ -115,9 +115,22 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Get welcome bonus amount from environment variable
+    const welcomeBonus = parseFloat(process.env.WELCOME_BONUS_AMOUNT || "5.0");
+
     const user = await this.prisma.user.create({
-      data: { name, email, passwordHash: hashedPassword, role: "user" },
+      data: {
+        name,
+        email,
+        passwordHash: hashedPassword,
+        role: "user",
+        creditBalance: welcomeBonus, // Give welcome bonus to all new users
+      },
     });
+
+    console.log(
+      `✅ User created with ID: ${user.id} - Welcome bonus: ${welcomeBonus} credits`
+    );
 
     // Apply referral code if provided
     let referralResult: {
@@ -270,7 +283,7 @@ export class AuthService {
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Store OTP in database with expiration (5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await this.prisma.user.upsert({
@@ -347,7 +360,13 @@ export class AuthService {
     }
   }
 
-  async verifyOTP(phone: string, otp: string, name?: string, isSimulator: boolean = false) {
+  async verifyOTP(
+    phone: string,
+    otp: string,
+    name?: string,
+    isSimulator: boolean = false,
+    referralCode?: string
+  ) {
     // Clean phone number: ensure E.164 format
     let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
 
@@ -430,15 +449,24 @@ export class AuthService {
       if (!user) {
         // Create new user if doesn't exist
         console.log(`📝 Creating new user with phone: ${cleanPhone}`);
+
+        // Get welcome bonus amount from environment variable
+        const welcomeBonus = parseFloat(
+          process.env.WELCOME_BONUS_AMOUNT || "5.0"
+        );
+
         user = await this.prisma.user.create({
           data: {
             phone: cleanPhone, // Use formatted phone number
             name: name?.trim() || "",
             passwordHash: "temp_password",
             role: "user",
+            creditBalance: welcomeBonus, // Give welcome bonus to all new users
           },
         });
-        console.log(`✅ User created with ID: ${user.id}`);
+        console.log(
+          `✅ User created with ID: ${user.id} - Welcome bonus: ${welcomeBonus} credits`
+        );
       } else {
         console.log(`👤 Found existing user with ID: ${user.id}`);
         // Update existing user
@@ -468,6 +496,31 @@ export class AuthService {
     } catch (error) {
       console.error("❌ Error tracking phone number:", error.message);
       // Continue anyway - don't fail the whole process
+    }
+
+    // Apply referral code if provided (only for new users or users without referral)
+    if (referralCode && user) {
+      try {
+        // Check if user was already referred
+        const existingReferral = await this.prisma.referralReward.findFirst({
+          where: { referredUserId: user.id },
+        });
+
+        // Only apply if user hasn't been referred before
+        if (!existingReferral) {
+          await this.referralsService.applyReferralCode(referralCode, user.id);
+          console.log(
+            `✅ Referral code ${referralCode} applied for user ${user.id}`
+          );
+        } else {
+          console.log(
+            `ℹ️ User ${user.id} was already referred, skipping referral code`
+          );
+        }
+      } catch (error) {
+        // Log error but don't fail signup if referral fails
+        console.error("❌ Referral code application failed:", error.message);
+      }
     }
 
     // Generate JWT token

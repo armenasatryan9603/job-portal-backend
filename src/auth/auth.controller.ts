@@ -49,8 +49,8 @@ export class AuthController {
   }
 
   @Post('verify-otp')
-  async verifyOTP(@Body() body: { phone: string; otp: string; name?: string; isSimulator?: boolean }) {
-    return this.authService.verifyOTP(body.phone, body.otp, body.name, body.isSimulator);
+  async verifyOTP(@Body() body: { phone: string; otp: string; name?: string; isSimulator?: boolean; referralCode?: string }) {
+    return this.authService.verifyOTP(body.phone, body.otp, body.name, body.isSimulator, body.referralCode);
   }
 
   @Post('reset-otp')

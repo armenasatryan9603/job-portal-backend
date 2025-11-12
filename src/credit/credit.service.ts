@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
-import { PrismaService } from '../prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import axios from "axios";
+import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class CreditService {
@@ -8,12 +8,8 @@ export class CreditService {
 
   constructor(private prisma: PrismaService) {}
 
-  private readonly vposUrl =
-    process.env.AMERIABANK_VPOS_URL ||
-    'https://services.ameriabank.am/VPOS/api/VPOS/InitPayment';
-  private readonly vposStatusUrl =
-    process.env.AMERIABANK_VPOS_STATUS_URL ||
-    'https://services.ameriabank.am/VPOS/api/VPOS/GetPaymentDetails';
+  private readonly vposUrl = process.env.AMERIABANK_VPOS_URL!;
+  private readonly vposStatusUrl = process.env.AMERIABANK_VPOS_STATUS_URL!;
 
   private readonly credentials = {
     clientId: process.env.AMERIABANK_CLIENT_ID,
@@ -21,49 +17,229 @@ export class CreditService {
     password: process.env.AMERIABANK_PASSWORD,
   };
 
-  // 1️⃣ Initiate payment
   async initiatePayment(userId: number, amount: number) {
-    const orderId = `${userId}-${Date.now()}`;
+    // Validate credentials and required environment variables
+    if (
+      !this.credentials.clientId ||
+      !this.credentials.username ||
+      !this.credentials.password
+    ) {
+      this.logger.error("AmeriaBank credentials not configured");
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
+      );
+    }
 
+    if (!this.vposUrl || !this.vposStatusUrl) {
+      this.logger.error("AmeriaBank vPOS URLs not configured");
+      throw new Error(
+        "Payment gateway URLs not configured. Please contact support."
+      );
+    }
+
+    // Generate unique OrderID (integer, max 16 digits for JavaScript safe integer)
+    const timestamp = Date.now();
+    const timestampSuffix = timestamp.toString().slice(-10);
+    const randomSuffix = Math.floor(Math.random() * 100);
+    const userIdStr = userId.toString().padStart(5, "0").slice(-5);
+    const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
+    const orderIdInt = parseInt(
+      `${timestampSuffix}${userIdStr}${randomStr}`,
+      10
+    );
+    const orderId = `${userId}-${timestamp}-${randomSuffix}`;
+
+    if (orderIdInt > Number.MAX_SAFE_INTEGER) {
+      throw new Error("OrderID generation failed: number too large");
+    }
+
+    // Build callback URL
+    // Use BACKEND_URL if set, otherwise construct from PORT (for local development)
+    const port = process.env.PORT || "8080";
+    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
+    const backUrl = `${backendUrl}/credit/refill/callback`;
+
+    // Build payment request payload
     const payload = {
       ClientID: this.credentials.clientId,
-      ClientUsr: this.credentials.username,
-      ClientPass: this.credentials.password,
+      Username: this.credentials.username,
+      Password: this.credentials.password,
       Amount: amount,
-      OrderID: orderId,
-      // Optional: ReturnURL, FailURL, Description
+      OrderID: orderIdInt,
+      Description: `Credit refill - ${amount} credits`,
+      BackURL: backUrl,
     };
 
-    const response = await axios.post(this.vposUrl, payload);
-    this.logger.log(`Initiated payment for user ${userId} amount ${amount}`);
-    return { orderId, paymentData: response.data };
+    // Initiate payment
+    const response = await axios.post(this.vposUrl, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      timeout: 30000,
+    });
+
+    const responseData = response.data;
+
+    // Check for errors
+    if (responseData?.ResponseCode && responseData.ResponseCode !== 1) {
+      const errorMessage =
+        responseData.ResponseMessage ||
+        `Payment gateway error: ${responseData.ResponseCode}`;
+      this.logger.error(`Payment initiation failed: ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+
+    // Extract PaymentID and construct payment URL
+    if (responseData?.ResponseCode === 1 && responseData?.PaymentID) {
+      const baseDomain = this.vposUrl.includes("servicestest")
+        ? "https://servicestest.ameriabank.am"
+        : "https://services.ameriabank.am";
+      const paymentUrl = `${baseDomain}/VPOS/Payments/Pay?id=${responseData.PaymentID}&lang=en`;
+
+      return {
+        orderId,
+        paymentUrl,
+        paymentHtml: null,
+        paymentData: response.data,
+      };
+    }
+
+    // Fallback error
+    this.logger.error(
+      `Payment initiated but PaymentID not found. ResponseCode: ${responseData?.ResponseCode}`
+    );
+    throw new Error(
+      "Payment initiated but payment URL could not be generated. Please contact support."
+    );
   }
 
-  // 2️⃣ Handle webhook / confirm payment
-  async handleWebhook(orderId: string, paidAmount: number) {
-    const userId = parseInt(orderId.split('-')[0]);
+  async handlePaymentCallback(
+    orderID: string,
+    responseCode: string,
+    paymentID: string,
+    opaque?: string
+  ) {
+    // Validate required parameters
+    if (!orderID || !paymentID) {
+      throw new Error("Payment callback missing required parameters");
+    }
 
-    // Verify with vPOS API (optional, recommended)
-    const verifyPayload = {
-      ClientID: this.credentials.clientId,
-      ClientUsr: this.credentials.username,
-      ClientPass: this.credentials.password,
-      OrderID: orderId,
-    };
-    const verifyResponse = await axios.post(this.vposStatusUrl, verifyPayload);
+    // Handle responseCode "01" (duplicate order) - still verify via GetPaymentDetails
+    if (responseCode && responseCode !== "00" && responseCode !== "01") {
+      throw new Error(`Payment failed with code: ${responseCode}`);
+    }
 
-    if (verifyResponse.data.Status !== 'Approved') {
-      this.logger.warn(`Payment ${orderId} not approved`);
-      throw new Error('Payment not approved');
+    // Get payment details to finalize transaction
+    const paymentDetails = await this.getPaymentDetails(paymentID);
+
+    // Check payment status
+    if (paymentDetails.PaymentState === "payment_approved") {
+      // Payment approved - proceed
+    } else if (
+      paymentDetails.PaymentState === "payment_declined" ||
+      paymentDetails.OrderStatus === "6"
+    ) {
+      const errorMsg =
+        paymentDetails.Description ||
+        paymentDetails.TrxnDescription ||
+        `Payment declined. ResponseCode: ${paymentDetails.ResponseCode}`;
+
+      const isTestMode = this.vposUrl.includes("servicestest");
+      const fullErrorMsg = isTestMode
+        ? `${errorMsg} (Test mode: Use an approved test card for successful payments.)`
+        : errorMsg;
+
+      throw new Error(fullErrorMsg);
+    } else if (
+      paymentDetails.ResponseCode &&
+      paymentDetails.ResponseCode !== "00" &&
+      paymentDetails.ResponseCode !== "0125"
+    ) {
+      const errorMsg =
+        paymentDetails.Description ||
+        paymentDetails.TrxnDescription ||
+        `Payment error. ResponseCode: ${paymentDetails.ResponseCode}`;
+      throw new Error(errorMsg);
+    }
+
+    // Extract userId from orderID (format: userId-timestamp-random)
+    let userId: number;
+    if (orderID.includes("-")) {
+      userId = parseInt(orderID.split("-")[0]);
+    } else {
+      // Fallback: try paymentDetails.OrderID
+      const orderIdFromDetails = paymentDetails.OrderID?.toString() || "";
+      if (orderIdFromDetails.includes("-")) {
+        userId = parseInt(orderIdFromDetails.split("-")[0]);
+      } else {
+        throw new Error(`Cannot determine userId from orderID: ${orderID}`);
+      }
+    }
+
+    if (isNaN(userId)) {
+      throw new Error(`Invalid userId extracted from orderID: ${orderID}`);
+    }
+
+    // Get payment amount
+    const amount = paymentDetails.DepositedAmount || paymentDetails.Amount;
+    if (!amount || amount <= 0) {
+      throw new Error(
+        `Invalid payment amount: ${amount}. Payment may not have been completed.`
+      );
     }
 
     // Update user credits
     await this.prisma.user.update({
       where: { id: userId },
+      data: { creditBalance: { increment: amount } },
+    });
+
+    this.logger.log(`Credits added: user ${userId}, amount ${amount}`);
+    return {
+      message: "Credits added successfully",
+      paymentDetails,
+    };
+  }
+
+  async getPaymentDetails(paymentID: string) {
+    const payload = {
+      PaymentID: paymentID,
+      Username: this.credentials.username,
+      Password: this.credentials.password,
+    };
+
+    const response = await axios.post(this.vposStatusUrl, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      timeout: 30000,
+    });
+
+    // Log warning for non-success ResponseCode but still return data
+    // Caller will check PaymentState to determine actual status
+    if (response.data?.ResponseCode && response.data.ResponseCode !== "00") {
+      this.logger.warn(
+        `GetPaymentDetails ResponseCode: ${response.data.ResponseCode}`
+      );
+    }
+
+    return response.data;
+  }
+
+  // Legacy webhook handler (kept for backward compatibility)
+  async handleWebhook(orderId: string, paidAmount: number) {
+    const userId = parseInt(orderId.split("-")[0]);
+
+    await this.prisma.user.update({
+      where: { id: userId },
       data: { creditBalance: { increment: paidAmount } },
     });
 
-    this.logger.log(`Credits added to user ${userId}: ${paidAmount}`);
-    return { message: 'Credits added successfully' };
+    this.logger.log(
+      `Credits added via webhook: user ${userId}, amount ${paidAmount}`
+    );
+    return { message: "Credits added successfully" };
   }
 }

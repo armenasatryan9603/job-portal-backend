@@ -3,9 +3,9 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
+} from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class ReferralsService {
@@ -13,7 +13,7 @@ export class ReferralsService {
 
   constructor(
     private prisma: PrismaService,
-    private notificationsService: NotificationsService,
+    private notificationsService: NotificationsService
   ) {}
 
   /**
@@ -45,7 +45,7 @@ export class ReferralsService {
     } catch (error) {
       this.logger.error(
         `Error generating referral code for user ${userId}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -56,7 +56,7 @@ export class ReferralsService {
    */
   async applyReferralCode(
     referralCode: string,
-    newUserId: number,
+    newUserId: number
   ): Promise<{
     success: boolean;
     referrerId?: number;
@@ -71,12 +71,12 @@ export class ReferralsService {
       });
 
       if (!referrer) {
-        throw new BadRequestException('Invalid referral code');
+        throw new BadRequestException("Invalid referral code");
       }
 
       // Check if user is trying to refer themselves
       if (referrer.id === newUserId) {
-        throw new BadRequestException('Cannot refer yourself');
+        throw new BadRequestException("Cannot refer yourself");
       }
 
       // Check if user was already referred
@@ -85,12 +85,16 @@ export class ReferralsService {
       });
 
       if (existingReferral) {
-        throw new BadRequestException('User has already been referred');
+        throw new BadRequestException("User has already been referred");
       }
 
-      // Define reward amounts (configurable)
-      const referrerReward = 10.0; // Credits for referrer
-      const referredBonus = 5.0; // Credits for referred user
+      // Define reward amounts (configurable via environment variables)
+      const referrerReward = parseFloat(
+        process.env.REFERRAL_REWARD_AMOUNT || "10.0"
+      ); // Credits for referrer
+      const referredBonus = parseFloat(
+        process.env.REFERRAL_BONUS_AMOUNT || "5.0"
+      ); // Credits for referred user
 
       // Create referral reward record
       const referralReward = await this.prisma.referralReward.create({
@@ -99,7 +103,7 @@ export class ReferralsService {
           referredUserId: newUserId,
           rewardAmount: referrerReward,
           bonusAmount: referredBonus,
-          status: 'pending',
+          status: "pending",
         },
       });
 
@@ -127,7 +131,7 @@ export class ReferralsService {
         await tx.referralReward.update({
           where: { id: referralReward.id },
           data: {
-            status: 'completed',
+            status: "completed",
             completedAt: new Date(),
           },
         });
@@ -140,34 +144,34 @@ export class ReferralsService {
         // Notification for referrer
         await this.notificationsService.createNotificationWithPush(
           referrer.id,
-          'referral_reward',
-          'Referral Reward Earned!',
+          "referral_reward",
+          "Referral Reward Earned!",
           `You earned ${referrerReward} credits for referring a new user!`,
           {
             referredUserId: newUserId,
             rewardAmount: referrerReward,
             referralCode: referralCode,
-          },
+          }
         );
 
         // Notification for referred user
         await this.notificationsService.createNotificationWithPush(
           newUserId,
-          'referral_bonus',
-          'Welcome Bonus!',
+          "referral_bonus",
+          "Welcome Bonus!",
           `You received ${referredBonus} credits as a welcome bonus for using a referral code!`,
           {
             referrerId: referrer.id,
             bonusAmount: referredBonus,
             referralCode: referralCode,
-          },
+          }
         );
       } catch (error) {
-        this.logger.error('Failed to send referral notifications:', error);
+        this.logger.error("Failed to send referral notifications:", error);
       }
 
       this.logger.log(
-        `Applied referral code ${referralCode}: Referrer ${referrer.id} got ${referrerReward} credits, User ${newUserId} got ${referredBonus} credits`,
+        `Applied referral code ${referralCode}: Referrer ${referrer.id} got ${referrerReward} credits, User ${newUserId} got ${referredBonus} credits`
       );
 
       return {
@@ -208,7 +212,13 @@ export class ReferralsService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException("User not found");
+      }
+
+      // Generate referral code if user doesn't have one
+      let referralCode = user.referralCode;
+      if (!referralCode) {
+        referralCode = await this.generateReferralCode(userId);
       }
 
       // Get referral rewards
@@ -219,25 +229,25 @@ export class ReferralsService {
             select: { name: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       });
 
       const totalReferrals = referralRewards.length;
       const totalEarned = referralRewards
-        .filter((r) => r.status === 'completed')
+        .filter((r) => r.status === "completed")
         .reduce((sum, r) => sum + r.rewardAmount, 0);
       const pendingRewards = referralRewards
-        .filter((r) => r.status === 'pending')
+        .filter((r) => r.status === "pending")
         .reduce((sum, r) => sum + r.rewardAmount, 0);
 
       return {
-        referralCode: user.referralCode,
+        referralCode: referralCode,
         totalReferrals,
         totalEarned,
         pendingRewards,
         referrals: referralRewards.map((reward) => ({
           id: reward.id,
-          referredUserName: reward.referredUser.name,
+          referredUserName: reward.referredUser?.name || "Unknown User",
           rewardAmount: reward.rewardAmount,
           status: reward.status,
           createdAt: reward.createdAt,
@@ -246,7 +256,7 @@ export class ReferralsService {
     } catch (error) {
       this.logger.error(
         `Error getting referral stats for user ${userId}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -274,7 +284,7 @@ export class ReferralsService {
             select: { name: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       });
 
       return rewards.map((reward) => ({
@@ -289,7 +299,7 @@ export class ReferralsService {
     } catch (error) {
       this.logger.error(
         `Error getting referral rewards for user ${userId}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -305,7 +315,7 @@ export class ReferralsService {
     while (attempts < maxAttempts) {
       // Generate code like "USER123" or "REF456"
       const randomNum = Math.floor(Math.random() * 1000);
-      const code = `REF${randomNum.toString().padStart(3, '0')}`;
+      const code = `REF${randomNum.toString().padStart(3, "0")}`;
 
       // Check if code already exists
       const existing = await this.prisma.user.findUnique({

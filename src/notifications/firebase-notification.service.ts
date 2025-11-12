@@ -2,6 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma.service';
 
+/**
+ * FirebaseNotificationService - Firebase Cloud Messaging (FCM) Only
+ * 
+ * This service uses ONLY Firebase Admin SDK for sending push notifications via FCM.
+ * Other Firebase services (Storage, Database, Analytics) are NOT used to reduce costs.
+ * 
+ * The service initializes Firebase Admin SDK with minimal configuration,
+ * using only the messaging service for push notifications.
+ */
 @Injectable()
 export class FirebaseNotificationService {
   private readonly logger = new Logger(FirebaseNotificationService.name);

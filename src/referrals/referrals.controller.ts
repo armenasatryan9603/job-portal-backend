@@ -23,9 +23,13 @@ export class ReferralsController {
    * Generate or get user's referral code
    */
   @Get('code')
-  async getReferralCode(@GetUser() user: User): Promise<{ code: string }> {
+  async getReferralCode(@GetUser() user: any): Promise<{ code: string }> {
     try {
-      const code = await this.referralsService.generateReferralCode(user.id);
+      const userId = user?.userId || user?.id;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in token');
+      }
+      const code = await this.referralsService.generateReferralCode(userId);
       return { code };
     } catch (error) {
       this.logger.error('Error getting referral code:', error);
@@ -66,7 +70,7 @@ export class ReferralsController {
    * Get user's referral statistics
    */
   @Get('stats')
-  async getReferralStats(@GetUser() user: User): Promise<{
+  async getReferralStats(@GetUser() user: any): Promise<{
     referralCode: string | null;
     totalReferrals: number;
     totalEarned: number;
@@ -80,9 +84,14 @@ export class ReferralsController {
     }>;
   }> {
     try {
-      return await this.referralsService.getReferralStats(user.id);
+      const userId = user?.userId || user?.id;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in token');
+      }
+      return await this.referralsService.getReferralStats(userId);
     } catch (error) {
       this.logger.error('Error getting referral stats:', error);
+      this.logger.error('Error details:', error instanceof Error ? error.stack : error);
       throw error;
     }
   }
@@ -91,7 +100,7 @@ export class ReferralsController {
    * Get user's referral rewards history
    */
   @Get('rewards')
-  async getReferralRewards(@GetUser() user: User): Promise<
+  async getReferralRewards(@GetUser() user: any): Promise<
     Array<{
       id: number;
       referredUserName: string;
@@ -103,7 +112,11 @@ export class ReferralsController {
     }>
   > {
     try {
-      return await this.referralsService.getReferralRewards(user.id);
+      const userId = user?.userId || user?.id;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in token');
+      }
+      return await this.referralsService.getReferralRewards(userId);
     } catch (error) {
       this.logger.error('Error getting referral rewards:', error);
       throw error;
@@ -114,13 +127,17 @@ export class ReferralsController {
    * Get referral link for sharing
    */
   @Get('share-link')
-  async getShareLink(@GetUser() user: User): Promise<{
+  async getShareLink(@GetUser() user: any): Promise<{
     referralCode: string;
     shareLink: string;
     message: string;
   }> {
     try {
-      const code = await this.referralsService.generateReferralCode(user.id);
+      const userId = user?.userId || user?.id;
+      if (!userId) {
+        throw new BadRequestException('User ID not found in token');
+      }
+      const code = await this.referralsService.generateReferralCode(userId);
 
       // Generate shareable link (you can customize the domain)
       const baseUrl = process.env.FRONTEND_URL || 'https://yourapp.com';

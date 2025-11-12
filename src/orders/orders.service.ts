@@ -2,15 +2,20 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
+import { NotificationsService } from "../notifications/notifications.service";
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private prisma: PrismaService,
-    private orderPricingService: OrderPricingService
+    private orderPricingService: OrderPricingService,
+    private notificationsService: NotificationsService
   ) {}
 
   async createOrder(
@@ -56,7 +61,7 @@ export class OrdersService {
         ? [skills]
         : [];
 
-    return this.prisma.order.create({
+    const order = await this.prisma.order.create({
       data: {
         clientId,
         serviceId,
@@ -77,6 +82,12 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
+        Service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         _count: {
           select: {
             Proposals: true,
@@ -85,6 +96,17 @@ export class OrdersService {
         },
       },
     });
+
+    // Send notifications to users who have notifications enabled for this service
+    if (serviceId) {
+      await this.sendNewOrderNotifications(
+        order.id,
+        serviceId,
+        order.title || ""
+      );
+    }
+
+    return order;
   }
 
   async findAll(
@@ -744,6 +766,12 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
+          Service: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           _count: {
             select: {
               Proposals: true,
@@ -794,11 +822,121 @@ export class OrdersService {
         }
       }
 
-      return {
+      const result = {
         ...order,
         MediaFiles: createdMediaFiles,
       };
+
+      // Send notifications to users who have notifications enabled for this service
+      // Do this after transaction completes to avoid blocking the transaction
+      if (serviceId) {
+        // Use setImmediate to send notifications asynchronously after transaction
+        setImmediate(async () => {
+          await this.sendNewOrderNotifications(
+            order.id,
+            serviceId,
+            order.title || ""
+          );
+        });
+      }
+
+      return result;
     });
+  }
+
+  /**
+   * Send notifications to users who have notifications enabled for a service
+   * when a new order is created for that service
+   */
+  private async sendNewOrderNotifications(
+    orderId: number,
+    serviceId: number,
+    orderTitle: string
+  ): Promise<void> {
+    try {
+      // Find all users who have notifications enabled for this service
+      const userServices = await this.prisma.userService.findMany({
+        where: {
+          serviceId,
+          notificationsEnabled: true,
+        },
+        include: {
+          User: {
+            select: {
+              id: true,
+              name: true,
+              fcmToken: true,
+            },
+          },
+          Service: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (userServices.length === 0) {
+        this.logger.log(
+          `No users with notifications enabled for service ${serviceId}`
+        );
+        return;
+      }
+
+      // Get service name for notification
+      const serviceName =
+        userServices[0]?.Service?.name || `Service #${serviceId}`;
+
+      // Get the order to find the client ID (to exclude from notifications)
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { clientId: true },
+      });
+
+      const clientId = order?.clientId;
+
+      // Send notification to each user (excluding the order creator)
+      const notifications = userServices
+        .filter(
+          (us) =>
+            us.User.fcmToken && // Only users with FCM tokens
+            us.userId !== clientId // Don't notify the order creator
+        )
+        .map((us) =>
+          this.notificationsService
+            .createNotificationWithPush(
+              us.userId,
+              "new_order",
+              "New Order Available!",
+              `A new order "${orderTitle}" has been posted in ${serviceName}. Check it out!`,
+              {
+                type: "order",
+                orderId: orderId.toString(),
+                serviceId: serviceId.toString(),
+                serviceName: serviceName,
+              }
+            )
+            .catch((error) => {
+              this.logger.error(
+                `Failed to send notification to user ${us.userId}:`,
+                error
+              );
+            })
+        );
+
+      await Promise.all(notifications);
+
+      this.logger.log(
+        `Sent new order notifications to ${notifications.length} users for order ${orderId} in service ${serviceId}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error sending new order notifications for order ${orderId}:`,
+        error
+      );
+      // Don't throw - notification failure shouldn't break order creation
+    }
   }
 
   /**
