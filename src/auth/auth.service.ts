@@ -286,21 +286,38 @@ export class AuthService {
 
     // Store OTP in database with expiration (5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await this.prisma.user.upsert({
-      where: { phone: cleanPhone },
-      update: {
-        otpCode: otp,
-        otpExpiresAt: expiresAt,
-      },
-      create: {
-        phone: cleanPhone,
-        name: "",
-        passwordHash: "temp_password",
-        role: "user",
-        otpCode: otp,
-        otpExpiresAt: expiresAt,
-      },
-    });
+    try {
+      await this.prisma.user.upsert({
+        where: { phone: cleanPhone },
+        update: {
+          otpCode: otp,
+          otpExpiresAt: expiresAt,
+        },
+        create: {
+          phone: cleanPhone,
+          name: "",
+          passwordHash: "temp_password",
+          role: "user",
+          otpCode: otp,
+          otpExpiresAt: expiresAt,
+        },
+      });
+    } catch (error) {
+      console.error("Database error while storing OTP:", error);
+      // Check if it's a connection error
+      if (
+        error instanceof Error &&
+        (error.message.includes("Can't reach database server") ||
+          error.message.includes("P1001") ||
+          error.message.includes("connection"))
+      ) {
+        throw new Error(
+          "Database connection failed. Please check your DATABASE_URL and ensure the database server is running."
+        );
+      }
+      // Re-throw other errors
+      throw error;
+    }
 
     // If simulator mode, skip sending real SMS and just log
     if (isSimulator) {
