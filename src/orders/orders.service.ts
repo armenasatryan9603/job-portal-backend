@@ -555,6 +555,24 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
+          Service: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          BannerImage: {
+            select: {
+              id: true,
+              fileUrl: true,
+              fileType: true,
+            },
+          },
+          Proposals: {
+            take: 3,
+            orderBy: { createdAt: "desc" },
+            include: {},
+          },
           _count: {
             select: {
               Proposals: true,
