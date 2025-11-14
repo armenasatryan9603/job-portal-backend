@@ -360,6 +360,92 @@ export class ChatService {
       throw new Error("User is not a participant in this conversation");
     }
 
+    // Validate message content - prevent phone numbers
+    if (messageType === "text" && content) {
+      const containsPhoneNumber = (text: string): boolean => {
+        // More comprehensive phone number detection
+        // Handles various formats including:
+        // - International: +374 77 7539543, +1-234-567-8900
+        // - Local formats: 094122345, 093 10 19 43, 094 40-60 - 71 10
+        // - With multiple spaces: 033      50 6070
+        // - With quotes: "000777659-67"
+
+        const phonePatterns = [
+          // International format: +374 77 7539543, +1 234 567 8900
+          /\+\d{1,4}[\s\-\.]?\d{1,4}[\s\-\.]?\d{1,4}[\s\-\.]?\d{1,9}/g,
+          // Local formats with spaces/dashes: 094 40-60 - 71 10, 093 10 19 43
+          /0\d{1,2}[\s\-\.]+[\d\s\-\.]{5,}/g,
+          // Formats with parentheses: (123) 456-7890
+          /\(\d{1,4}\)[\s\-\.]?\d{1,4}[\s\-\.]?\d{1,9}/g,
+          // Sequences of digits with separators: 055906940, "000777659-67"
+          /["']?\d{2,}[\s\-\.]?\d{1,}[\s\-\.]?\d{1,}["']?/g,
+          // Consecutive digits (7+): 1234567890
+          /\d{7,}/g,
+        ];
+
+        // Check if any pattern matches
+        for (const pattern of phonePatterns) {
+          const matches = text.match(pattern);
+          if (matches) {
+            for (const match of matches) {
+              // Remove all non-digit characters to get pure number
+              const digitsOnly = match.replace(/\D/g, "");
+
+              // Check if it's a valid phone number length (7-15 digits)
+              if (digitsOnly.length >= 7 && digitsOnly.length <= 15) {
+                const num = parseInt(digitsOnly);
+
+                // Filter out false positives:
+                // - Years (1900-2099)
+                // - Very small numbers that are likely not phones
+                // - Numbers that are too short even after cleaning
+                if (
+                  !(num >= 1900 && num <= 2099) &&
+                  digitsOnly.length >= 7 &&
+                  // Additional check: if it starts with 0 and has 7+ digits, likely a phone
+                  (match.trim().startsWith("0") ||
+                    match.trim().startsWith("+") ||
+                    digitsOnly.length >= 8)
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+
+        // Additional check: look for sequences of digits separated by spaces/dashes
+        // that when combined form a phone number (7-15 digits)
+        const flexiblePattern = /[\d\s\-\.\(\)\+]{7,}/g;
+        const flexibleMatches = text.match(flexiblePattern);
+        if (flexibleMatches) {
+          for (const match of flexibleMatches) {
+            const digitsOnly = match.replace(/\D/g, "");
+            if (digitsOnly.length >= 7 && digitsOnly.length <= 15) {
+              const num = parseInt(digitsOnly);
+              // Check if it looks like a phone number (not a year, not too small)
+              if (
+                !(num >= 1900 && num <= 2099) &&
+                digitsOnly.length >= 7 &&
+                // Must have some separators or be 8+ digits to avoid false positives
+                (match.match(/[\s\-\.]/) || digitsOnly.length >= 8)
+              ) {
+                return true;
+              }
+            }
+          }
+        }
+
+        return false;
+      };
+
+      if (containsPhoneNumber(content)) {
+        throw new Error(
+          "Sharing phone numbers is not allowed in chat messages for security reasons."
+        );
+      }
+    }
+
     // Create message
     const message = await this.prisma.message.create({
       data: {
@@ -877,268 +963,578 @@ export class ChatService {
    * Reject application and refund credit
    */
   async rejectApplication(orderId: number, clientId: number) {
-    return this.prisma.$transaction(async (tx) => {
-      // Verify the client owns this order
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          clientId: clientId,
-        },
-        include: {
-          Proposals: {
-            where: {
-              status: "pending",
-            },
+    return this.prisma
+      .$transaction(async (tx) => {
+        // Verify the client owns this order
+        const order = await tx.order.findFirst({
+          where: {
+            id: orderId,
+            clientId: clientId,
           },
-        },
-      });
-
-      if (!order) {
-        throw new Error("Order not found or you are not the owner");
-      }
-
-      // Get all pending proposals for this order
-      const pendingProposals = order.Proposals;
-
-      // Get pricing configuration to calculate refund amount
-      const orderBudget = order.budget || 0;
-      const pricingConfig =
-        await this.orderPricingService.getPricingConfig(orderBudget);
-      const creditCost = pricingConfig.creditCost;
-      const refundAmount = Math.round(
-        creditCost * pricingConfig.refundPercentage
-      );
-
-      console.log(
-        `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${pendingProposals.length} rejected proposals`
-      );
-
-      // Refund credits to all applicants using pricing table
-      for (const proposal of pendingProposals) {
-        if (refundAmount > 0) {
-          await tx.user.update({
-            where: { id: proposal.userId },
-            data: {
-              creditBalance: {
-                increment: refundAmount,
+          include: {
+            Proposals: {
+              where: {
+                status: "pending",
               },
             },
+          },
+        });
+
+        if (!order) {
+          throw new Error("Order not found or you are not the owner");
+        }
+
+        // Get all pending proposals for this order
+        const pendingProposals = order.Proposals;
+
+        // Get pricing configuration to calculate refund amount
+        const orderBudget = order.budget || 0;
+        const pricingConfig =
+          await this.orderPricingService.getPricingConfig(orderBudget);
+        const creditCost = pricingConfig.creditCost;
+        const refundAmount = Math.round(
+          creditCost * pricingConfig.refundPercentage
+        );
+
+        console.log(
+          `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${pendingProposals.length} rejected proposals`
+        );
+
+        // Refund credits to all applicants using pricing table
+        for (const proposal of pendingProposals) {
+          if (refundAmount > 0) {
+            await tx.user.update({
+              where: { id: proposal.userId },
+              data: {
+                creditBalance: {
+                  increment: refundAmount,
+                },
+              },
+            });
+          }
+
+          // Update proposal status to rejected
+          await tx.orderProposal.update({
+            where: { id: proposal.id },
+            data: { status: "rejected" },
           });
         }
 
-        // Update proposal status to rejected
-        await tx.orderProposal.update({
-          where: { id: proposal.id },
-          data: { status: "rejected" },
+        // Update order status to closed
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: "closed" },
         });
-      }
 
-      // Update order status to closed
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "closed" },
+        // Close all conversations related to this order
+        await tx.conversation.updateMany({
+          where: { orderId: orderId },
+          data: {
+            status: "closed",
+            updatedAt: new Date(),
+          },
+        });
+
+        return {
+          message: "Application rejected and credits refunded",
+          refundedCredits: pendingProposals.length,
+        };
+      })
+      .then(async (result) => {
+        // Emit Pusher events after transaction completes
+        try {
+          // Get order with all participants (client and specialists with proposals)
+          const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+              Client: { select: { id: true } },
+              Proposals: {
+                select: { userId: true },
+                distinct: ["userId"],
+              },
+            },
+          });
+
+          if (order) {
+            const userIds = new Set<number>();
+            userIds.add(order.clientId);
+            order.Proposals.forEach((p) => userIds.add(p.userId));
+
+            // Emit to order channel
+            await this.pusherService.trigger(
+              `order-${orderId}`,
+              "order-status-updated",
+              {
+                orderId,
+                status: "closed",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each user's channel
+            for (const userId of userIds) {
+              await this.pusherService.trigger(
+                `user-${userId}`,
+                "order-status-updated",
+                {
+                  orderId,
+                  status: "closed",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Error emitting Pusher event for order status:", error);
+        }
+
+        return result;
       });
-
-      // Close all conversations related to this order
-      await tx.conversation.updateMany({
-        where: { orderId: orderId },
-        data: {
-          status: "closed",
-          updatedAt: new Date(),
-        },
-      });
-
-      return {
-        message: "Application rejected and credits refunded",
-        refundedCredits: pendingProposals.length,
-      };
-    });
   }
 
   /**
    * Choose application
    */
   async chooseApplication(orderId: number, clientId: number) {
-    return this.prisma.$transaction(async (tx) => {
-      // Verify the client owns this order
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          clientId: clientId,
-        },
-        include: {
-          Proposals: {
-            where: {
-              status: "pending",
-            },
+    return this.prisma
+      .$transaction(async (tx) => {
+        // Verify the client owns this order
+        const order = await tx.order.findFirst({
+          where: {
+            id: orderId,
+            clientId: clientId,
           },
-        },
-      });
-
-      if (!order) {
-        throw new Error("Order not found or you are not the owner");
-      }
-
-      if (order.Proposals.length === 0) {
-        throw new Error("No pending proposals found");
-      }
-
-      // For now, we'll choose the first proposal
-      // TODO: Allow client to specify which proposal to choose
-      const chosenProposal = order.Proposals[0];
-
-      // Update the chosen proposal to accepted
-      await tx.orderProposal.update({
-        where: { id: chosenProposal.id },
-        data: { status: "accepted" },
-      });
-
-      // Reject all other proposals and refund their credits using pricing table
-      const otherProposals = order.Proposals.filter(
-        (p) => p.id !== chosenProposal.id
-      );
-
-      // Get pricing configuration to calculate refund amount
-      const orderBudget = order.budget || 0;
-      const pricingConfig =
-        await this.orderPricingService.getPricingConfig(orderBudget);
-      const creditCost = pricingConfig.creditCost;
-      const refundAmount = Math.round(
-        creditCost * pricingConfig.refundPercentage
-      );
-
-      console.log(
-        `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${otherProposals.length} rejected proposals`
-      );
-
-      for (const proposal of otherProposals) {
-        if (refundAmount > 0) {
-          await tx.user.update({
-            where: { id: proposal.userId },
-            data: {
-              creditBalance: {
-                increment: refundAmount,
+          include: {
+            Proposals: {
+              where: {
+                status: "pending",
               },
             },
+          },
+        });
+
+        if (!order) {
+          throw new Error("Order not found or you are not the owner");
+        }
+
+        if (order.Proposals.length === 0) {
+          throw new Error("No pending proposals found");
+        }
+
+        // For now, we'll choose the first proposal
+        // TODO: Allow client to specify which proposal to choose
+        const chosenProposal = order.Proposals[0];
+
+        // Update the chosen proposal to accepted
+        await tx.orderProposal.update({
+          where: { id: chosenProposal.id },
+          data: { status: "accepted" },
+        });
+
+        // Reject all other proposals and refund their credits using pricing table
+        const otherProposals = order.Proposals.filter(
+          (p) => p.id !== chosenProposal.id
+        );
+
+        // Get pricing configuration to calculate refund amount
+        const orderBudget = order.budget || 0;
+        const pricingConfig =
+          await this.orderPricingService.getPricingConfig(orderBudget);
+        const creditCost = pricingConfig.creditCost;
+        const refundAmount = Math.round(
+          creditCost * pricingConfig.refundPercentage
+        );
+
+        console.log(
+          `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${otherProposals.length} rejected proposals`
+        );
+
+        for (const proposal of otherProposals) {
+          if (refundAmount > 0) {
+            await tx.user.update({
+              where: { id: proposal.userId },
+              data: {
+                creditBalance: {
+                  increment: refundAmount,
+                },
+              },
+            });
+          }
+
+          await tx.orderProposal.update({
+            where: { id: proposal.id },
+            data: { status: "rejected" },
           });
         }
 
-        await tx.orderProposal.update({
-          where: { id: proposal.id },
-          data: { status: "rejected" },
+        // Update order status to in_progress (work has started, not completed yet)
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: "in_progress" },
         });
-      }
 
-      // Update order status to in_progress (work has started, not completed yet)
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "in_progress" },
+        // Keep conversations active (don't close them - work is in progress)
+        // Conversations remain active so client and specialist can communicate during work
+
+        return {
+          message:
+            "Application chosen successfully and order is now in progress",
+          chosenProposalId: chosenProposal.id,
+          refundedCredits: otherProposals.length,
+        };
+      })
+      .then(async (result) => {
+        // Emit Pusher events after transaction completes
+        try {
+          // Get order with all participants (client and specialists with proposals)
+          const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+              Client: { select: { id: true } },
+              Proposals: {
+                select: { userId: true },
+                distinct: ["userId"],
+              },
+            },
+          });
+
+          if (order) {
+            const userIds = new Set<number>();
+            userIds.add(order.clientId);
+            order.Proposals.forEach((p) => userIds.add(p.userId));
+
+            // Emit to order channel
+            await this.pusherService.trigger(
+              `order-${orderId}`,
+              "order-status-updated",
+              {
+                orderId,
+                status: "in_progress",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each user's channel
+            for (const userId of userIds) {
+              await this.pusherService.trigger(
+                `user-${userId}`,
+                "order-status-updated",
+                {
+                  orderId,
+                  status: "in_progress",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Error emitting Pusher event for order status:", error);
+        }
+
+        return result;
       });
-
-      // Keep conversations active (don't close them - work is in progress)
-      // Conversations remain active so client and specialist can communicate during work
-
-      return {
-        message: "Application chosen successfully and order is now in progress",
-        chosenProposalId: chosenProposal.id,
-        refundedCredits: otherProposals.length,
-      };
-    });
   }
 
   /**
    * Cancel chosen application and reopen order
    */
   async cancelApplication(orderId: number, clientId: number) {
-    return this.prisma.$transaction(async (tx) => {
-      // Verify the client owns this order
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          clientId: clientId,
-        },
-        include: {
-          Proposals: {
-            where: {
-              status: "accepted",
+    return this.prisma
+      .$transaction(async (tx) => {
+        // Verify the client owns this order
+        const order = await tx.order.findFirst({
+          where: {
+            id: orderId,
+            clientId: clientId,
+          },
+          include: {
+            Proposals: {
+              where: {
+                status: "accepted",
+              },
             },
           },
-        },
+        });
+
+        if (!order) {
+          throw new Error("Order not found or you are not the owner");
+        }
+
+        if (order.Proposals.length === 0) {
+          throw new Error("No accepted proposal found");
+        }
+
+        // Mark the accepted proposal as canceled
+        await tx.orderProposal.updateMany({
+          where: {
+            orderId: orderId,
+            status: "accepted",
+          },
+          data: { status: "canceled" },
+        });
+
+        // Update order status to closed to allow feedback submission
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: "closed" },
+        });
+
+        // Get all conversations related to this order before updating
+        const conversations = await tx.conversation.findMany({
+          where: { orderId: orderId },
+          include: {
+            Participants: {
+              where: { isActive: true },
+              select: { userId: true },
+            },
+          },
+        });
+
+        // Close all conversations related to this order
+        await tx.conversation.updateMany({
+          where: { orderId: orderId },
+          data: {
+            status: "closed",
+            updatedAt: new Date(),
+          },
+        });
+
+        return {
+          message:
+            "Application canceled, order closed, and conversation closed",
+        };
+      })
+      .then(async (result) => {
+        // Emit Pusher events after transaction completes
+        try {
+          // Get order with all participants (client and specialists with proposals)
+          const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+              Client: { select: { id: true } },
+              Proposals: {
+                select: { userId: true },
+                distinct: ["userId"],
+              },
+            },
+          });
+
+          if (order) {
+            const userIds = new Set<number>();
+            userIds.add(order.clientId);
+            order.Proposals.forEach((p) => userIds.add(p.userId));
+
+            // Emit to order channel
+            await this.pusherService.trigger(
+              `order-${orderId}`,
+              "order-status-updated",
+              {
+                orderId,
+                status: "closed",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each user's channel
+            for (const userId of userIds) {
+              await this.pusherService.trigger(
+                `user-${userId}`,
+                "order-status-updated",
+                {
+                  orderId,
+                  status: "closed",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+
+          // Also emit conversation status updates
+          const conversations = await this.prisma.conversation.findMany({
+            where: { orderId: orderId },
+            include: {
+              Participants: {
+                where: { isActive: true },
+                select: { userId: true },
+              },
+            },
+          });
+
+          for (const conversation of conversations) {
+            // Emit to conversation channel
+            await this.pusherService.trigger(
+              `conversation-${conversation.id}`,
+              "conversation-status-updated",
+              {
+                conversationId: conversation.id,
+                status: "closed",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each participant's user channel
+            for (const participant of conversation.Participants) {
+              await this.pusherService.trigger(
+                `user-${participant.userId}`,
+                "conversation-status-updated",
+                {
+                  conversationId: conversation.id,
+                  status: "closed",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error emitting Pusher event for order/conversation status:",
+            error
+          );
+          // Don't fail the request if Pusher fails
+        }
+
+        return result;
       });
-
-      if (!order) {
-        throw new Error("Order not found or you are not the owner");
-      }
-
-      if (order.Proposals.length === 0) {
-        throw new Error("No accepted proposal found");
-      }
-
-      // Mark the accepted proposal as canceled
-      await tx.orderProposal.updateMany({
-        where: {
-          orderId: orderId,
-          status: "accepted",
-        },
-        data: { status: "canceled" },
-      });
-
-      // Update order status to closed to allow feedback submission
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "closed" },
-      });
-
-      // Close all conversations related to this order
-      await tx.conversation.updateMany({
-        where: { orderId: orderId },
-        data: {
-          status: "closed",
-          updatedAt: new Date(),
-        },
-      });
-
-      return {
-        message: "Application canceled, order closed, and conversation closed",
-      };
-    });
   }
 
   /**
    * Complete order and close conversation
    */
   async completeOrder(orderId: number, clientId: number) {
-    return this.prisma.$transaction(async (tx) => {
-      // Verify the client owns this order
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          clientId: clientId,
-        },
+    return this.prisma
+      .$transaction(async (tx) => {
+        // Verify the client owns this order
+        const order = await tx.order.findFirst({
+          where: {
+            id: orderId,
+            clientId: clientId,
+          },
+        });
+
+        if (!order) {
+          throw new Error("Order not found or you are not the owner");
+        }
+
+        // Update order status to completed
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: "completed" },
+        });
+
+        // Get all conversations related to this order before updating
+        const conversations = await tx.conversation.findMany({
+          where: { orderId: orderId },
+          include: {
+            Participants: {
+              where: { isActive: true },
+              select: { userId: true },
+            },
+          },
+        });
+
+        // Close all conversations related to this order
+        await tx.conversation.updateMany({
+          where: { orderId: orderId },
+          data: {
+            status: "completed",
+            updatedAt: new Date(),
+          },
+        });
+
+        return {
+          message: "Order completed successfully",
+        };
+      })
+      .then(async (result) => {
+        // Emit Pusher events after transaction completes
+        try {
+          // Get order with all participants (client and specialists with proposals)
+          const order = await this.prisma.order.findUnique({
+            where: { id: orderId },
+            include: {
+              Client: { select: { id: true } },
+              Proposals: {
+                select: { userId: true },
+                distinct: ["userId"],
+              },
+            },
+          });
+
+          if (order) {
+            const userIds = new Set<number>();
+            userIds.add(order.clientId);
+            order.Proposals.forEach((p) => userIds.add(p.userId));
+
+            // Emit to order channel
+            await this.pusherService.trigger(
+              `order-${orderId}`,
+              "order-status-updated",
+              {
+                orderId,
+                status: "completed",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each user's channel
+            for (const userId of userIds) {
+              await this.pusherService.trigger(
+                `user-${userId}`,
+                "order-status-updated",
+                {
+                  orderId,
+                  status: "completed",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+
+          // Also emit conversation status updates
+          const conversations = await this.prisma.conversation.findMany({
+            where: { orderId: orderId },
+            include: {
+              Participants: {
+                where: { isActive: true },
+                select: { userId: true },
+              },
+            },
+          });
+
+          for (const conversation of conversations) {
+            // Emit to conversation channel
+            await this.pusherService.trigger(
+              `conversation-${conversation.id}`,
+              "conversation-status-updated",
+              {
+                conversationId: conversation.id,
+                status: "completed",
+                updatedAt: new Date().toISOString(),
+              }
+            );
+
+            // Emit to each participant's user channel
+            for (const participant of conversation.Participants) {
+              await this.pusherService.trigger(
+                `user-${participant.userId}`,
+                "conversation-status-updated",
+                {
+                  conversationId: conversation.id,
+                  status: "completed",
+                  updatedAt: new Date().toISOString(),
+                }
+              );
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error emitting Pusher event for order/conversation status:",
+            error
+          );
+          // Don't fail the request if Pusher fails
+        }
+
+        return result;
       });
-
-      if (!order) {
-        throw new Error("Order not found or you are not the owner");
-      }
-
-      // Update order status to completed
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: "completed" },
-      });
-
-      // Close all conversations related to this order
-      await tx.conversation.updateMany({
-        where: { orderId: orderId },
-        data: {
-          status: "completed",
-          updatedAt: new Date(),
-        },
-      });
-
-      return {
-        message: "Order completed successfully",
-      };
-    });
   }
 }

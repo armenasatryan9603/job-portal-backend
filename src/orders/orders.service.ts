@@ -114,6 +114,7 @@ export class OrdersService {
     limit: number = 10,
     status?: string,
     serviceId?: number,
+    serviceIds?: number[],
     clientId?: number
   ) {
     const skip = (page - 1) * limit;
@@ -123,7 +124,10 @@ export class OrdersService {
       where.status = status;
     }
 
-    if (serviceId) {
+    // Support both single serviceId (backward compatibility) and multiple serviceIds
+    if (serviceIds && serviceIds.length > 0) {
+      where.serviceId = { in: serviceIds };
+    } else if (serviceId) {
       where.serviceId = serviceId;
     }
 
@@ -414,7 +418,7 @@ export class OrdersService {
     page: number = 1,
     limit: number = 10
   ) {
-    return this.findAll(page, limit, undefined, undefined, clientId);
+    return this.findAll(page, limit, undefined, undefined, undefined, clientId);
   }
 
   async getOrdersBySpecialist(
@@ -512,7 +516,7 @@ export class OrdersService {
     page: number = 1,
     limit: number = 10
   ) {
-    return this.findAll(page, limit, undefined, serviceId);
+    return this.findAll(page, limit, undefined, serviceId, undefined);
   }
 
   async getOrdersByStatus(
@@ -520,30 +524,42 @@ export class OrdersService {
     page: number = 1,
     limit: number = 10
   ) {
-    return this.findAll(page, limit, status);
+    return this.findAll(page, limit, status, undefined, undefined);
   }
 
-  async searchOrders(query: string, page: number = 1, limit: number = 10) {
+  async searchOrders(
+    query: string,
+    page: number = 1,
+    limit: number = 10,
+    serviceIds?: number[]
+  ) {
     const skip = (page - 1) * limit;
+
+    const where: any = {
+      OR: [
+        { title: { contains: query, mode: "insensitive" } },
+        { description: { contains: query, mode: "insensitive" } },
+        {
+          Client: {
+            name: { contains: query, mode: "insensitive" },
+          },
+        },
+        {
+          Service: {
+            name: { contains: query, mode: "insensitive" },
+          },
+        },
+      ],
+    };
+
+    // Add serviceIds filter if provided
+    if (serviceIds && serviceIds.length > 0) {
+      where.serviceId = { in: serviceIds };
+    }
 
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
-        where: {
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            {
-              Client: {
-                name: { contains: query, mode: "insensitive" },
-              },
-            },
-            {
-              Service: {
-                name: { contains: query, mode: "insensitive" },
-              },
-            },
-          ],
-        },
+        where,
         skip,
         take: limit,
         include: {
@@ -582,24 +598,7 @@ export class OrdersService {
         },
         orderBy: { createdAt: "desc" },
       }),
-      this.prisma.order.count({
-        where: {
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            {
-              Client: {
-                name: { contains: query, mode: "insensitive" },
-              },
-            },
-            {
-              Service: {
-                name: { contains: query, mode: "insensitive" },
-              },
-            },
-          ],
-        },
-      }),
+      this.prisma.order.count({ where }),
     ]);
 
     // Calculate credit cost for each order

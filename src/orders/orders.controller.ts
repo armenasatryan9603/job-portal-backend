@@ -91,13 +91,26 @@ export class OrdersController {
     @Query("limit") limit: string = "10",
     @Query("status") status?: string,
     @Query("serviceId") serviceId?: string,
+    @Query("serviceIds") serviceIds?: string,
     @Query("clientId") clientId?: string
   ) {
+    // Parse serviceIds from comma-separated string or single serviceId
+    let parsedServiceIds: number[] | undefined;
+    if (serviceIds) {
+      parsedServiceIds = serviceIds
+        .split(",")
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id));
+    }
+
     return this.ordersService.findAll(
       parseInt(page),
       parseInt(limit),
       status,
       serviceId ? parseInt(serviceId) : undefined,
+      parsedServiceIds && parsedServiceIds.length > 0
+        ? parsedServiceIds
+        : undefined,
       clientId ? parseInt(clientId) : undefined
     );
   }
@@ -106,7 +119,8 @@ export class OrdersController {
   async searchOrders(
     @Query("q") query: string,
     @Query("page") page: string = "1",
-    @Query("limit") limit: string = "10"
+    @Query("limit") limit: string = "10",
+    @Query("serviceIds") serviceIds?: string
   ) {
     if (!query) {
       return {
@@ -122,10 +136,20 @@ export class OrdersController {
       };
     }
 
+    // Parse serviceIds from comma-separated string
+    let parsedServiceIds: number[] | undefined;
+    if (serviceIds) {
+      parsedServiceIds = serviceIds
+        .split(",")
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id));
+    }
+
     return this.ordersService.searchOrders(
       query,
       parseInt(page),
-      parseInt(limit)
+      parseInt(limit),
+      parsedServiceIds && parsedServiceIds.length > 0 ? parsedServiceIds : undefined
     );
   }
 
