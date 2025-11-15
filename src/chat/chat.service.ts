@@ -684,6 +684,24 @@ export class ChatService {
           );
           // Don't use this conversation, create a new one instead
         } else {
+          // Reopen conversation if it's closed (e.g., after rejection)
+          if (
+            existingConversation.status === "closed" ||
+            existingConversation.status === "completed"
+          ) {
+            console.log(
+              `Reopening closed conversation ${existingConversation.id} for order ${orderId}`
+            );
+            await this.prisma.conversation.update({
+              where: { id: existingConversation.id },
+              data: {
+                status: "active",
+                updatedAt: new Date(),
+              },
+            });
+            existingConversation.status = "active";
+          }
+
           // Check if proposal message was already sent (first message from specialist)
           const hasProposalMessage = existingConversation.Messages.length > 0;
 
