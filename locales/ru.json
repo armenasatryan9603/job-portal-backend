@@ -453,7 +453,7 @@
   "projectTracking": "Отслеживание проекта",
   "securityUpdates": "Обновления безопасности",
   "paymentReceived": "Платеж получен",
-  "amount": "Сумма",
+  "application": "Заявка",
   "paymentMethod": "Способ оплаты",
   "bankTransfer": "Банковский перевод",
   "filterByStatus": "Фильтр по статусу",
