@@ -222,6 +222,9 @@ export class ChatService {
             isActive: true,
           },
         },
+        status: {
+          not: "removed",
+        },
       },
       select: {
         id: true,
@@ -347,6 +350,29 @@ export class ChatService {
   async sendMessage(userId: number, dto: SendMessageDto) {
     const { conversationId, content, messageType = "text", metadata } = dto;
 
+    // Verify conversation exists and is not removed
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+      },
+      include: {
+        Order: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    if (conversation.status === "removed") {
+      throw new Error("Cannot send messages in a deleted conversation");
+    }
+
     // Verify user is participant in conversation
     const participant = await this.prisma.conversationParticipant.findFirst({
       where: {
@@ -360,8 +386,13 @@ export class ChatService {
       throw new Error("User is not a participant in this conversation");
     }
 
-    // Validate message content - prevent phone numbers
-    if (messageType === "text" && content) {
+    // Validate message content - prevent phone numbers only when order is "open"
+    // Once order is "in_progress" (candidate chosen), phone numbers are allowed
+    if (
+      messageType === "text" &&
+      content &&
+      conversation.Order?.status === "open"
+    ) {
       const containsPhoneNumber = (text: string): boolean => {
         // More comprehensive phone number detection
         // Handles various formats including:
@@ -441,7 +472,7 @@ export class ChatService {
 
       if (containsPhoneNumber(content)) {
         throw new Error(
-          "Sharing phone numbers is not allowed in chat messages for security reasons."
+          "Phone numbers cannot be shared until a candidate is chosen. Please wait until the order is accepted."
         );
       }
     }
@@ -574,6 +605,84 @@ export class ChatService {
         lastReadAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Delete a conversation (mark as removed) - only if closed
+   */
+  async deleteConversation(userId: number, conversationId: number) {
+    // Verify the conversation exists and user is a participant
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        Participants: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new Error(
+        "Conversation not found or you are not authorized to delete it"
+      );
+    }
+
+    // Check if conversation is closed
+    if (
+      conversation.status !== "closed" &&
+      conversation.status !== "completed"
+    ) {
+      throw new Error("Conversations can only be deleted if they are closed");
+    }
+
+    // Mark conversation as removed (don't delete from DB)
+    const updatedConversation = await this.prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+      data: {
+        status: "removed",
+      },
+    });
+
+    // Emit Pusher event to notify all participants
+    try {
+      // Get all participants
+      const participants = await this.prisma.conversationParticipant.findMany({
+        where: { conversationId, isActive: true },
+        select: { userId: true },
+      });
+
+      // Emit to conversation channel
+      await this.pusherService.trigger(
+        `conversation-${conversationId}`,
+        "conversation-deleted",
+        {
+          conversationId: conversationId,
+          deletedBy: userId,
+        }
+      );
+
+      // Emit to each participant's user channel
+      for (const participant of participants) {
+        await this.pusherService.trigger(
+          `user-${participant.userId}`,
+          "conversation-deleted",
+          {
+            conversationId: conversationId,
+            deletedBy: userId,
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error emitting Pusher event:", error);
+      // Don't fail the request if Pusher fails
+    }
+
+    return updatedConversation;
   }
 
   /**
@@ -1191,6 +1300,39 @@ export class ChatService {
           data: { status: "in_progress" },
         });
 
+        // Get the conversation for this order to send system message
+        const conversation = await tx.conversation.findFirst({
+          where: { orderId },
+          include: {
+            Participants: {
+              where: { isActive: true },
+              select: { userId: true },
+            },
+          },
+        });
+
+        // Send system message to notify participants they can now share phone numbers
+        let systemMessage: any = null;
+        if (conversation) {
+          systemMessage = await tx.message.create({
+            data: {
+              conversationId: conversation.id,
+              senderId: clientId, // Use client ID as sender for system message
+              content: "You can now share contact information with each other.",
+              messageType: "system",
+            },
+            include: {
+              Sender: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          });
+        }
+
         // Keep conversations active (don't close them - work is in progress)
         // Conversations remain active so client and specialist can communicate during work
 
@@ -1199,6 +1341,7 @@ export class ChatService {
             "Application chosen successfully and order is now in progress",
           chosenProposalId: chosenProposal.id,
           refundedCredits: otherProposals.length,
+          systemMessage, // Include system message in result
         };
       })
       .then(async (result) => {
@@ -1243,6 +1386,40 @@ export class ChatService {
                   updatedAt: new Date().toISOString(),
                 }
               );
+            }
+
+            // Emit system message to conversation channel if it exists
+            if (result.systemMessage) {
+              const conversation = await this.prisma.conversation.findFirst({
+                where: { orderId },
+              });
+
+              if (conversation) {
+                await this.pusherService.trigger(
+                  `conversation-${conversation.id}`,
+                  "new-message",
+                  result.systemMessage
+                );
+
+                // Also update conversation list for all participants
+                const participants =
+                  await this.prisma.conversationParticipant.findMany({
+                    where: { conversationId: conversation.id, isActive: true },
+                    select: { userId: true },
+                  });
+
+                for (const participant of participants) {
+                  await this.pusherService.trigger(
+                    `user-${participant.userId}`,
+                    "conversation-updated",
+                    {
+                      conversationId: conversation.id,
+                      lastMessage: result.systemMessage,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  );
+                }
+              }
             }
           }
         } catch (error) {

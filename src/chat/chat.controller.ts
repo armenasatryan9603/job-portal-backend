@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -87,6 +88,19 @@ export class ChatController {
   ) {
     const userId = req.user.userId;
     return this.chatService.markMessagesAsRead(userId, conversationId);
+  }
+
+  /**
+   * Delete a conversation (mark as removed)
+   */
+  @Delete('conversations/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteConversation(
+    @Request() req,
+    @Param('id', ParseIntPipe) conversationId: number,
+  ) {
+    const userId = req.user.userId;
+    return this.chatService.deleteConversation(userId, conversationId);
   }
 
   /**
