@@ -126,6 +126,7 @@
   "verify": "Verify",
   "name": "Name",
   "bio": "Bio",
+  "noBioProvided": "No bio provided",
   "skills": "Skills",
   "experience": "Experience",
   "notRatedYet": "Not rated yet",

@@ -123,6 +123,7 @@
   "name": "Имя",
   "email": "Email",
   "bio": "Биография",
+  "noBioProvided": "Биография не указана",
   "skills": "Навыки",
   "experience": "Опыт",
   "rating": "Рейтинг",

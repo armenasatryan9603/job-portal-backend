@@ -125,6 +125,7 @@
   "name": "Անուն",
   "email": "Email",
   "bio": "Կենսագրություն",
+  "noBioProvided": "Կենսագրություն նշված չէ",
   "skills": "Հմտություններ",
   "experience": "Փորձ",
   "notRatedYet": "Դեռ գնահատված չէ",
