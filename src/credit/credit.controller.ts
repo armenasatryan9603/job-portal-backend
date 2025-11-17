@@ -9,16 +9,36 @@ import {
 } from '@nestjs/common';
 import { CreditService } from './credit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreditTransactionsService } from './credit-transactions.service';
 
 @Controller('credit')
 export class CreditController {
-  constructor(private creditService: CreditService) {}
+  constructor(
+    private creditService: CreditService,
+    private creditTransactionsService: CreditTransactionsService,
+  ) {}
 
   // Step 1: Initiate payment
   @UseGuards(JwtAuthGuard)
   @Post('refill/initiate')
   async initiate(@Request() req, @Body() body: { amount: number }) {
     return this.creditService.initiatePayment(req.user.userId, body.amount);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('transactions')
+  async getTransactions(
+    @Request() req,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ) {
+    const pageNumber = Number.parseInt(page, 10) || 1;
+    const limitNumber = Number.parseInt(limit, 10) || 20;
+    return this.creditTransactionsService.getTransactionsForUser(
+      req.user.userId,
+      pageNumber,
+      limitNumber,
+    );
   }
 
   // BackURL callback endpoint (called by AmeriaBank vPOS after payment)

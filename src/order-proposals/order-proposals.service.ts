@@ -5,12 +5,14 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
 
 @Injectable()
 export class OrderProposalsService {
   constructor(
     private prisma: PrismaService,
-    private orderPricingService: OrderPricingService
+    private orderPricingService: OrderPricingService,
+    private creditTransactionsService: CreditTransactionsService
   ) {}
 
   async create(createOrderProposalDto: {
@@ -189,11 +191,29 @@ export class OrderProposalsService {
 
               // Deduct credits from user
               console.log("Deducting credits from user...");
-              await tx.user.update({
+              const updatedUser = await tx.user.update({
                 where: { id: createOrderProposalDto.userId },
                 data: { creditBalance: { decrement: applicationCost } },
+                select: { creditBalance: true },
               });
               console.log("Credits deducted successfully");
+
+              // Log credit transaction
+              await this.creditTransactionsService.logTransaction({
+                userId: createOrderProposalDto.userId,
+                amount: -applicationCost, // Negative for deduction
+                balanceAfter: updatedUser.creditBalance,
+                type: "order_application",
+                status: "completed",
+                description: `Applied to order #${createOrderProposalDto.orderId}`,
+                referenceId: createOrderProposalDto.orderId.toString(),
+                referenceType: "order",
+                metadata: {
+                  orderId: createOrderProposalDto.orderId,
+                  applicationCost,
+                },
+                tx,
+              });
 
               // Create the proposal
               console.log("Creating proposal...");

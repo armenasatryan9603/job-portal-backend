@@ -5,6 +5,7 @@ import { SendMessageDto } from "./dto/send-message.dto";
 import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { PusherService } from "./pusher.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
 
 export interface GetMessagesDto {
   conversationId: number;
@@ -18,7 +19,8 @@ export class ChatService {
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
     private orderPricingService: OrderPricingService,
-    private pusherService: PusherService
+    private pusherService: PusherService,
+    private creditTransactionsService: CreditTransactionsService,
   ) {}
 
   /**
@@ -1130,13 +1132,34 @@ export class ChatService {
         // Refund credits to all applicants using pricing table
         for (const proposal of pendingProposals) {
           if (refundAmount > 0) {
-            await tx.user.update({
+            const updatedUser = await tx.user.update({
               where: { id: proposal.userId },
               data: {
                 creditBalance: {
                   increment: refundAmount,
                 },
               },
+              select: { creditBalance: true },
+            });
+
+            // Log credit transaction
+            await this.creditTransactionsService.logTransaction({
+              userId: proposal.userId,
+              amount: refundAmount,
+              balanceAfter: updatedUser.creditBalance,
+              type: "rejection_refund",
+              status: "completed",
+              description: `Refund for rejected application on order #${orderId}`,
+              referenceId: orderId.toString(),
+              referenceType: "order",
+              metadata: {
+                orderId,
+                proposalId: proposal.id,
+                refundAmount,
+                creditCost,
+                refundPercentage: pricingConfig.refundPercentage,
+              },
+              tx,
             });
           }
 

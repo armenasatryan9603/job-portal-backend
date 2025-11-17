@@ -1,12 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
 import axios from "axios";
 import { PrismaService } from "../prisma.service";
+import { CreditTransactionsService } from "./credit-transactions.service";
 
 @Injectable()
 export class CreditService {
   private readonly logger = new Logger(CreditService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private creditTransactionsService: CreditTransactionsService,
+  ) {}
 
   private readonly vposUrl = process.env.AMERIABANK_VPOS_URL!;
   private readonly vposStatusUrl = process.env.AMERIABANK_VPOS_STATUS_URL!;
@@ -189,10 +193,29 @@ export class CreditService {
       );
     }
 
-    // Update user credits
-    await this.prisma.user.update({
+    // Update user credits and log transaction
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { creditBalance: { increment: amount } },
+      select: { creditBalance: true },
+    });
+
+    // Log credit transaction
+    await this.creditTransactionsService.logTransaction({
+      userId,
+      amount,
+      balanceAfter: updatedUser.creditBalance,
+      type: "refill",
+      status: "completed",
+      description: `Credit refill of ${amount} credits`,
+      referenceId: paymentID,
+      referenceType: "payment",
+      metadata: {
+        orderID,
+        paymentID,
+        responseCode,
+        paymentState: paymentDetails.PaymentState,
+      },
     });
 
     this.logger.log(`Credits added: user ${userId}, amount ${amount}`);

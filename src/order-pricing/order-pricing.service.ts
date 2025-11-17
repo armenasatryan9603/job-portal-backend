@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CreditTransactionsService } from '../credit/credit-transactions.service';
 
 @Injectable()
 export class OrderPricingService {
@@ -9,6 +10,7 @@ export class OrderPricingService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private creditTransactionsService: CreditTransactionsService,
   ) {}
 
   /**
@@ -239,11 +241,33 @@ export class OrderPricingService {
       await this.prisma.$transaction(async (tx) => {
         for (const proposal of rejectedProposals) {
           // Refund credits to the user
-          await tx.user.update({
+          const updatedUser = await tx.user.update({
             where: { id: proposal.userId },
             data: {
               creditBalance: { increment: refundAmount },
             },
+            select: { creditBalance: true },
+          });
+
+          // Log credit transaction
+          await this.creditTransactionsService.logTransaction({
+            userId: proposal.userId,
+            amount: refundAmount,
+            balanceAfter: updatedUser.creditBalance,
+            type: "selection_refund",
+            status: "completed",
+            description: `Refund for not being selected for order #${orderId}`,
+            referenceId: orderId.toString(),
+            referenceType: "order",
+            metadata: {
+              orderId,
+              proposalId: proposal.id,
+              selectedProposalId,
+              refundAmount,
+              creditCost: pricingConfig.creditCost,
+              refundPercentage: pricingConfig.refundPercentage,
+            },
+            tx,
           });
 
           // Update proposal status to rejected

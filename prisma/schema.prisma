@@ -43,6 +43,7 @@ model User {
   referrer                 User?                     @relation("UserReferrals", fields: [referredBy], references: [id])
   referrals                User[]                    @relation("UserReferrals")
   UserServices             UserService[]
+  CreditTransactions       CreditTransaction[]
 }
 
 model Service {
@@ -378,4 +379,21 @@ model ReviewReason {
   @@unique([reviewId, reasonId])
   @@index([reviewId])
   @@index([reasonId])
+}
+
+model CreditTransaction {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  amount        Float
+  balanceAfter  Float
+  type          String
+  status        String   @default("completed")
+  description   String?
+  referenceId   String?
+  referenceType String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  User          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

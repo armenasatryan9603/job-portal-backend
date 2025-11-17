@@ -5,9 +5,10 @@ import { ChatService } from "./chat.service";
 import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
 import { OrderPricingModule } from "../order-pricing/order-pricing.module";
 import { PusherService } from "./pusher.service";
+import { CreditModule } from "../credit/credit.module";
 
 @Module({
-  imports: [OrderPricingModule],
+  imports: [OrderPricingModule, CreditModule],
   controllers: [ChatController],
   providers: [ChatService, PrismaService, FirebaseNotificationService, PusherService],
   exports: [ChatService],
