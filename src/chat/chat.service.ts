@@ -1732,4 +1732,42 @@ export class ChatService {
         return result;
       });
   }
+
+  /**
+   * Broadcast typing status to conversation participants
+   */
+  async sendTypingStatus(
+    userId: number,
+    conversationId: number,
+    isTyping: boolean
+  ) {
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+        userId,
+        isActive: true,
+      },
+    });
+
+    if (!participant) {
+      throw new Error("You are not a participant of this conversation");
+    }
+
+    try {
+      await this.pusherService.trigger(
+        `conversation-${conversationId}`,
+        "currently-typing",
+        {
+          conversationId,
+          userId,
+          isTyping,
+          timestamp: new Date().toISOString(),
+        }
+      );
+    } catch (error) {
+      console.error("Failed to broadcast typing status:", error);
+    }
+
+    return { success: true };
+  }
 }

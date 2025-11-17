@@ -9,24 +9,24 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
-} from '@nestjs/common';
-import { ChatService } from './chat.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
-import { SendMessageDto } from './dto/send-message.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PusherService } from './pusher.service';
+} from "@nestjs/common";
+import { ChatService } from "./chat.service";
+import { CreateConversationDto } from "./dto/create-conversation.dto";
+import { SendMessageDto } from "./dto/send-message.dto";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { PusherService } from "./pusher.service";
 
-@Controller('chat')
+@Controller("chat")
 export class ChatController {
   constructor(
     private chatService: ChatService,
-    private pusherService: PusherService,
+    private pusherService: PusherService
   ) {}
 
   /**
    * Create a new conversation
    */
-  @Post('conversations')
+  @Post("conversations")
   @UseGuards(JwtAuthGuard)
   async createConversation(@Request() req, @Body() dto: CreateConversationDto) {
     const userId = req.user.userId;
@@ -36,12 +36,12 @@ export class ChatController {
   /**
    * Get user's conversations
    */
-  @Get('conversations')
+  @Get("conversations")
   @UseGuards(JwtAuthGuard)
   async getUserConversations(
     @Request() req,
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 20,
+    @Query("page", ParseIntPipe) page: number = 1,
+    @Query("limit", ParseIntPipe) limit: number = 20
   ) {
     const userId = req.user.userId;
     return this.chatService.getUserConversations(userId, page, limit);
@@ -50,19 +50,19 @@ export class ChatController {
   /**
    * Get specific conversation
    */
-  @Get('conversations/:id')
-  async getConversation(@Param('id', ParseIntPipe) conversationId: number) {
+  @Get("conversations/:id")
+  async getConversation(@Param("id", ParseIntPipe) conversationId: number) {
     return this.chatService.getConversationById(conversationId);
   }
 
   /**
    * Get messages for a conversation
    */
-  @Get('conversations/:id/messages')
+  @Get("conversations/:id/messages")
   async getMessages(
-    @Param('id', ParseIntPipe) conversationId: number,
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 50,
+    @Param("id", ParseIntPipe) conversationId: number,
+    @Query("page", ParseIntPipe) page: number = 1,
+    @Query("limit", ParseIntPipe) limit: number = 50
   ) {
     return this.chatService.getMessages(conversationId, page, limit);
   }
@@ -70,7 +70,7 @@ export class ChatController {
   /**
    * Send a message
    */
-  @Post('messages')
+  @Post("messages")
   @UseGuards(JwtAuthGuard)
   async sendMessage(@Request() req, @Body() dto: SendMessageDto) {
     const userId = req.user.userId;
@@ -80,11 +80,11 @@ export class ChatController {
   /**
    * Mark messages as read
    */
-  @Post('conversations/:id/read')
+  @Post("conversations/:id/read")
   @UseGuards(JwtAuthGuard)
   async markAsRead(
     @Request() req,
-    @Param('id', ParseIntPipe) conversationId: number,
+    @Param("id", ParseIntPipe) conversationId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.markMessagesAsRead(userId, conversationId);
@@ -93,11 +93,11 @@ export class ChatController {
   /**
    * Delete a conversation (mark as removed)
    */
-  @Delete('conversations/:id')
+  @Delete("conversations/:id")
   @UseGuards(JwtAuthGuard)
   async deleteConversation(
     @Request() req,
-    @Param('id', ParseIntPipe) conversationId: number,
+    @Param("id", ParseIntPipe) conversationId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.deleteConversation(userId, conversationId);
@@ -106,7 +106,7 @@ export class ChatController {
   /**
    * Get unread message count
    */
-  @Get('unread-count')
+  @Get("unread-count")
   @UseGuards(JwtAuthGuard)
   async getUnreadCount(@Request() req) {
     const userId = req.user.userId;
@@ -117,11 +117,11 @@ export class ChatController {
   /**
    * Create conversation for order
    */
-  @Post('orders/:orderId/conversation')
+  @Post("orders/:orderId/conversation")
   @UseGuards(JwtAuthGuard)
   async createOrderConversation(
     @Request() req,
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param("orderId", ParseIntPipe) orderId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.createOrderConversation(orderId, userId);
@@ -130,11 +130,11 @@ export class ChatController {
   /**
    * Get conversation participants
    */
-  @Get('conversations/:id/participants')
+  @Get("conversations/:id/participants")
   @UseGuards(JwtAuthGuard)
   async getParticipants(
     @Request() req,
-    @Param('id', ParseIntPipe) conversationId: number,
+    @Param("id", ParseIntPipe) conversationId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.getConversationParticipants(conversationId, userId);
@@ -143,11 +143,11 @@ export class ChatController {
   /**
    * Reject application and refund credit
    */
-  @Post('orders/:orderId/reject')
+  @Post("orders/:orderId/reject")
   @UseGuards(JwtAuthGuard)
   async rejectApplication(
     @Request() req,
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param("orderId", ParseIntPipe) orderId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.rejectApplication(orderId, userId);
@@ -156,11 +156,11 @@ export class ChatController {
   /**
    * Choose application
    */
-  @Post('orders/:orderId/choose')
+  @Post("orders/:orderId/choose")
   @UseGuards(JwtAuthGuard)
   async chooseApplication(
     @Request() req,
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param("orderId", ParseIntPipe) orderId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.chooseApplication(orderId, userId);
@@ -169,11 +169,11 @@ export class ChatController {
   /**
    * Leave a conversation
    */
-  @Post('conversations/:conversationId/leave')
+  @Post("conversations/:conversationId/leave")
   @UseGuards(JwtAuthGuard)
   async leaveConversation(
     @Request() req,
-    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Param("conversationId", ParseIntPipe) conversationId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.leaveConversation(conversationId, userId);
@@ -182,11 +182,11 @@ export class ChatController {
   /**
    * Cancel chosen application and reopen order
    */
-  @Post('orders/:orderId/cancel')
+  @Post("orders/:orderId/cancel")
   @UseGuards(JwtAuthGuard)
   async cancelApplication(
     @Request() req,
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param("orderId", ParseIntPipe) orderId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.cancelApplication(orderId, userId);
@@ -195,11 +195,11 @@ export class ChatController {
   /**
    * Complete order and close conversation
    */
-  @Post('orders/:orderId/complete')
+  @Post("orders/:orderId/complete")
   @UseGuards(JwtAuthGuard)
   async completeOrder(
     @Request() req,
-    @Param('orderId', ParseIntPipe) orderId: number,
+    @Param("orderId", ParseIntPipe) orderId: number
   ) {
     const userId = req.user.userId;
     return this.chatService.completeOrder(orderId, userId);
@@ -208,46 +208,63 @@ export class ChatController {
   /**
    * Get Pusher configuration (public key and cluster)
    */
-  @Get('pusher/config')
+  @Get("pusher/config")
   async getPusherConfig() {
     return {
-      key: process.env.PUSHER_KEY || '',
-      cluster: process.env.PUSHER_CLUSTER || 'eu',
+      key: process.env.PUSHER_KEY || "",
+      cluster: process.env.PUSHER_CLUSTER || "eu",
     };
   }
 
   /**
    * Authenticate Pusher channel subscription
    */
-  @Post('pusher/auth')
+  @Post("pusher/auth")
   @UseGuards(JwtAuthGuard)
   async authenticatePusher(
     @Request() req,
-    @Body() body: { socket_id: string; channel_name: string },
+    @Body() body: { socket_id: string; channel_name: string }
   ) {
     const userId = req.user.userId;
     const { socket_id, channel_name } = body;
 
     // Validate channel name format (e.g., "private-conversation-123" or "conversation-123")
     if (
-      channel_name.startsWith('private-conversation-') ||
-      channel_name.startsWith('conversation-')
+      channel_name.startsWith("private-conversation-") ||
+      channel_name.startsWith("conversation-")
     ) {
       const conversationId = parseInt(
-        channel_name.replace('private-conversation-', '').replace('conversation-', ''),
+        channel_name
+          .replace("private-conversation-", "")
+          .replace("conversation-", "")
       );
 
       // Verify user is participant
       const participants = await this.chatService.getConversationParticipants(
         conversationId,
-        userId,
+        userId
       );
 
       if (!participants || participants.length === 0) {
-        throw new Error('Not authorized for this channel');
+        throw new Error("Not authorized for this channel");
       }
     }
 
     return this.pusherService.authenticate(socket_id, channel_name, userId);
+  }
+
+  /**
+   * Broadcast typing indicator
+   */
+  @Post("conversations/:id/typing")
+  @UseGuards(JwtAuthGuard)
+  async sendTypingStatus(
+    @Request() req,
+    @Param("id", ParseIntPipe) conversationId: number,
+    @Body() body: { isTyping: boolean }
+  ) {
+    const userId = req.user.userId;
+    const isTyping = body?.isTyping === true;
+    return this.chatService.sendTypingStatus(userId, conversationId, isTyping);
   }
 }
