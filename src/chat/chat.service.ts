@@ -552,6 +552,15 @@ export class ChatService {
     senderId: number
   ) {
     try {
+      console.log(`📤 [NOTIFICATION] Starting notification send for conversation ${conversationId}, sender: ${senderId}`);
+      
+      // Get sender info for notification title
+      const sender = await this.prisma.user.findUnique({
+        where: { id: senderId },
+        select: { name: true },
+      });
+      const senderName = sender?.name || "Someone";
+
       // Get all participants except the sender
       const participants = await this.prisma.conversationParticipant.findMany({
         where: {
@@ -570,26 +579,50 @@ export class ChatService {
         },
       });
 
+      console.log(`📤 [NOTIFICATION] Found ${participants.length} recipient(s) for conversation ${conversationId}`);
+
+      if (participants.length === 0) {
+        console.log(`⚠️ [NOTIFICATION] No recipients found for conversation ${conversationId}`);
+        return;
+      }
+
       // Send push notification to each participant
       for (const participant of participants) {
-        if (participant.User.fcmToken) {
-          await this.firebaseNotificationService.sendPushNotification(
-            participant.User.id,
-            `New message from ${message.Sender.name}`,
-            message.content.length > 100
-              ? `${message.content.substring(0, 100)}...`
-              : message.content,
-            {
-              type: "chat_message",
-              conversationId: conversationId.toString(),
-              messageId: message.id.toString(),
-              senderId: senderId.toString(),
-            }
-          );
+        console.log(`📤 [NOTIFICATION] Processing notification for user ${participant.User.id} (${participant.User.name})`);
+        
+        if (!participant.User.fcmToken) {
+          console.warn(`⚠️ [NOTIFICATION] User ${participant.User.id} has no FCM token - skipping notification`);
+          continue;
+        }
+
+        console.log(`📤 [NOTIFICATION] Sending notification to user ${participant.User.id} with FCM token: ${participant.User.fcmToken.substring(0, 20)}...`);
+
+        const notificationTitle = `New message from ${senderName}`;
+        const notificationBody = message.content && message.content.length > 100
+          ? `${message.content.substring(0, 100)}...`
+          : message.content || "You have a new message";
+
+        const result = await this.firebaseNotificationService.sendPushNotification(
+          participant.User.id,
+          notificationTitle,
+          notificationBody,
+          {
+            type: "chat_message",
+            conversationId: conversationId.toString(),
+            messageId: message.id.toString(),
+            senderId: senderId.toString(),
+          }
+        );
+
+        if (result) {
+          console.log(`✅ [NOTIFICATION] Successfully sent notification to user ${participant.User.id}`);
+        } else {
+          console.error(`❌ [NOTIFICATION] Failed to send notification to user ${participant.User.id}`);
         }
       }
     } catch (error) {
-      console.error("Error sending message notifications:", error);
+      console.error("❌ [NOTIFICATION] Error sending message notifications:", error);
+      console.error("   Error details:", error instanceof Error ? error.stack : String(error));
     }
   }
 

@@ -741,5 +741,15 @@
   "deleteConversation": "Delete Conversation",
   "areYouSureDeleteConversation": "Are you sure you want to delete this conversation?",
   "cannotDeleteConversation": "Cannot Delete Conversation",
-  "conversationMustBeClosed": "Conversations can only be deleted if they are closed."
+  "conversationMustBeClosed": "Conversations can only be deleted if they are closed.",
+  "orderApplication": "Order Application",
+  "rejectionRefund": "Rejection Refund",
+  "selectionRefund": "Selection Refund",
+  "loadingPaymentHistory": "Loading payment history...",
+  "failedToLoadPaymentHistory": "Failed to load payment history",
+  "loadingConversation": "Loading conversation...",
+  "failedToLoadConversation": "Failed to load conversation",
+  "failedToSendMessage": "Failed to send message",
+  "unknownError": "Unknown error",
+  "noProfileDataAvailable": "No profile data available"
 }

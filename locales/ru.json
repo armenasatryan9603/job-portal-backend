@@ -686,5 +686,15 @@
   "deleteConversation": "Удалить разговор",
   "areYouSureDeleteConversation": "Вы уверены, что хотите удалить этот разговор?",
   "cannotDeleteConversation": "Нельзя удалить разговор",
-  "conversationMustBeClosed": "Разговоры можно удалять только если они закрыты."
+  "conversationMustBeClosed": "Разговоры можно удалять только если они закрыты.",
+  "orderApplication": "Заявка на заказ",
+  "rejectionRefund": "Возврат при отклонении",
+  "selectionRefund": "Возврат при выборе",
+  "loadingPaymentHistory": "Загрузка истории платежей...",
+  "failedToLoadPaymentHistory": "Не удалось загрузить историю платежей",
+  "loadingConversation": "Загрузка разговора...",
+  "failedToLoadConversation": "Не удалось загрузить разговор",
+  "failedToSendMessage": "Не удалось отправить сообщение",
+  "unknownError": "Неизвестная ошибка",
+  "noProfileDataAvailable": "Данные профиля недоступны"
 }

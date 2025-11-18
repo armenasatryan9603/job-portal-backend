@@ -736,5 +736,15 @@
   "deleteConversation": "Ջնջել զրույցը",
   "areYouSureDeleteConversation": "Համոզված եք, որ ցանկանում եք ջնջել այս զրույցը:",
   "cannotDeleteConversation": "Հնարավոր չէ ջնջել զրույցը",
-  "conversationMustBeClosed": "Զրույցները կարող են ջնջվել միայն եթե դրանք փակ են:"
+  "conversationMustBeClosed": "Զրույցները կարող են ջնջվել միայն եթե դրանք փակ են:",
+  "orderApplication": "Պատվերի դիմում",
+  "rejectionRefund": "Մերժման վերադարձ",
+  "selectionRefund": "Ընտրության վերադարձ",
+  "loadingPaymentHistory": "Վճարումների պատմության բեռնում...",
+  "failedToLoadPaymentHistory": "Չհաջողվեց բեռնել վճարումների պատմությունը",
+  "loadingConversation": "Զրույցի բեռնում...",
+  "failedToLoadConversation": "Չհաջողվեց բեռնել զրույցը",
+  "failedToSendMessage": "Չհաջողվեց ուղարկել հաղորդագրությունը",
+  "unknownError": "Անհայտ սխալ",
+  "noProfileDataAvailable": "Պրոֆիլի տվյալները հասանելի չեն"
 }
