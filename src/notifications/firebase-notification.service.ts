@@ -1,13 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
-import * as admin from 'firebase-admin';
-import { PrismaService } from '../prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import * as admin from "firebase-admin";
+import * as fs from "fs";
+import * as path from "path";
+import { PrismaService } from "../prisma.service";
 
 /**
  * FirebaseNotificationService - Firebase Cloud Messaging (FCM) Only
- * 
+ *
  * This service uses ONLY Firebase Admin SDK for sending push notifications via FCM.
  * Other Firebase services (Storage, Database, Analytics) are NOT used to reduce costs.
- * 
+ *
  * The service initializes Firebase Admin SDK with minimal configuration,
  * using only the messaging service for push notifications.
  */
@@ -20,44 +22,73 @@ export class FirebaseNotificationService {
   }
 
   private initializeFirebase() {
+    if (admin.apps.length) {
+      return;
+    }
+
+    const serviceAccountPath =
+      process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+      path.join(process.cwd(), "service-account-key.json");
+    const projectIdFromEnv =
+      process.env.GCP_PROJECT ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.GOOGLE_PROJECT_ID;
+
     try {
-      // Initialize Firebase Admin SDK
-      if (!admin.apps.length) {
-        // Try to use service account key file first
-        try {
-          const serviceAccount = require('../../service-account-key.json');
-          admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-          });
-          this.logger.log(
-            '✅ Firebase Admin SDK initialized with service account',
-          );
-        } catch (serviceAccountError) {
-          // Fallback to application default credentials
-          admin.initializeApp({
-            credential: admin.credential.applicationDefault(),
-          });
-          this.logger.log(
-            '✅ Firebase Admin SDK initialized with default credentials',
-          );
-        }
-      }
+      this.initializeWithServiceAccount(serviceAccountPath, projectIdFromEnv);
     } catch (error) {
-      this.logger.error('❌ Failed to initialize Firebase Admin SDK:', error);
+      this.logger.error("❌ Failed to initialize Firebase Admin SDK:", error);
       this.logger.warn(
-        '⚠️  Push notifications will not work without proper Firebase setup',
+        "⚠️  Push notifications will not work without proper Firebase setup"
       );
     }
+  }
+
+  private initializeWithServiceAccount(
+    serviceAccountPath: string,
+    projectIdFallback?: string
+  ) {
+    if (fs.existsSync(serviceAccountPath)) {
+      const serviceAccountJson = JSON.parse(
+        fs.readFileSync(serviceAccountPath, "utf8")
+      );
+      const credential = admin.credential.cert(
+        serviceAccountJson as admin.ServiceAccount
+      );
+      const projectId =
+        serviceAccountJson.project_id ||
+        serviceAccountJson.projectId ||
+        projectIdFallback;
+      admin.initializeApp({
+        credential,
+        projectId,
+      });
+      this.logger.log(
+        `✅ Firebase Admin SDK initialized with service account: ${serviceAccountPath}`
+      );
+      return;
+    }
+
+    const applicationDefault = admin.credential.applicationDefault();
+    admin.initializeApp({
+      credential: applicationDefault,
+      projectId: projectIdFallback,
+    });
+    this.logger.log(
+      "✅ Firebase Admin SDK initialized with application default credentials"
+    );
   }
 
   async sendPushNotification(
     userId: number,
     title: string,
     body: string,
-    data?: any,
+    data?: any
   ): Promise<boolean> {
     try {
-      this.logger.log(`📤 [FCM] Attempting to send notification to user ${userId}`);
+      this.logger.log(
+        `📤 [FCM] Attempting to send notification to user ${userId}`
+      );
       this.logger.log(`   Title: ${title}`);
       this.logger.log(`   Body: ${body.substring(0, 50)}...`);
 
@@ -73,12 +104,18 @@ export class FirebaseNotificationService {
       }
 
       if (!user.fcmToken) {
-        this.logger.warn(`⚠️ [FCM] No FCM token found for user ${userId} (${user.name})`);
-        this.logger.warn(`   User needs to log in and grant notification permissions`);
+        this.logger.warn(
+          `⚠️ [FCM] No FCM token found for user ${userId} (${user.name})`
+        );
+        this.logger.warn(
+          `   User needs to log in and grant notification permissions`
+        );
         return false;
       }
 
-      this.logger.log(`✅ [FCM] Found FCM token for user ${userId}: ${user.fcmToken.substring(0, 30)}...`);
+      this.logger.log(
+        `✅ [FCM] Found FCM token for user ${userId}: ${user.fcmToken.substring(0, 30)}...`
+      );
 
       const message = {
         token: user.fcmToken,
@@ -87,44 +124,46 @@ export class FirebaseNotificationService {
           body,
         },
         data: {
-          type: data?.type || 'general',
+          type: data?.type || "general",
           ...data,
         },
         android: {
           notification: {
-            icon: 'ic_notification',
-            color: '#FF231F7C',
-            sound: 'default',
-            channelId: 'default',
+            icon: "ic_notification",
+            color: "#231F7C",
+            sound: "default",
+            channelId: "default",
           },
-          priority: 'high' as const,
+          priority: "high" as const,
         },
         apns: {
           payload: {
             aps: {
-              sound: 'default',
+              sound: "default",
               badge: 1,
               contentAvailable: true,
             },
           },
           headers: {
-            'apns-priority': '10',
+            "apns-priority": "10",
           },
         },
       };
 
-      this.logger.log(`📤 [FCM] Sending notification via Firebase Admin SDK...`);
+      this.logger.log(
+        `📤 [FCM] Sending notification via Firebase Admin SDK...`
+      );
       const response = await admin.messaging().send(message);
       this.logger.log(
-        `✅ [FCM] Push notification sent successfully to user ${userId}`,
+        `✅ [FCM] Push notification sent successfully to user ${userId}`
       );
       this.logger.log(`   Response: ${response}`);
       return true;
     } catch (error: any) {
       this.logger.error(
-        `❌ [FCM] Failed to send push notification to user ${userId}:`,
+        `❌ [FCM] Failed to send push notification to user ${userId}:`
       );
-      
+
       // More detailed error logging
       if (error.code) {
         this.logger.error(`   Error code: ${error.code}`);
@@ -132,11 +171,15 @@ export class FirebaseNotificationService {
       if (error.message) {
         this.logger.error(`   Error message: ${error.message}`);
       }
-      
+
       // Handle specific Firebase errors
-      if (error.code === 'messaging/invalid-registration-token' || 
-          error.code === 'messaging/registration-token-not-registered') {
-        this.logger.error(`   ⚠️ FCM token is invalid or expired. User needs to log in again.`);
+      if (
+        error.code === "messaging/invalid-registration-token" ||
+        error.code === "messaging/registration-token-not-registered"
+      ) {
+        this.logger.error(
+          `   ⚠️ FCM token is invalid or expired. User needs to log in again.`
+        );
         // Optionally: Clear the invalid token from database
         try {
           await this.prisma.user.update({
@@ -148,11 +191,11 @@ export class FirebaseNotificationService {
           this.logger.error(`   Failed to clear invalid token: ${updateError}`);
         }
       }
-      
+
       if (error.stack) {
         this.logger.error(`   Stack trace: ${error.stack}`);
       }
-      
+
       return false;
     }
   }
@@ -161,7 +204,7 @@ export class FirebaseNotificationService {
     userIds: number[],
     title: string,
     body: string,
-    data?: any,
+    data?: any
   ): Promise<{ success: number; failed: number }> {
     let success = 0;
     let failed = 0;
@@ -176,7 +219,7 @@ export class FirebaseNotificationService {
     }
 
     this.logger.log(
-      `Bulk notification results: ${success} success, ${failed} failed`,
+      `Bulk notification results: ${success} success, ${failed} failed`
     );
     return { success, failed };
   }
@@ -191,7 +234,7 @@ export class FirebaseNotificationService {
     } catch (error) {
       this.logger.error(
         `❌ Failed to update FCM token for user ${userId}:`,
-        error,
+        error
       );
       throw error;
     }
