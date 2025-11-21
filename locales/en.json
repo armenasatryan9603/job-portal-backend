@@ -853,5 +853,6 @@
   "helpDetailRightToRectification": "• Right to rectification",
   "helpDetailRightToErasure": "• Right to erasure",
   "helpDetailRightToPortability": "• Right to data portability",
-  "helpDetailRightToObject": "• Right to object to processing"
+  "helpDetailRightToObject": "• Right to object to processing",
+  "tapImageToSetAsBanner": "Tap image to set as banner"
 }

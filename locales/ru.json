@@ -798,5 +798,6 @@
   "helpDetailRightToRectification": "• Право на исправление",
   "helpDetailRightToErasure": "• Право на удаление",
   "helpDetailRightToPortability": "• Право на переносимость данных",
-  "helpDetailRightToObject": "• Право на возражение против обработки"
+  "helpDetailRightToObject": "• Право на возражение против обработки",
+  "tapImageToSetAsBanner": "Нажмите на изображение, чтобы установить как баннер"
 }
