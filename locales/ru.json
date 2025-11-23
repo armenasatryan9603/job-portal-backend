@@ -813,5 +813,12 @@
   "helpDetailRightToErasure": "• Право на удаление",
   "helpDetailRightToPortability": "• Право на переносимость данных",
   "helpDetailRightToObject": "• Право на возражение против обработки",
-  "tapImageToSetAsBanner": "Нажмите на изображение, чтобы установить как баннер"
+  "tapImageToSetAsBanner": "Нажмите на изображение, чтобы установить как баннер",
+  "aiEnhancementNotAvailable": "Улучшение с помощью ИИ недоступно. Пожалуйста, свяжитесь со службой поддержки.",
+  "insufficientCreditBalance": "Недостаточно кредитов. Требуется: {cost} кредитов, Доступно: {balance} кредитов",
+  "titleAndDescriptionRequiredForAI": "Заголовок и описание обязательны для улучшения с помощью ИИ",
+  "aiServiceNotConfigured": "Служба ИИ не настроена. Пожалуйста, установите переменную окружения OPENAI_API_KEY.",
+  "titleRequiredForAI": "Заголовок обязателен для улучшения с помощью ИИ",
+  "descriptionRequiredForAI": "Описание обязательно для улучшения с помощью ИИ",
+  "failedToEnhanceOrderText": "Не удалось улучшить текст заказа: {error}"
 }

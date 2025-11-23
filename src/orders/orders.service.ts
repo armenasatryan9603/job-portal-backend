@@ -7,15 +7,22 @@ import {
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { AIService } from "../ai/ai.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
 
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
+  private readonly AI_ENHANCEMENT_CREDIT_COST = parseFloat(
+    process.env.AI_ENHANCEMENT_CREDIT_COST || "2"
+  );
 
   constructor(
     private prisma: PrismaService,
     private orderPricingService: OrderPricingService,
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    private aiService: AIService,
+    private creditTransactionsService: CreditTransactionsService
   ) {}
 
   async createOrder(
@@ -26,7 +33,8 @@ export class OrdersService {
     budget: number,
     availableDates?: string[],
     location?: string,
-    skills?: string[]
+    skills?: string[],
+    useAIEnhancement: boolean = false
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
@@ -61,12 +69,89 @@ export class OrdersService {
         ? [skills]
         : [];
 
+    // Handle AI enhancement if requested
+    let titleEn: string | undefined;
+    let titleRu: string | undefined;
+    let titleHy: string | undefined;
+    let descriptionEn: string | undefined;
+    let descriptionRu: string | undefined;
+    let descriptionHy: string | undefined;
+
+    if (useAIEnhancement) {
+      // Check if AI service is available
+      if (!this.aiService.isAvailable()) {
+        throw new BadRequestException(
+          "AI enhancement is not available. Please contact support."
+        );
+      }
+
+      // Check if user has sufficient credits
+      if (client.creditBalance < this.AI_ENHANCEMENT_CREDIT_COST) {
+        throw new BadRequestException(
+          `Insufficient credit balance. Required: ${this.AI_ENHANCEMENT_CREDIT_COST} credits, Available: ${client.creditBalance} credits`
+        );
+      }
+
+      try {
+        // Enhance text with AI
+        const enhanced = await this.aiService.enhanceOrderText(title, description);
+        titleEn = enhanced.titleEn;
+        titleRu = enhanced.titleRu;
+        titleHy = enhanced.titleHy;
+        descriptionEn = enhanced.descriptionEn;
+        descriptionRu = enhanced.descriptionRu;
+        descriptionHy = enhanced.descriptionHy;
+
+        // Deduct credits in a transaction
+        await this.prisma.$transaction(async (tx) => {
+          const updatedUser = await tx.user.update({
+            where: { id: clientId },
+            data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+            select: { creditBalance: true },
+          });
+
+          // Log credit transaction
+          await this.creditTransactionsService.logTransaction({
+            userId: clientId,
+            amount: -this.AI_ENHANCEMENT_CREDIT_COST,
+            balanceAfter: updatedUser.creditBalance,
+            type: "ai_enhancement",
+            status: "completed",
+            description: `AI enhancement for order creation`,
+            referenceId: null,
+            referenceType: null,
+            metadata: {
+              service: "order_creation_ai_enhancement",
+              cost: this.AI_ENHANCEMENT_CREDIT_COST,
+            },
+            tx,
+          });
+        });
+
+        this.logger.log(
+          `AI enhancement applied for order by user ${clientId}. Credits deducted: ${this.AI_ENHANCEMENT_CREDIT_COST}`
+        );
+      } catch (error) {
+        this.logger.error("Error during AI enhancement:", error);
+        // If AI enhancement fails, fall back to saving user input as-is
+        this.logger.warn(
+          "Falling back to saving user input without AI enhancement"
+        );
+      }
+    }
+
     const order = await this.prisma.order.create({
       data: {
         clientId,
         serviceId,
         title,
         description,
+        titleEn,
+        titleRu,
+        titleHy,
+        descriptionEn,
+        descriptionRu,
+        descriptionHy,
         budget,
         availableDates: formattedAvailableDates,
         location,
@@ -218,6 +303,26 @@ export class OrdersService {
             bio: true,
           },
         },
+        Service: {
+          select: {
+            id: true,
+            name: true,
+            nameEn: true,
+            nameRu: true,
+            nameHy: true,
+            description: true,
+            descriptionEn: true,
+            descriptionRu: true,
+            descriptionHy: true,
+            imageUrl: true,
+            parentId: true,
+            averagePrice: true,
+            minPrice: true,
+            maxPrice: true,
+            completionRate: true,
+            isActive: true,
+          },
+        },
         Proposals: {
           orderBy: { createdAt: "desc" },
         },
@@ -262,8 +367,29 @@ export class OrdersService {
       order.budget || 0
     );
 
+    // Transform Service to match frontend expectations (add name and description fields)
+    let transformedService = order.Service;
+    if (order.Service) {
+      transformedService = {
+        ...order.Service,
+        name:
+          order.Service.nameEn ||
+          order.Service.nameRu ||
+          order.Service.nameHy ||
+          order.Service.name ||
+          "",
+        description:
+          order.Service.descriptionEn ||
+          order.Service.descriptionRu ||
+          order.Service.descriptionHy ||
+          order.Service.description ||
+          null,
+      };
+    }
+
     return {
       ...order,
+      Service: transformedService,
       creditCost,
     };
   }
@@ -317,7 +443,15 @@ export class OrdersService {
       description?: string;
       budget?: number;
       status?: string;
-    }
+      titleEn?: string;
+      titleRu?: string;
+      titleHy?: string;
+      descriptionEn?: string;
+      descriptionRu?: string;
+      descriptionHy?: string;
+    },
+    userId: number,
+    useAIEnhancement: boolean = false
   ) {
     // Validate that id is a valid number
     if (!id || isNaN(id) || id <= 0) {
@@ -331,6 +465,20 @@ export class OrdersService {
 
     if (!existingOrder) {
       throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
+    // Verify user is the owner of the order
+    if (existingOrder.clientId !== userId) {
+      throw new BadRequestException("You can only update your own orders");
+    }
+
+    // Get client to check credits if AI enhancement is enabled
+    const client = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!client) {
+      throw new BadRequestException(`Client with ID ${userId} not found`);
     }
 
     // If serviceId is being updated, check if service exists
@@ -359,9 +507,159 @@ export class OrdersService {
       );
     }
 
+    // Handle AI enhancement if requested
+    let titleEn: string | undefined;
+    let titleRu: string | undefined;
+    let titleHy: string | undefined;
+    let descriptionEn: string | undefined;
+    let descriptionRu: string | undefined;
+    let descriptionHy: string | undefined;
+    let shouldDeductCredits = false;
+
+    // Check if enhanced fields are already provided (from modal accept)
+    if (
+      updateOrderDto.titleEn &&
+      updateOrderDto.descriptionEn &&
+      useAIEnhancement
+    ) {
+      // Enhanced data already provided from modal - use it and deduct credits
+      titleEn = updateOrderDto.titleEn;
+      titleRu = updateOrderDto.titleRu;
+      titleHy = updateOrderDto.titleHy;
+      descriptionEn = updateOrderDto.descriptionEn;
+      descriptionRu = updateOrderDto.descriptionRu;
+      descriptionHy = updateOrderDto.descriptionHy;
+      shouldDeductCredits = true;
+    }
+    // Only apply AI enhancement if title or description is being updated and enhanced fields not already provided
+    else if (
+      useAIEnhancement &&
+      (updateOrderDto.title !== undefined ||
+        updateOrderDto.description !== undefined)
+    ) {
+      // Check if AI service is available
+      if (!this.aiService.isAvailable()) {
+        throw new BadRequestException(
+          "AI enhancement is not available. Please contact support."
+        );
+      }
+
+      // Check if user has sufficient credits
+      if (client.creditBalance < this.AI_ENHANCEMENT_CREDIT_COST) {
+        throw new BadRequestException(
+          `Insufficient credit balance. Required: ${this.AI_ENHANCEMENT_CREDIT_COST} credits, Available: ${client.creditBalance} credits`
+        );
+      }
+
+      // Use existing values if not being updated, otherwise use new values
+      const titleToEnhance =
+        updateOrderDto.title !== undefined
+          ? updateOrderDto.title
+          : existingOrder.title || "";
+      const descriptionToEnhance =
+        updateOrderDto.description !== undefined
+          ? updateOrderDto.description
+          : existingOrder.description || "";
+
+      if (!titleToEnhance || !descriptionToEnhance) {
+        throw new BadRequestException(
+          "Title and description are required for AI enhancement"
+        );
+      }
+
+      try {
+        // Enhance text with AI
+        const enhanced = await this.aiService.enhanceOrderText(
+          titleToEnhance,
+          descriptionToEnhance
+        );
+        titleEn = enhanced.titleEn;
+        titleRu = enhanced.titleRu;
+        titleHy = enhanced.titleHy;
+        descriptionEn = enhanced.descriptionEn;
+        descriptionRu = enhanced.descriptionRu;
+        descriptionHy = enhanced.descriptionHy;
+        shouldDeductCredits = true;
+      } catch (error) {
+        this.logger.error("Error during AI enhancement:", error);
+        // If AI enhancement fails, fall back to saving user input as-is
+        this.logger.warn(
+          "Falling back to saving user input without AI enhancement"
+        );
+        shouldDeductCredits = false; // Don't deduct credits if AI failed
+      }
+    }
+
+    // Deduct credits if AI enhancement was used (either from modal accept or AI service call)
+    if (shouldDeductCredits && titleEn && descriptionEn) {
+      // Check if user has sufficient credits
+      if (client.creditBalance < this.AI_ENHANCEMENT_CREDIT_COST) {
+        throw new BadRequestException(
+          `Insufficient credit balance. Required: ${this.AI_ENHANCEMENT_CREDIT_COST} credits, Available: ${client.creditBalance} credits`
+        );
+      }
+
+      // Deduct credits in a transaction
+      await this.prisma.$transaction(async (tx) => {
+        const updatedUser = await tx.user.update({
+          where: { id: userId },
+          data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+          select: { creditBalance: true },
+        });
+
+        // Log credit transaction
+        await this.creditTransactionsService.logTransaction({
+          userId: userId,
+          amount: -this.AI_ENHANCEMENT_CREDIT_COST,
+          balanceAfter: updatedUser.creditBalance,
+          type: "ai_enhancement",
+          status: "completed",
+          description: `AI enhancement for order update`,
+          referenceId: id.toString(),
+          referenceType: "order",
+          metadata: {
+            service: "order_update_ai_enhancement",
+            cost: this.AI_ENHANCEMENT_CREDIT_COST,
+            orderId: id,
+          },
+          tx,
+        });
+      });
+
+      this.logger.log(
+        `AI enhancement applied for order update by user ${userId} (from modal). Credits deducted: ${this.AI_ENHANCEMENT_CREDIT_COST}`
+      );
+    }
+
+    // Prepare update data (exclude useAIEnhancement as it's not a database field)
+    const { useAIEnhancement: _, ...updateData } = updateOrderDto as any;
+    
+    // Add multilingual fields if AI enhancement was used
+    // Check both: fields from AI service call OR fields already in updateOrderDto (from modal accept)
+    if (titleEn && descriptionEn) {
+      // Use fields from AI service call (when AI enhancement happens in this method)
+      updateData.titleEn = titleEn;
+      updateData.titleRu = titleRu;
+      updateData.titleHy = titleHy;
+      updateData.descriptionEn = descriptionEn;
+      updateData.descriptionRu = descriptionRu;
+      updateData.descriptionHy = descriptionHy;
+    } else if (
+      (updateOrderDto as any).titleEn &&
+      (updateOrderDto as any).descriptionEn
+    ) {
+      // Use fields already in updateOrderDto (when accepting from modal)
+      updateData.titleEn = (updateOrderDto as any).titleEn;
+      updateData.titleRu = (updateOrderDto as any).titleRu;
+      updateData.titleHy = (updateOrderDto as any).titleHy;
+      updateData.descriptionEn = (updateOrderDto as any).descriptionEn;
+      updateData.descriptionRu = (updateOrderDto as any).descriptionRu;
+      updateData.descriptionHy = (updateOrderDto as any).descriptionHy;
+    }
+
     return this.prisma.order.update({
       where: { id: Number(id) },
-      data: updateOrderDto,
+      data: updateData,
       include: {
         Client: {
           select: {
@@ -752,15 +1050,96 @@ export class OrdersService {
       fileType: string;
       mimeType: string;
       fileSize: number;
-    }> = []
+    }> = [],
+    useAIEnhancement: boolean = false
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
       await this.validateMediaFiles(mediaFiles);
     }
 
+    // Check if client exists
+    const client = await this.prisma.user.findUnique({
+      where: { id: clientId },
+    });
+
+    if (!client) {
+      throw new BadRequestException(`Client with ID ${clientId} not found`);
+    }
+
+    // Handle AI enhancement if requested (before transaction)
+    let titleEn: string | undefined;
+    let titleRu: string | undefined;
+    let titleHy: string | undefined;
+    let descriptionEn: string | undefined;
+    let descriptionRu: string | undefined;
+    let descriptionHy: string | undefined;
+
+    if (useAIEnhancement) {
+      // Check if AI service is available
+      if (!this.aiService.isAvailable()) {
+        throw new BadRequestException(
+          "AI enhancement is not available. Please contact support."
+        );
+      }
+
+      // Check if user has sufficient credits
+      if (client.creditBalance < this.AI_ENHANCEMENT_CREDIT_COST) {
+        throw new BadRequestException(
+          `Insufficient credit balance. Required: ${this.AI_ENHANCEMENT_CREDIT_COST} credits, Available: ${client.creditBalance} credits`
+        );
+      }
+
+      try {
+        // Enhance text with AI
+        const enhanced = await this.aiService.enhanceOrderText(title, description);
+        titleEn = enhanced.titleEn;
+        titleRu = enhanced.titleRu;
+        titleHy = enhanced.titleHy;
+        descriptionEn = enhanced.descriptionEn;
+        descriptionRu = enhanced.descriptionRu;
+        descriptionHy = enhanced.descriptionHy;
+
+        this.logger.log(
+          `AI enhancement applied for order with media by user ${clientId}`
+        );
+      } catch (error) {
+        this.logger.error("Error during AI enhancement:", error);
+        // If AI enhancement fails, fall back to saving user input as-is
+        this.logger.warn(
+          "Falling back to saving user input without AI enhancement"
+        );
+      }
+    }
+
     // Use Prisma transaction to ensure atomicity
     return this.prisma.$transaction(async (tx) => {
+      // Deduct credits if AI enhancement was used
+      if (useAIEnhancement && titleEn && descriptionEn) {
+        const updatedUser = await tx.user.update({
+          where: { id: clientId },
+          data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+          select: { creditBalance: true },
+        });
+
+        // Log credit transaction
+        await this.creditTransactionsService.logTransaction({
+          userId: clientId,
+          amount: -this.AI_ENHANCEMENT_CREDIT_COST,
+          balanceAfter: updatedUser.creditBalance,
+          type: "ai_enhancement",
+          status: "completed",
+          description: `AI enhancement for order creation with media`,
+          referenceId: null,
+          referenceType: null,
+          metadata: {
+            service: "order_creation_ai_enhancement",
+            cost: this.AI_ENHANCEMENT_CREDIT_COST,
+          },
+          tx,
+        });
+      }
+
       // Create the order first
       const order = await tx.order.create({
         data: {
@@ -768,6 +1147,12 @@ export class OrdersService {
           serviceId,
           title,
           description,
+          titleEn,
+          titleRu,
+          titleHy,
+          descriptionEn,
+          descriptionRu,
+          descriptionHy,
           budget,
           availableDates: availableDates || [],
           location,

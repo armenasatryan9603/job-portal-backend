@@ -863,5 +863,12 @@
   "helpDetailRightToErasure": "• Ջնջման իրավունք",
   "helpDetailRightToPortability": "• Տվյալների փոխանցելիության իրավունք",
   "helpDetailRightToObject": "• Մշակմանը դեմ լինելու իրավունք",
-  "tapImageToSetAsBanner": "Սեղմեք պատկերը՝ որպես բաններ սահմանելու համար"
+  "tapImageToSetAsBanner": "Սեղմեք պատկերը՝ որպես բաններ սահմանելու համար",
+  "aiEnhancementNotAvailable": "AI-ով բարելավումը հասանելի չէ: Խնդրում ենք կապ հաստատել աջակցության հետ:",
+  "insufficientCreditBalance": "Անբավարար կրեդիտային մնացորդ: Պահանջվում է: {cost} կրեդիտ, Հասանելի է: {balance} կրեդիտ",
+  "titleAndDescriptionRequiredForAI": "Վերնագիրը և նկարագրությունը պարտադիր են AI-ով բարելավման համար",
+  "aiServiceNotConfigured": "AI ծառայությունը կարգավորված չէ: Խնդրում ենք սահմանել OPENAI_API_KEY շրջակա փոփոխականը:",
+  "titleRequiredForAI": "Վերնագիրը պարտադիր է AI-ով բարելավման համար",
+  "descriptionRequiredForAI": "Նկարագրությունը պարտադիր է AI-ով բարելավման համար",
+  "failedToEnhanceOrderText": "Չհաջողվեց բարելավել պատվերի տեքստը: {error}"
 }

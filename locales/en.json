@@ -870,5 +870,12 @@
   "helpDetailRightToErasure": "• Right to erasure",
   "helpDetailRightToPortability": "• Right to data portability",
   "helpDetailRightToObject": "• Right to object to processing",
-  "tapImageToSetAsBanner": "Tap image to set as banner"
+  "tapImageToSetAsBanner": "Tap image to set as banner",
+  "aiEnhancementNotAvailable": "AI enhancement is not available. Please contact support.",
+  "insufficientCreditBalance": "Insufficient credit balance. Required: {cost} credits, Available: {balance} credits",
+  "titleAndDescriptionRequiredForAI": "Title and description are required for AI enhancement",
+  "aiServiceNotConfigured": "AI service is not configured. Please set OPENAI_API_KEY environment variable.",
+  "titleRequiredForAI": "Title is required for AI enhancement",
+  "descriptionRequiredForAI": "Description is required for AI enhancement",
+  "failedToEnhanceOrderText": "Failed to enhance order text: {error}"
 }

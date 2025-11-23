@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
@@ -11,6 +12,10 @@ export class ServicesService {
 
   // Helper method to transform service data based on language
   private transformServiceForLanguage(service: any, language: string = "en") {
+    if (!service) {
+      return service;
+    }
+
     const languageMap = {
       en: {
         name: "nameEn",
@@ -31,31 +36,33 @@ export class ServicesService {
     // Transform features
     const features = service.ServiceFeatures
       ? service.ServiceFeatures.map((sf: any) => {
-          const feature = sf.Feature;
+          const feature = sf?.Feature;
+          if (!feature) return null;
           return {
             id: feature.id,
             name: feature.name,
             description: feature.description,
           };
-        })
+        }).filter((f: any) => f !== null)
       : [];
 
     // Transform technologies
     const technologies = service.ServiceTechnologies
       ? service.ServiceTechnologies.map((st: any) => {
-          const technology = st.Technology;
+          const technology = st?.Technology;
+          if (!technology) return null;
           return {
             id: technology.id,
             name: technology.name,
             description: technology.description,
           };
-        })
+        }).filter((t: any) => t !== null)
       : [];
 
     return {
       ...service,
-      name: service[langFields.name] || service.name,
-      description: service[langFields.description] || service.description,
+      name: service[langFields.name] || service.name || "",
+      description: service[langFields.description] || service.description || null,
       features,
       technologies,
     };
@@ -114,79 +121,85 @@ export class ServicesService {
     parentId?: number,
     language: string = "en"
   ) {
-    const skip = (page - 1) * limit;
-    const where = parentId !== undefined ? { parentId } : {};
+    try {
+      const skip = (page - 1) * limit;
+      const where = parentId !== undefined ? { parentId } : {};
 
-    const [services, total] = await Promise.all([
-      this.prisma.service.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          Parent: true,
-          Children: true,
-          ServiceFeatures: {
-            include: {
-              Feature: true,
-            },
-          },
-          ServiceTechnologies: {
-            include: {
-              Technology: true,
-            },
-          },
-          _count: {
-            select: {
-              Orders: true,
-            },
-          },
-        },
-        orderBy: { name: "asc" },
-      }),
-      this.prisma.service.count({ where }),
-    ]);
-
-    // Add computed fields to each service
-    const servicesWithStats = await Promise.all(
-      services.map(async (service) => {
-        const [specialistCount, recentOrders] = await Promise.all([
-          this.prisma.userService.count({
-            where: { serviceId: service.id },
-          }),
-          this.prisma.order.count({
-            where: {
-              serviceId: service.id,
-              createdAt: {
-                gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+      const [services, total] = await Promise.all([
+        this.prisma.service.findMany({
+          where,
+          skip,
+          take: limit,
+          include: {
+            Parent: true,
+            Children: true,
+            ServiceFeatures: {
+              include: {
+                Feature: true,
               },
             },
-          }),
-        ]);
+            ServiceTechnologies: {
+              include: {
+                Technology: true,
+              },
+            },
+            _count: {
+              select: {
+                Orders: true,
+              },
+            },
+          },
+          orderBy: { name: "asc" },
+        }),
+        this.prisma.service.count({ where }),
+      ]);
 
-        return {
-          ...service,
-          specialistCount,
-          recentOrders,
-        };
-      })
-    );
+      // Add computed fields to each service
+      const servicesWithStats = await Promise.all(
+        services.map(async (service) => {
+          const [specialistCount, recentOrders] = await Promise.all([
+            this.prisma.userService.count({
+              where: { serviceId: service.id },
+            }),
+            this.prisma.order.count({
+              where: {
+                serviceId: service.id,
+                createdAt: {
+                  gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+                },
+              },
+            }),
+          ]);
 
-    // Transform services for the specified language
-    const transformedServices = servicesWithStats.map((service) =>
-      this.transformServiceForLanguage(service, language)
-    );
+          return {
+            ...service,
+            specialistCount,
+            recentOrders,
+          };
+        })
+      );
 
-    return {
-      services: transformedServices,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page < Math.ceil(total / limit),
-        hasPrevPage: page > 1,
-      },
-    };
+      // Transform services for the specified language
+      const transformedServices = servicesWithStats.map((service) =>
+        this.transformServiceForLanguage(service, language)
+      );
+
+      return {
+        services: transformedServices,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPrevPage: page > 1,
+        },
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch services: ${error.message}`
+      );
+    }
   }
 
   async findOne(id: number, language: string = "en") {
@@ -363,45 +376,61 @@ export class ServicesService {
   }
 
   async getRootServices(language: string = "en") {
-    const services = await this.prisma.service.findMany({
-      where: { parentId: null, isActive: true },
-      include: {
-        Children: {
-          where: { isActive: true },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
-
-    // Add computed fields to each service
-    const servicesWithStats = await Promise.all(
-      services.map(async (service) => {
-        const [specialistCount, recentOrders] = await Promise.all([
-          this.prisma.userService.count({
-            where: { serviceId: service.id },
-          }),
-          this.prisma.order.count({
-            where: {
-              serviceId: service.id,
-              createdAt: {
-                gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
-              },
+    try {
+      const services = await this.prisma.service.findMany({
+        where: { parentId: null, isActive: true },
+        include: {
+          Children: {
+            where: { isActive: true },
+          },
+          ServiceFeatures: {
+            include: {
+              Feature: true,
             },
-          }),
-        ]);
+          },
+          ServiceTechnologies: {
+            include: {
+              Technology: true,
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+      });
 
-        return {
-          ...service,
-          specialistCount,
-          recentOrders,
-        };
-      })
-    );
+      // Add computed fields to each service
+      const servicesWithStats = await Promise.all(
+        services.map(async (service) => {
+          const [specialistCount, recentOrders] = await Promise.all([
+            this.prisma.userService.count({
+              where: { serviceId: service.id },
+            }),
+            this.prisma.order.count({
+              where: {
+                serviceId: service.id,
+                createdAt: {
+                  gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+                },
+              },
+            }),
+          ]);
 
-    // Transform services for the specified language
-    return servicesWithStats.map((service) =>
-      this.transformServiceForLanguage(service, language)
-    );
+          return {
+            ...service,
+            specialistCount,
+            recentOrders,
+          };
+        })
+      );
+
+      // Transform services for the specified language
+      return servicesWithStats.map((service) =>
+        this.transformServiceForLanguage(service, language)
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to fetch root services: ${error.message}`
+      );
+    }
   }
 
   async getChildServices(parentId: number, language: string = "en") {
@@ -409,6 +438,16 @@ export class ServicesService {
       where: { parentId },
       include: {
         Parent: true,
+        ServiceFeatures: {
+          include: {
+            Feature: true,
+          },
+        },
+        ServiceTechnologies: {
+          include: {
+            Technology: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     });
@@ -427,14 +466,23 @@ export class ServicesService {
   ) {
     const skip = (page - 1) * limit;
 
+    // Search across all language fields to find matches regardless of search language
+    const searchConditions: Prisma.ServiceWhereInput = {
+      OR: [
+        { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { description: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { nameEn: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { descriptionEn: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { nameRu: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { descriptionRu: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { nameHy: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        { descriptionHy: { contains: query, mode: Prisma.QueryMode.insensitive } },
+      ],
+    };
+
     const [services, total] = await Promise.all([
       this.prisma.service.findMany({
-        where: {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-          ],
-        },
+        where: searchConditions,
         skip,
         take: limit,
         include: {
@@ -449,12 +497,7 @@ export class ServicesService {
         orderBy: { name: "asc" },
       }),
       this.prisma.service.count({
-        where: {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-          ],
-        },
+        where: searchConditions,
       }),
     ]);
 

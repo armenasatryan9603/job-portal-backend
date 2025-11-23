@@ -157,8 +157,14 @@ model Order {
   id             Int             @id @default(autoincrement())
   clientId       Int
   serviceId      Int?
-  title          String?
-  description    String?
+  title          String?         // Keep for backward compatibility
+  description    String?         // Keep for backward compatibility
+  titleEn        String?
+  titleRu        String?
+  titleHy        String?
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
   budget         Float?
   availableDates String[]        @default([])
   location       String?

@@ -12,11 +12,15 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { OrdersService } from "./orders.service";
+import { AIService } from "../ai/ai.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
 @Controller("orders")
 export class OrdersController {
-  constructor(private ordersService: OrdersService) {}
+  constructor(
+    private ordersService: OrdersService,
+    private aiService: AIService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post("create")
@@ -31,6 +35,7 @@ export class OrdersController {
       availableDates?: string[];
       location?: string;
       skills?: string[];
+      useAIEnhancement?: boolean;
     }
   ) {
     // Validate user is authenticated
@@ -46,7 +51,8 @@ export class OrdersController {
       body.budget,
       body.availableDates,
       body.location,
-      body.skills
+      body.skills,
+      body.useAIEnhancement ?? false
     );
   }
 
@@ -70,6 +76,7 @@ export class OrdersController {
         mimeType: string;
         fileSize: number;
       }>;
+      useAIEnhancement?: boolean;
     }
   ) {
     return this.ordersService.createOrderWithMedia(
@@ -81,7 +88,8 @@ export class OrdersController {
       body.availableDates,
       body.location,
       body.skills,
-      body.mediaFiles || []
+      body.mediaFiles || [],
+      body.useAIEnhancement ?? false
     );
   }
 
@@ -238,19 +246,36 @@ export class OrdersController {
   async update(
     @Param("id") id: string,
     @Body()
-    updateOrderDto: {
+    body: {
       serviceId?: number;
       title?: string;
       description?: string;
       budget?: number;
       status?: string;
-    }
+      useAIEnhancement?: boolean;
+      titleEn?: string;
+      titleRu?: string;
+      titleHy?: string;
+      descriptionEn?: string;
+      descriptionRu?: string;
+      descriptionHy?: string;
+    },
+    @Request() req
   ) {
     const orderId = parseInt(id, 10);
     if (isNaN(orderId)) {
       throw new Error(`Invalid order ID: ${id}`);
     }
-    return this.ordersService.update(orderId, updateOrderDto);
+    
+    // Extract useAIEnhancement and exclude it from updateOrderDto
+    const { useAIEnhancement, ...updateOrderDto } = body;
+    
+    return this.ordersService.update(
+      orderId,
+      updateOrderDto,
+      req.user.userId,
+      useAIEnhancement ?? false
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -302,5 +327,52 @@ export class OrdersController {
     }
 
     return this.ordersService.setBannerImage(orderId, body.mediaFileId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post("preview-ai-enhancement")
+  async previewAIEnhancement(
+    @Body()
+    body: {
+      title: string;
+      description: string;
+    }
+  ) {
+    if (!body.title || !body.title.trim()) {
+      throw new BadRequestException("Title is required");
+    }
+
+    if (!body.description || !body.description.trim()) {
+      throw new BadRequestException("Description is required");
+    }
+
+    // Check if AI service is available
+    if (!this.aiService.isAvailable()) {
+      throw new BadRequestException(
+        "AI enhancement is not available. Please contact support."
+      );
+    }
+
+    // Call AI service to enhance text (no credit deduction, no save)
+    const enhanced = await this.aiService.enhanceOrderText(
+      body.title.trim(),
+      body.description.trim()
+    );
+
+    return {
+      original: {
+        title: body.title.trim(),
+        description: body.description.trim(),
+      },
+      enhanced: {
+        titleEn: enhanced.titleEn,
+        titleRu: enhanced.titleRu,
+        titleHy: enhanced.titleHy,
+        descriptionEn: enhanced.descriptionEn,
+        descriptionRu: enhanced.descriptionRu,
+        descriptionHy: enhanced.descriptionHy,
+        detectedLanguage: enhanced.detectedLanguage,
+      },
+    };
   }
 }
