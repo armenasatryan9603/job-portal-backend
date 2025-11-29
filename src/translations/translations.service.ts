@@ -48,4 +48,45 @@ export class TranslationsService {
   isLanguageSupported(language: string): boolean {
     return this.getAvailableLanguages().includes(language);
   }
+
+  /**
+   * Get a single translation by key
+   */
+  async getTranslation(
+    language: string,
+    key: string,
+    fallback?: string
+  ): Promise<string> {
+    try {
+      const translations = await this.getTranslations(language);
+      return translations[key] || fallback || key;
+    } catch (error) {
+      console.error(`Error getting translation for key ${key}:`, error);
+      return fallback || key;
+    }
+  }
+
+  /**
+   * Translate a message with placeholders
+   * Supports {placeholder} syntax
+   */
+  async translate(
+    language: string,
+    key: string,
+    placeholders?: Record<string, string | number>
+  ): Promise<string> {
+    let translation = await this.getTranslation(language, key, key);
+
+    if (placeholders) {
+      Object.keys(placeholders).forEach((placeholder) => {
+        const value = String(placeholders[placeholder]);
+        translation = translation.replace(
+          new RegExp(`\\{${placeholder}\\}`, "g"),
+          value
+        );
+      });
+    }
+
+    return translation;
+  }
 }

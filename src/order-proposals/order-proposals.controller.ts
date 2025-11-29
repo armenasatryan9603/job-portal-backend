@@ -41,12 +41,14 @@ export class OrderProposalsController {
     createOrderProposalDto: {
       orderId: number;
       message?: string;
+      questionAnswers?: Array<{ questionId: number; answer: string }>;
     }
   ) {
     try {
       console.log("Received apply request:", {
         orderId: createOrderProposalDto.orderId,
         hasMessage: !!createOrderProposalDto.message,
+        hasQuestionAnswers: !!createOrderProposalDto.questionAnswers,
         userId: req.user?.userId,
       });
 
@@ -78,6 +80,7 @@ export class OrderProposalsController {
         orderId: orderId,
         message: createOrderProposalDto.message,
         userId: userId,
+        questionAnswers: createOrderProposalDto.questionAnswers,
       });
     } catch (error) {
       console.error("Error in createWithCreditDeduction:", error);

@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
-import { CreditTransactionsService } from '../credit/credit-transactions.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
 
 @Injectable()
 export class OrderPricingService {
@@ -10,7 +10,7 @@ export class OrderPricingService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private creditTransactionsService: CreditTransactionsService,
+    private creditTransactionsService: CreditTransactionsService
   ) {}
 
   /**
@@ -28,13 +28,13 @@ export class OrderPricingService {
           isActive: true,
         },
         orderBy: {
-          minBudget: 'desc', // Get the highest tier that applies
+          minBudget: "desc", // Get the highest tier that applies
         },
       });
 
       if (pricing) {
         this.logger.log(
-          `Found pricing for order budget $${orderBudget}: ${pricing.creditCost} credits`,
+          `Found pricing for order budget $${orderBudget}: ${pricing.creditCost} credits`
         );
         return pricing.creditCost;
       }
@@ -42,13 +42,13 @@ export class OrderPricingService {
       // Default fallback pricing (percentage of budget)
       const defaultPricing = this.getDefaultPricing(orderBudget);
       this.logger.warn(
-        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits`,
+        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits`
       );
       return defaultPricing;
     } catch (error) {
       this.logger.error(
         `Error getting credit cost for order budget $${orderBudget}:`,
-        error,
+        error
       );
       // Return default pricing on error
       return this.getDefaultPricing(orderBudget);
@@ -73,13 +73,13 @@ export class OrderPricingService {
           isActive: true,
         },
         orderBy: {
-          minBudget: 'desc', // Get the highest tier that applies
+          minBudget: "desc", // Get the highest tier that applies
         },
       });
 
       if (pricing) {
         this.logger.log(
-          `Found pricing config for order budget $${orderBudget}: ${pricing.creditCost} credits, ${pricing.refundPercentage * 100}% refund`,
+          `Found pricing config for order budget $${orderBudget}: ${pricing.creditCost} credits, ${pricing.refundPercentage * 100}% refund`
         );
         return {
           creditCost: pricing.creditCost,
@@ -90,7 +90,7 @@ export class OrderPricingService {
       // Default fallback pricing
       const defaultPricing = this.getDefaultPricing(orderBudget);
       this.logger.warn(
-        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits, 50% refund`,
+        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits, 50% refund`
       );
       return {
         creditCost: defaultPricing,
@@ -99,7 +99,7 @@ export class OrderPricingService {
     } catch (error) {
       this.logger.error(
         `Error getting pricing config for order budget $${orderBudget}:`,
-        error,
+        error
       );
       // Return default pricing on error
       const defaultPricing = this.getDefaultPricing(orderBudget);
@@ -116,7 +116,7 @@ export class OrderPricingService {
   async getAllPricing(): Promise<any[]> {
     return this.prisma.orderPricing.findMany({
       where: { isActive: true },
-      orderBy: { minBudget: 'asc' },
+      orderBy: { minBudget: "asc" },
     });
   }
 
@@ -190,7 +190,7 @@ export class OrderPricingService {
     const percentage = 0.05; // 5%
     const creditCost = Math.max(
       1,
-      Math.min(100, Math.round(orderBudget * percentage)),
+      Math.min(100, Math.round(orderBudget * percentage))
     );
 
     return creditCost;
@@ -205,18 +205,18 @@ export class OrderPricingService {
   async processRefundsForRejectedApplicants(
     orderId: number,
     selectedProposalId: number,
-    orderBudget: number,
+    orderBudget: number
   ): Promise<void> {
     try {
       // Get pricing configuration for refund percentage
       const pricingConfig = await this.getPricingConfig(orderBudget);
       const refundAmount = Math.round(
-        pricingConfig.creditCost * pricingConfig.refundPercentage,
+        pricingConfig.creditCost * pricingConfig.refundPercentage
       );
 
       if (refundAmount <= 0) {
         this.logger.log(
-          `No refund needed for order ${orderId} (refund amount: ${refundAmount})`,
+          `No refund needed for order ${orderId} (refund amount: ${refundAmount})`
         );
         return;
       }
@@ -226,7 +226,7 @@ export class OrderPricingService {
         where: {
           orderId: orderId,
           id: { not: selectedProposalId },
-          status: { in: ['pending', 'rejected'] },
+          status: { in: ["pending", "rejected"] },
         },
         include: {
           User: true,
@@ -234,7 +234,7 @@ export class OrderPricingService {
       });
 
       this.logger.log(
-        `Processing refunds for ${rejectedProposals.length} rejected applicants on order ${orderId}`,
+        `Processing refunds for ${rejectedProposals.length} rejected applicants on order ${orderId}`
       );
 
       // Process refunds in a transaction
@@ -273,14 +273,14 @@ export class OrderPricingService {
           // Update proposal status to rejected
           await tx.orderProposal.update({
             where: { id: proposal.id },
-            data: { status: 'rejected' },
+            data: { status: "rejected" },
           });
 
           // Create notification for rejected applicant (will be sent after transaction)
           // We'll send the push notification after the transaction completes
 
           this.logger.log(
-            `Refunded ${refundAmount} credits to user ${proposal.userId} for rejected proposal ${proposal.id}`,
+            `Refunded ${refundAmount} credits to user ${proposal.userId} for rejected proposal ${proposal.id}`
           );
         }
       });
@@ -290,30 +290,33 @@ export class OrderPricingService {
         try {
           await this.notificationsService.createNotificationWithPush(
             proposal.userId,
-            'proposal_rejected',
-            'Application Update',
-            `Unfortunately, you were not selected for this job. We've refunded ${refundAmount} credits to your account.`,
+            "proposal_rejected",
+            "notificationProposalRejectedTitle",
+            "notificationProposalRejectedWithRefundMessage",
             {
               orderId: orderId,
               proposalId: proposal.id,
               refundAmount: refundAmount,
             },
+            {
+              refundAmount: refundAmount,
+            }
           );
         } catch (error) {
           this.logger.error(
             `Failed to send notification to user ${proposal.userId}:`,
-            error,
+            error
           );
         }
       }
 
       this.logger.log(
-        `Successfully processed refunds for ${rejectedProposals.length} rejected applicants`,
+        `Successfully processed refunds for ${rejectedProposals.length} rejected applicants`
       );
     } catch (error) {
       this.logger.error(
         `Error processing refunds for order ${orderId}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -323,7 +326,7 @@ export class OrderPricingService {
    * Initialize default pricing configurations based on budget ranges
    */
   async initializeDefaultPricing(): Promise<void> {
-    this.logger.log('Initializing default pricing configurations...');
+    this.logger.log("Initializing default pricing configurations...");
 
     const defaultConfigs = [
       {
@@ -331,28 +334,28 @@ export class OrderPricingService {
         maxBudget: 500,
         creditCost: 1,
         refundPercentage: 0.5,
-        description: 'Small orders ($0-$500)',
+        description: "Small orders ($0-$500)",
       },
       {
         minBudget: 500,
         maxBudget: 2000,
         creditCost: 5,
         refundPercentage: 0.6,
-        description: 'Medium orders ($500-$2000)',
+        description: "Medium orders ($500-$2000)",
       },
       {
         minBudget: 2000,
         maxBudget: 5000,
         creditCost: 10,
         refundPercentage: 0.7,
-        description: 'Large orders ($2000-$5000)',
+        description: "Large orders ($2000-$5000)",
       },
       {
         minBudget: 5000,
         maxBudget: undefined,
         creditCost: 20,
         refundPercentage: 0.8,
-        description: 'Premium orders ($5000+)',
+        description: "Premium orders ($5000+)",
       },
     ];
 
@@ -360,16 +363,16 @@ export class OrderPricingService {
       try {
         await this.setPricing(config);
         this.logger.log(
-          `Initialized pricing for budget range $${config.minBudget}-${config.maxBudget || '∞'}: ${config.creditCost} credits, ${config.refundPercentage * 100}% refund`,
+          `Initialized pricing for budget range $${config.minBudget}-${config.maxBudget || "∞"}: ${config.creditCost} credits, ${config.refundPercentage * 100}% refund`
         );
       } catch (error) {
         this.logger.error(
-          `Failed to initialize pricing for budget range $${config.minBudget}-${config.maxBudget || '∞'}:`,
-          error,
+          `Failed to initialize pricing for budget range $${config.minBudget}-${config.maxBudget || "∞"}:`,
+          error
         );
       }
     }
 
-    this.logger.log('Default pricing initialization completed');
+    this.logger.log("Default pricing initialization completed");
   }
 }

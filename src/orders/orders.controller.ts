@@ -36,6 +36,7 @@ export class OrdersController {
       location?: string;
       skills?: string[];
       useAIEnhancement?: boolean;
+      questions?: string[];
     }
   ) {
     // Validate user is authenticated
@@ -52,7 +53,8 @@ export class OrdersController {
       body.availableDates,
       body.location,
       body.skills,
-      body.useAIEnhancement ?? false
+      body.useAIEnhancement ?? false,
+      body.questions
     );
   }
 
@@ -77,6 +79,7 @@ export class OrdersController {
         fileSize: number;
       }>;
       useAIEnhancement?: boolean;
+      questions?: string[];
     }
   ) {
     return this.ordersService.createOrderWithMedia(
@@ -89,7 +92,8 @@ export class OrdersController {
       body.location,
       body.skills,
       body.mediaFiles || [],
-      body.useAIEnhancement ?? false
+      body.useAIEnhancement ?? false,
+      body.questions
     );
   }
 
@@ -259,6 +263,7 @@ export class OrdersController {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      questions?: string[];
     },
     @Request() req
   ) {

@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma.service";
 import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { PusherService } from "./pusher.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
@@ -18,6 +19,7 @@ export class ChatService {
   constructor(
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
+    private notificationsService: NotificationsService,
     private orderPricingService: OrderPricingService,
     private pusherService: PusherService,
     private creditTransactionsService: CreditTransactionsService
@@ -573,9 +575,10 @@ export class ChatService {
       // Send push notification to each participant
       for (const participant of participants) {
         if (participant.User.fcmToken) {
-          await this.firebaseNotificationService.sendPushNotification(
+          await this.notificationsService.createNotificationWithPush(
             participant.User.id,
-            `New message from ${message.Sender.name}`,
+            "chat_message",
+            "notificationChatMessageTitle",
             message.content.length > 100
               ? `${message.content.substring(0, 100)}...`
               : message.content,
@@ -584,6 +587,9 @@ export class ChatService {
               conversationId: conversationId.toString(),
               messageId: message.id.toString(),
               senderId: senderId.toString(),
+            },
+            {
+              senderName: message.Sender.name,
             }
           );
         }
@@ -1196,7 +1202,10 @@ export class ChatService {
           // Get order with all participants (client and specialists with proposals)
           const order = await this.prisma.order.findUnique({
             where: { id: orderId },
-            include: {
+            select: {
+              id: true,
+              title: true,
+              clientId: true,
               Client: { select: { id: true } },
               Proposals: {
                 select: { userId: true },
@@ -1232,6 +1241,43 @@ export class ChatService {
                   updatedAt: new Date().toISOString(),
                 }
               );
+            }
+
+            // Send notifications to all rejected specialists
+            const rejectedProposals = await this.prisma.orderProposal.findMany({
+              where: {
+                orderId: orderId,
+                status: "rejected",
+              },
+              include: {
+                User: {
+                  select: { id: true, name: true },
+                },
+              },
+            });
+
+            for (const proposal of rejectedProposals) {
+              try {
+                await this.notificationsService.createNotificationWithPush(
+                  proposal.userId,
+                  "proposal_rejected",
+                  "notificationProposalRejectedTitle",
+                  "notificationProposalRejectedMessage",
+                  {
+                    type: "proposal_rejected",
+                    orderId: orderId,
+                    proposalId: proposal.id,
+                  },
+                  {
+                    orderTitle: order.title || "the order",
+                  }
+                );
+              } catch (error) {
+                console.error(
+                  `Failed to send notification to user ${proposal.userId}:`,
+                  error
+                );
+              }
             }
           }
         } catch (error) {
@@ -1373,7 +1419,10 @@ export class ChatService {
           // Get order with all participants (client and specialists with proposals)
           const order = await this.prisma.order.findUnique({
             where: { id: orderId },
-            include: {
+            select: {
+              id: true,
+              title: true,
+              clientId: true,
               Client: { select: { id: true } },
               Proposals: {
                 select: { userId: true },
@@ -1443,6 +1492,94 @@ export class ChatService {
                   );
                 }
               }
+            }
+
+            // Send notifications
+            try {
+              // Get conversation for notifications
+              const conversationForNotification =
+                await this.prisma.conversation.findFirst({
+                  where: { orderId },
+                  select: { id: true },
+                });
+
+              // Get chosen proposal and rejected proposals
+              const chosenProposal = await this.prisma.orderProposal.findUnique(
+                {
+                  where: { id: result.chosenProposalId },
+                  include: {
+                    User: {
+                      select: { id: true, name: true },
+                    },
+                  },
+                }
+              );
+
+              const rejectedProposals =
+                await this.prisma.orderProposal.findMany({
+                  where: {
+                    orderId: orderId,
+                    status: "rejected",
+                  },
+                  include: {
+                    User: {
+                      select: { id: true, name: true },
+                    },
+                  },
+                });
+
+              // Notify chosen specialist
+              if (chosenProposal) {
+                try {
+                  await this.notificationsService.createNotificationWithPush(
+                    chosenProposal.userId,
+                    "proposal_accepted",
+                    "notificationProposalAcceptedTitle",
+                    "notificationProposalAcceptedMessage",
+                    {
+                      type: "proposal_accepted",
+                      orderId: orderId,
+                      proposalId: chosenProposal.id,
+                      conversationId: conversationForNotification?.id,
+                    },
+                    {
+                      orderTitle: order.title || "the order",
+                    }
+                  );
+                } catch (error) {
+                  console.error(
+                    `Failed to send notification to chosen specialist ${chosenProposal.userId}:`,
+                    error
+                  );
+                }
+              }
+
+              // Notify rejected specialists
+              for (const proposal of rejectedProposals) {
+                try {
+                  await this.notificationsService.createNotificationWithPush(
+                    proposal.userId,
+                    "proposal_rejected",
+                    "notificationProposalRejectedTitle",
+                    "notificationProposalRejectedMessage",
+                    {
+                      type: "proposal_rejected",
+                      orderId: orderId,
+                      proposalId: proposal.id,
+                    },
+                    {
+                      orderTitle: order.title || "the order",
+                    }
+                  );
+                } catch (error) {
+                  console.error(
+                    `Failed to send notification to rejected specialist ${proposal.userId}:`,
+                    error
+                  );
+                }
+              }
+            } catch (error) {
+              console.error("Error sending notifications:", error);
             }
           }
         } catch (error) {

@@ -1,25 +1,31 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma.service';
-import { FirebaseNotificationService } from './firebase-notification.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma.service";
+import { FirebaseNotificationService } from "./firebase-notification.service";
+import { TranslationsService } from "../translations/translations.service";
+import {
+  UserPreferences,
+  DEFAULT_PREFERENCES,
+} from "../types/user-preferences";
 
 @Injectable()
 export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
+    private translationsService: TranslationsService
   ) {}
 
   async getUserNotifications(
     userId: number,
     page: number = 1,
-    limit: number = 20,
+    limit: number = 20
   ) {
     const skip = (page - 1) * limit;
 
     const [notifications, total] = await Promise.all([
       this.prisma.notification.findMany({
         where: { userId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip,
         take: limit,
       }),
@@ -57,7 +63,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new NotFoundException('Notification not found');
+      throw new NotFoundException("Notification not found");
     }
 
     return this.prisma.notification.update({
@@ -85,7 +91,7 @@ export class NotificationsService {
     });
 
     if (!notification) {
-      throw new NotFoundException('Notification not found');
+      throw new NotFoundException("Notification not found");
     }
 
     return this.prisma.notification.delete({
@@ -99,21 +105,64 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Get user's preferred language from preferences JSON field, defaulting to 'en'
+   */
+  private async getUserLanguage(userId: number): Promise<string> {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { preferences: true } as any, // Type assertion - Prisma types will update after TypeScript server restart
+      });
+
+      if (user?.preferences) {
+        const prefs = user.preferences as UserPreferences;
+        return prefs.language || DEFAULT_PREFERENCES.language || "en";
+      }
+
+      return DEFAULT_PREFERENCES.language || "en";
+    } catch (error) {
+      console.error(`Error getting user language for user ${userId}:`, error);
+      return DEFAULT_PREFERENCES.language || "en";
+    }
+  }
+
   async createNotificationWithPush(
     userId: number,
     type: string,
-    title: string,
-    message: string,
+    titleKey: string,
+    messageKey: string,
     data?: any,
+    placeholders?: Record<string, string | number>
   ) {
-    // Create database notification
+    // Get user's language preference
+    const language = await this.getUserLanguage(userId);
+
+    // Translate title and message
+    const title = await this.translationsService.translate(
+      language,
+      titleKey,
+      placeholders
+    );
+    const message = await this.translationsService.translate(
+      language,
+      messageKey,
+      placeholders
+    );
+
+    // Create database notification (store original keys for future reference)
     const notification = await this.prisma.notification.create({
       data: {
         userId,
         type,
         title,
         message,
-        data,
+        data: {
+          ...data,
+          titleKey,
+          messageKey,
+          language,
+        },
       },
     });
 
@@ -123,10 +172,10 @@ export class NotificationsService {
         userId,
         title,
         message,
-        { type, ...data },
+        { type, ...data }
       );
     } catch (error) {
-      console.error('Failed to send push notification:', error);
+      console.error("Failed to send push notification:", error);
       // Don't fail the database operation if push fails
     }
 
@@ -136,7 +185,7 @@ export class NotificationsService {
   async updateUserFCMToken(userId: number, fcmToken: string) {
     return this.firebaseNotificationService.updateUserFCMToken(
       userId,
-      fcmToken,
+      fcmToken
     );
   }
 }

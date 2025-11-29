@@ -34,7 +34,8 @@ export class OrdersService {
     availableDates?: string[],
     location?: string,
     skills?: string[],
-    useAIEnhancement: boolean = false
+    useAIEnhancement: boolean = false,
+    questions?: string[]
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
@@ -94,7 +95,10 @@ export class OrdersService {
 
       try {
         // Enhance text with AI
-        const enhanced = await this.aiService.enhanceOrderText(title, description);
+        const enhanced = await this.aiService.enhanceOrderText(
+          title,
+          description
+        );
         titleEn = enhanced.titleEn;
         titleRu = enhanced.titleRu;
         titleHy = enhanced.titleHy;
@@ -106,7 +110,9 @@ export class OrdersService {
         await this.prisma.$transaction(async (tx) => {
           const updatedUser = await tx.user.update({
             where: { id: clientId },
-            data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+            data: {
+              creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST },
+            },
             select: { creditBalance: true },
           });
 
@@ -157,7 +163,19 @@ export class OrdersService {
         location,
         skills: formattedSkills,
         status: "open",
-      },
+        ...(questions && questions.length > 0
+          ? {
+              questions: {
+                create: questions
+                  .filter((q) => q && q.trim().length > 0)
+                  .map((question, index) => ({
+                    question: question.trim(),
+                    order: index,
+                  })),
+              },
+            }
+          : {}),
+      } as any,
       include: {
         Client: {
           select: {
@@ -173,13 +191,16 @@ export class OrdersService {
             name: true,
           },
         },
+        questions: {
+          orderBy: { order: "asc" },
+        },
         _count: {
           select: {
             Proposals: true,
             Reviews: true,
           },
         },
-      },
+      } as any,
     });
 
     // Send notifications to users who have notifications enabled for this service
@@ -246,13 +267,16 @@ export class OrdersService {
             orderBy: { createdAt: "desc" },
             include: {},
           },
+          questions: {
+            orderBy: { order: "asc" },
+          },
           _count: {
             select: {
               Proposals: true,
               Reviews: true,
             },
           },
-        },
+        } as any,
         orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({ where }),
@@ -349,13 +373,16 @@ export class OrdersService {
             fileType: true,
           },
         },
+        questions: {
+          orderBy: { order: "asc" },
+        },
         _count: {
           select: {
             Proposals: true,
             Reviews: true,
           },
         },
-      },
+      } as any,
     });
 
     if (!order) {
@@ -368,21 +395,22 @@ export class OrdersService {
     );
 
     // Transform Service to match frontend expectations (add name and description fields)
-    let transformedService = order.Service;
-    if (order.Service) {
+    const orderWithService = order as any;
+    let transformedService = orderWithService.Service;
+    if (orderWithService.Service) {
       transformedService = {
-        ...order.Service,
+        ...orderWithService.Service,
         name:
-          order.Service.nameEn ||
-          order.Service.nameRu ||
-          order.Service.nameHy ||
-          order.Service.name ||
+          orderWithService.Service.nameEn ||
+          orderWithService.Service.nameRu ||
+          orderWithService.Service.nameHy ||
+          orderWithService.Service.name ||
           "",
         description:
-          order.Service.descriptionEn ||
-          order.Service.descriptionRu ||
-          order.Service.descriptionHy ||
-          order.Service.description ||
+          orderWithService.Service.descriptionEn ||
+          orderWithService.Service.descriptionRu ||
+          orderWithService.Service.descriptionHy ||
+          orderWithService.Service.description ||
           null,
       };
     }
@@ -449,6 +477,7 @@ export class OrdersService {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      questions?: string[];
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -603,7 +632,9 @@ export class OrdersService {
       await this.prisma.$transaction(async (tx) => {
         const updatedUser = await tx.user.update({
           where: { id: userId },
-          data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+          data: {
+            creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST },
+          },
           select: { creditBalance: true },
         });
 
@@ -631,9 +662,13 @@ export class OrdersService {
       );
     }
 
-    // Prepare update data (exclude useAIEnhancement as it's not a database field)
-    const { useAIEnhancement: _, ...updateData } = updateOrderDto as any;
-    
+    // Prepare update data (exclude useAIEnhancement and questions as they're handled separately)
+    const {
+      useAIEnhancement: _,
+      questions,
+      ...updateData
+    } = updateOrderDto as any;
+
     // Add multilingual fields if AI enhancement was used
     // Check both: fields from AI service call OR fields already in updateOrderDto (from modal accept)
     if (titleEn && descriptionEn) {
@@ -657,6 +692,26 @@ export class OrdersService {
       updateData.descriptionHy = (updateOrderDto as any).descriptionHy;
     }
 
+    // Handle questions update if provided
+    if (questions !== undefined) {
+      // Delete existing questions and create new ones
+      await (this.prisma as any).orderQuestion.deleteMany({
+        where: { orderId: Number(id) },
+      });
+
+      if (questions && questions.length > 0) {
+        await (this.prisma as any).orderQuestion.createMany({
+          data: questions
+            .filter((q: string) => q && q.trim().length > 0)
+            .map((question: string, index: number) => ({
+              orderId: Number(id),
+              question: question.trim(),
+              order: index,
+            })),
+        });
+      }
+    }
+
     return this.prisma.order.update({
       where: { id: Number(id) },
       data: updateData,
@@ -669,13 +724,16 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
+        questions: {
+          orderBy: { order: "asc" },
+        },
         _count: {
           select: {
             Proposals: true,
             Reviews: true,
           },
         },
-      },
+      } as any,
     });
   }
 
@@ -887,13 +945,16 @@ export class OrdersService {
             orderBy: { createdAt: "desc" },
             include: {},
           },
+          questions: {
+            orderBy: { order: "asc" },
+          },
           _count: {
             select: {
               Proposals: true,
               Reviews: true,
             },
           },
-        },
+        } as any,
         orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({ where }),
@@ -1006,13 +1067,16 @@ export class OrdersService {
               verified: true,
             },
           },
+          questions: {
+            orderBy: { order: "asc" },
+          },
           _count: {
             select: {
               Proposals: true,
               Reviews: true,
             },
           },
-        },
+        } as any,
         orderBy: { createdAt: "desc" },
       }),
       this.prisma.order.count({ where }),
@@ -1051,7 +1115,8 @@ export class OrdersService {
       mimeType: string;
       fileSize: number;
     }> = [],
-    useAIEnhancement: boolean = false
+    useAIEnhancement: boolean = false,
+    questions?: string[]
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
@@ -1092,7 +1157,10 @@ export class OrdersService {
 
       try {
         // Enhance text with AI
-        const enhanced = await this.aiService.enhanceOrderText(title, description);
+        const enhanced = await this.aiService.enhanceOrderText(
+          title,
+          description
+        );
         titleEn = enhanced.titleEn;
         titleRu = enhanced.titleRu;
         titleHy = enhanced.titleHy;
@@ -1118,7 +1186,9 @@ export class OrdersService {
       if (useAIEnhancement && titleEn && descriptionEn) {
         const updatedUser = await tx.user.update({
           where: { id: clientId },
-          data: { creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST } },
+          data: {
+            creditBalance: { decrement: this.AI_ENHANCEMENT_CREDIT_COST },
+          },
           select: { creditBalance: true },
         });
 
@@ -1158,7 +1228,19 @@ export class OrdersService {
           location,
           skills: skills || [],
           status: "open",
-        },
+          ...(questions && questions.length > 0
+            ? {
+                questions: {
+                  create: questions
+                    .filter((q) => q && q.trim().length > 0)
+                    .map((question, index) => ({
+                      question: question.trim(),
+                      order: index,
+                    })),
+                },
+              }
+            : {}),
+        } as any,
         include: {
           Client: {
             select: {
@@ -1174,13 +1256,16 @@ export class OrdersService {
               name: true,
             },
           },
+          questions: {
+            orderBy: { order: "asc" },
+          },
           _count: {
             select: {
               Proposals: true,
               Reviews: true,
             },
           },
-        },
+        } as any,
       });
 
       // Create media file records if any
@@ -1310,12 +1395,16 @@ export class OrdersService {
             .createNotificationWithPush(
               us.userId,
               "new_order",
-              "New Order Available!",
-              `A new order "${orderTitle}" has been posted in ${serviceName}. Check it out!`,
+              "notificationNewOrderTitle",
+              "notificationNewOrderMessage",
               {
                 type: "order",
                 orderId: orderId.toString(),
                 serviceId: serviceId.toString(),
+                serviceName: serviceName,
+              },
+              {
+                orderTitle: orderTitle,
                 serviceName: serviceName,
               }
             )

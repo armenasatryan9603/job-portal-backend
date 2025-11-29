@@ -893,5 +893,22 @@
   "aiServiceNotConfigured": "Служба ИИ не настроена. Пожалуйста, установите переменную окружения OPENAI_API_KEY.",
   "titleRequiredForAI": "Заголовок обязателен для улучшения с помощью ИИ",
   "descriptionRequiredForAI": "Описание обязательно для улучшения с помощью ИИ",
-  "failedToEnhanceOrderText": "Не удалось улучшить текст заказа: {error}"
+  "failedToEnhanceOrderText": "Не удалось улучшить текст заказа: {error}",
+  "pleaseAnswerQuestions": "Пожалуйста, ответьте на следующие вопросы",
+  "pleaseAnswerQuestion": "Пожалуйста, ответьте на этот вопрос",
+  "enterYourAnswer": "Введите ваш ответ...",
+  "notificationNewOrderTitle": "Доступен новый заказ!",
+  "notificationNewOrderMessage": "Новый заказ \"{orderTitle}\" размещен в {serviceName}. Проверьте!",
+  "notificationChatMessageTitle": "Новое сообщение от {senderName}",
+  "notificationProposalAcceptedTitle": "Поздравляем! Вас выбрали!",
+  "notificationProposalAcceptedMessage": "Вас выбрали для работы: \"{orderTitle}\". Клиент скоро свяжется с вами.",
+  "notificationProposalRejectedTitle": "Обновление заявки",
+  "notificationProposalRejectedMessage": "К сожалению, ваша заявка на \"{orderTitle}\" не была выбрана. Ваши кредиты возвращены.",
+  "notificationProposalRejectedWithRefundMessage": "К сожалению, вас не выбрали для этой работы. Мы вернули {refundAmount} кредитов на ваш счет.",
+  "notificationHiringApprovedTitle": "Поздравляем! Вас наняли!",
+  "notificationHiringApprovedMessage": "Вас выбрали для работы: \"{orderTitle}\". Клиент скоро свяжется с вами.",
+  "notificationReferralRewardTitle": "Награда за реферала заработана!",
+  "notificationReferralRewardMessage": "Вы заработали {rewardAmount} кредитов за приглашение нового пользователя!",
+  "notificationReferralBonusTitle": "Приветственный бонус!",
+  "notificationReferralBonusMessage": "Вы получили {bonusAmount} кредитов в качестве приветственного бонуса за использование реферального кода!"
 }

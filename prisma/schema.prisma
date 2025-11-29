@@ -29,8 +29,10 @@ model User {
   referralCode             String?                   @unique
   referralCredits          Float                     @default(0)
   referredBy               Int?
+  preferences              Json?
   Cards                    Card[]
   ConversationParticipants ConversationParticipant[]
+  CreditTransactions       CreditTransaction[]
   MediaFiles               MediaFile[]               @relation("MediaUploader")
   SentMessages             Message[]                 @relation("MessageSender")
   Notifications            Notification[]
@@ -43,7 +45,6 @@ model User {
   referrer                 User?                     @relation("UserReferrals", fields: [referredBy], references: [id])
   referrals                User[]                    @relation("UserReferrals")
   UserServices             UserService[]
-  CreditTransactions       CreditTransaction[]
 }
 
 model Service {
@@ -56,7 +57,6 @@ model Service {
   descriptionEn       String?
   descriptionRu       String?
   descriptionHy       String?
-  imageUrl            String?
   parentId            Int?
   averagePrice        Float?
   minPrice            Float?
@@ -65,12 +65,13 @@ model Service {
   isActive            Boolean             @default(true)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
+  imageUrl            String?
   Orders              Order[]
   Parent              Service?            @relation("ServiceChildren", fields: [parentId], references: [id])
   Children            Service[]           @relation("ServiceChildren")
-  UserServices        UserService[]
   ServiceFeatures     ServiceFeature[]
   ServiceTechnologies ServiceTechnology[]
+  UserServices        UserService[]
 
   @@index([parentId])
   @@index([isActive])
@@ -117,8 +118,8 @@ model ServiceFeature {
   serviceId Int
   featureId Int
   createdAt DateTime @default(now())
-  Service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   Feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  Service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@unique([serviceId, featureId])
   @@index([serviceId])
@@ -157,27 +158,28 @@ model Order {
   id             Int             @id @default(autoincrement())
   clientId       Int
   serviceId      Int?
-  title          String?         // Keep for backward compatibility
-  description    String?         // Keep for backward compatibility
-  titleEn        String?
-  titleRu        String?
-  titleHy        String?
-  descriptionEn String?
-  descriptionRu String?
-  descriptionHy String?
+  title          String?
+  description    String?
   budget         Float?
   availableDates String[]        @default([])
   location       String?
   skills         String[]        @default([])
   status         String          @default("open")
-  bannerImageId  Int? // ID of the MediaFile to use as banner
   createdAt      DateTime        @default(now())
+  bannerImageId  Int?
+  titleEn        String?
+  titleRu        String?
+  titleHy        String?
+  descriptionEn  String?
+  descriptionRu  String?
+  descriptionHy  String?
   Conversations  Conversation[]
   MediaFiles     MediaFile[]
   BannerImage    MediaFile?      @relation("BannerImage", fields: [bannerImageId], references: [id])
   Client         User            @relation("ClientOrders", fields: [clientId], references: [id])
   Service        Service?        @relation(fields: [serviceId], references: [id])
   Proposals      OrderProposal[]
+  questions      OrderQuestion[]
   Reviews        Review[]
 }
 
@@ -191,6 +193,17 @@ model OrderProposal {
   createdAt DateTime @default(now())
   Order     Order    @relation(fields: [orderId], references: [id])
   User      User     @relation(fields: [userId], references: [id])
+}
+
+model OrderQuestion {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  question  String
+  order     Int      @default(0) // Order of the question (for sorting)
+  createdAt DateTime @default(now())
+  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
 }
 
 model Review {
@@ -222,8 +235,8 @@ model MediaFile {
   uploadedBy Int
   createdAt  DateTime @default(now())
   Order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  BannerFor  Order[]  @relation("BannerImage")
   User       User     @relation("MediaUploader", fields: [uploadedBy], references: [id])
+  BannerFor  Order[]  @relation("BannerImage")
 }
 
 model Card {
@@ -312,8 +325,8 @@ model Message {
   metadata       Json?
   isEdited       Boolean      @default(false)
   editedAt       DateTime?
-  status         String       @default("active")
   createdAt      DateTime     @default(now())
+  status         String       @default("active")
   Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   Sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 

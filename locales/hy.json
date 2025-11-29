@@ -894,5 +894,22 @@
   "retryAI": "Կրկին փորձել AI",
   "aiEnhancementNotAvailable": "AI-ով բարելավումը հասանելի չէ: Խնդրում ենք կապ հաստատել աջակցության հետ:",
   "insufficientCreditBalance": "Անբավարար կրեդիտային մնացորդ: Պահանջվում է: {cost} կրեդիտ, Հասանելի է: {balance} կրեդիտ",
-  "titleAndDescriptionRequiredForAI": "Վերնագիրը և նկարագրությունը պարտադիր են AI-ով բարելավման համար"
+  "titleAndDescriptionRequiredForAI": "Վերնագիրը և նկարագրությունը պարտադիր են AI-ով բարելավման համար",
+  "pleaseAnswerQuestions": "Խնդրում ենք պատասխանել հետևյալ հարցերին",
+  "pleaseAnswerQuestion": "Խնդրում ենք պատասխանել այս հարցին",
+  "enterYourAnswer": "Մուտքագրեք ձեր պատասխանը...",
+  "notificationNewOrderTitle": "Նոր պատվեր հասանելի է!",
+  "notificationNewOrderMessage": "Նոր պատվեր \"{orderTitle}\" տեղադրվել է {serviceName}-ում: Ստուգեք!",
+  "notificationChatMessageTitle": "Նոր հաղորդագրություն {senderName}-ից",
+  "notificationProposalAcceptedTitle": "Շնորհավորում ենք! Դուք ընտրվել եք!",
+  "notificationProposalAcceptedMessage": "Դուք ընտրվել եք աշխատանքի համար: \"{orderTitle}\". Հաճախորդը շուտով կկապվի ձեզ հետ:",
+  "notificationProposalRejectedTitle": "Դիմումի թարմացում",
+  "notificationProposalRejectedMessage": "Ցավոք, ձեր դիմումը \"{orderTitle}\"-ի համար չի ընտրվել: Ձեր կրեդիտները վերադարձվել են:",
+  "notificationProposalRejectedWithRefundMessage": "Ցավոք, դուք չեք ընտրվել այս աշխատանքի համար: Մենք վերադարձրել ենք {refundAmount} կրեդիտ ձեր հաշվին:",
+  "notificationHiringApprovedTitle": "Շնորհավորում ենք! Դուք վարձվել եք!",
+  "notificationHiringApprovedMessage": "Դուք ընտրվել եք աշխատանքի համար: \"{orderTitle}\". Հաճախորդը շուտով կկապվի ձեզ հետ:",
+  "notificationReferralRewardTitle": "Ռեֆերալային պարգև վաստակվեց!",
+  "notificationReferralRewardMessage": "Դուք վաստակել եք {rewardAmount} կրեդիտ նոր օգտատիրոջ հրավիրելու համար!",
+  "notificationReferralBonusTitle": "Բարի գալուստ բոնուս!",
+  "notificationReferralBonusMessage": "Դուք ստացել եք {bonusAmount} կրեդիտ որպես բարի գալուստ բոնուս ռեֆերալային կոդ օգտագործելու համար!"
 }

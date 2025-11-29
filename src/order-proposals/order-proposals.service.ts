@@ -100,6 +100,7 @@ export class OrderProposalsService {
     userId: number;
     price?: number;
     message?: string;
+    questionAnswers?: Array<{ questionId: number; answer: string }>;
   }) {
     console.log("Starting createWithCreditDeduction:", {
       orderId: createOrderProposalDto.orderId,
@@ -121,10 +122,15 @@ export class OrderProposalsService {
             async (tx) => {
               console.log("Transaction started");
 
-              // Check if order exists
+              // Check if order exists and get questions
               console.log("Checking if order exists...");
               const order = await tx.order.findUnique({
                 where: { id: createOrderProposalDto.orderId },
+                include: {
+                  questions: {
+                    orderBy: { order: "asc" },
+                  },
+                },
               });
 
               if (!order) {
@@ -133,6 +139,49 @@ export class OrderProposalsService {
                 );
               }
               console.log("Order found:", order.id, order.title);
+
+              // Validate question answers if order has questions
+              if (order.questions && order.questions.length > 0) {
+                if (
+                  !createOrderProposalDto.questionAnswers ||
+                  createOrderProposalDto.questionAnswers.length === 0
+                ) {
+                  throw new BadRequestException(
+                    "This order requires answers to all questions"
+                  );
+                }
+
+                // Check that all questions are answered
+                const answeredQuestionIds = new Set(
+                  createOrderProposalDto.questionAnswers.map(
+                    (qa) => qa.questionId
+                  )
+                );
+                const requiredQuestionIds = new Set(
+                  order.questions.map((q) => q.id)
+                );
+
+                // Check if all required questions are answered
+                for (const question of order.questions) {
+                  if (!answeredQuestionIds.has(question.id)) {
+                    throw new BadRequestException(
+                      `Missing answer for question: ${question.question}`
+                    );
+                  }
+                }
+
+                // Check if all answers are non-empty
+                for (const qa of createOrderProposalDto.questionAnswers) {
+                  if (!qa.answer || !qa.answer.trim()) {
+                    const question = order.questions.find(
+                      (q) => q.id === qa.questionId
+                    );
+                    throw new BadRequestException(
+                      `Answer cannot be empty for question: ${question?.question || "Unknown"}`
+                    );
+                  }
+                }
+              }
 
               // Get dynamic pricing based on order budget
               console.log("Calculating credit cost...");
@@ -215,13 +264,46 @@ export class OrderProposalsService {
                 tx,
               });
 
+              // Format message with questions and answers
+              let formattedMessage = createOrderProposalDto.message || "";
+
+              if (
+                order.questions &&
+                order.questions.length > 0 &&
+                createOrderProposalDto.questionAnswers &&
+                createOrderProposalDto.questionAnswers.length > 0
+              ) {
+                // Create a map of questionId to answer for quick lookup
+                const answerMap = new Map(
+                  createOrderProposalDto.questionAnswers.map((qa) => [
+                    qa.questionId,
+                    qa.answer.trim(),
+                  ])
+                );
+
+                // Format questions and answers into the message
+                const qaSection = order.questions
+                  .map((question) => {
+                    const answer = answerMap.get(question.id);
+                    return `Q: ${question.question}\nA: ${answer || ""}`;
+                  })
+                  .join("\n\n");
+
+                // Append Q&A section to the message
+                if (formattedMessage.trim()) {
+                  formattedMessage = `${formattedMessage}\n\n---\n\n${qaSection}`;
+                } else {
+                  formattedMessage = qaSection;
+                }
+              }
+
               // Create the proposal
               console.log("Creating proposal...");
               const proposal = await tx.orderProposal.create({
                 data: {
                   orderId: createOrderProposalDto.orderId,
                   userId: createOrderProposalDto.userId,
-                  message: createOrderProposalDto.message,
+                  message: formattedMessage,
                   price: createOrderProposalDto.price,
                 },
                 include: {

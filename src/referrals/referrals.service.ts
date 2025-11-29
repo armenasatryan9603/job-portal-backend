@@ -145,12 +145,15 @@ export class ReferralsService {
         await this.notificationsService.createNotificationWithPush(
           referrer.id,
           "referral_reward",
-          "Referral Reward Earned!",
-          `You earned ${referrerReward} credits for referring a new user!`,
+          "notificationReferralRewardTitle",
+          "notificationReferralRewardMessage",
           {
             referredUserId: newUserId,
             rewardAmount: referrerReward,
             referralCode: referralCode,
+          },
+          {
+            rewardAmount: referrerReward,
           }
         );
 
@@ -158,12 +161,15 @@ export class ReferralsService {
         await this.notificationsService.createNotificationWithPush(
           newUserId,
           "referral_bonus",
-          "Welcome Bonus!",
-          `You received ${referredBonus} credits as a welcome bonus for using a referral code!`,
+          "notificationReferralBonusTitle",
+          "notificationReferralBonusMessage",
           {
             referrerId: referrer.id,
             bonusAmount: referredBonus,
             referralCode: referralCode,
+          },
+          {
+            bonusAmount: referredBonus,
           }
         );
       } catch (error) {
