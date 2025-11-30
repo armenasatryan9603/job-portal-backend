@@ -246,6 +246,56 @@ export class OrdersController {
     return this.ordersService.getOrderChangeHistory(orderId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post(":id/save")
+  async saveOrder(@Request() req, @Param("id") id: string) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.saveOrder(req.user.userId, orderId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(":id/save")
+  async unsaveOrder(@Request() req, @Param("id") id: string) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.unsaveOrder(req.user.userId, orderId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("saved/all")
+  async getSavedOrders(
+    @Request() req,
+    @Query("page") page?: string,
+    @Query("limit") limit?: string
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.ordersService.getSavedOrders(
+      req.user.userId,
+      pageNum,
+      limitNum
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(":id/is-saved")
+  async isOrderSaved(@Request() req, @Param("id") id: string) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    const isSaved = await this.ordersService.isOrderSaved(
+      req.user.userId,
+      orderId
+    );
+    return { isSaved };
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const orderId = parseInt(id, 10);

@@ -46,6 +46,7 @@ model User {
   referrals                User[]                    @relation("UserReferrals")
   UserServices             UserService[]
   OrderChangeHistory       OrderChangeHistory[]      @relation("OrderChangedBy")
+  SavedOrders              SavedOrder[]              @relation("SavedOrders")
 }
 
 model Service {
@@ -156,17 +157,17 @@ model UserService {
 }
 
 model Order {
-  id             Int                 @id @default(autoincrement())
+  id             Int                  @id @default(autoincrement())
   clientId       Int
   serviceId      Int?
   title          String?
   description    String?
   budget         Float?
-  availableDates String[]            @default([])
+  availableDates String[]             @default([])
   location       String?
-  skills         String[]            @default([])
-  status         String              @default("open")
-  createdAt      DateTime            @default(now())
+  skills         String[]             @default([])
+  status         String               @default("open")
+  createdAt      DateTime             @default(now())
   bannerImageId  Int?
   titleEn        String?
   titleRu        String?
@@ -176,13 +177,14 @@ model Order {
   descriptionHy  String?
   Conversations  Conversation[]
   MediaFiles     MediaFile[]
-  BannerImage    MediaFile?          @relation("BannerImage", fields: [bannerImageId], references: [id])
-  Client         User                @relation("ClientOrders", fields: [clientId], references: [id])
-  Service        Service?            @relation(fields: [serviceId], references: [id])
+  BannerImage    MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
+  Client         User                 @relation("ClientOrders", fields: [clientId], references: [id])
+  Service        Service?             @relation(fields: [serviceId], references: [id])
   Proposals      OrderProposal[]
   questions      OrderQuestion[]
   Reviews        Review[]
   ChangeHistory  OrderChangeHistory[]
+  SavedBy        SavedOrder[]
 }
 
 model OrderProposal {
@@ -420,18 +422,32 @@ model CreditTransaction {
 }
 
 model OrderChangeHistory {
-  id        Int      @id @default(autoincrement())
-  orderId  Int
+  id           Int      @id @default(autoincrement())
+  orderId      Int
   fieldChanged String // 'status', 'title', 'budget', etc.
-  oldValue  String?
-  newValue  String?
-  changedBy Int
-  reason    String?
-  createdAt DateTime @default(now())
-  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  ChangedBy User     @relation("OrderChangedBy", fields: [changedBy], references: [id])
+  oldValue     String?
+  newValue     String?
+  changedBy    Int
+  reason       String?
+  createdAt    DateTime @default(now())
+  Order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ChangedBy    User     @relation("OrderChangedBy", fields: [changedBy], references: [id])
 
   @@index([orderId])
   @@index([createdAt])
   @@index([fieldChanged])
+}
+
+model SavedOrder {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  orderId   Int
+  createdAt DateTime @default(now())
+  User      User     @relation("SavedOrders", fields: [userId], references: [id], onDelete: Cascade)
+  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orderId])
+  @@index([userId])
+  @@index([orderId])
+  @@index([createdAt])
 }

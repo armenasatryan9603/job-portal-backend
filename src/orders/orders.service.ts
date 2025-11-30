@@ -1560,6 +1560,171 @@ export class OrdersService {
   }
 
   /**
+   * Save an order for later (bookmark)
+   */
+  async saveOrder(userId: number, orderId: number) {
+    // Check if order exists
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Check if already saved
+    const existing = await this.prisma.savedOrder.findUnique({
+      where: {
+        userId_orderId: {
+          userId,
+          orderId,
+        },
+      },
+    });
+
+    if (existing) {
+      return existing; // Already saved
+    }
+
+    // Create saved order
+    return this.prisma.savedOrder.create({
+      data: {
+        userId,
+        orderId,
+      },
+    });
+  }
+
+  /**
+   * Unsave an order (remove bookmark)
+   */
+  async unsaveOrder(userId: number, orderId: number) {
+    const savedOrder = await this.prisma.savedOrder.findUnique({
+      where: {
+        userId_orderId: {
+          userId,
+          orderId,
+        },
+      },
+    });
+
+    if (!savedOrder) {
+      throw new NotFoundException("Order is not saved");
+    }
+
+    await this.prisma.savedOrder.delete({
+      where: {
+        id: savedOrder.id,
+      },
+    });
+
+    return { success: true, message: "Order unsaved successfully" };
+  }
+
+  /**
+   * Get all saved orders for a user
+   */
+  async getSavedOrders(userId: number, page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+
+    const [savedOrders, total] = await Promise.all([
+      this.prisma.savedOrder.findMany({
+        where: { userId },
+        include: {
+          Order: {
+            include: {
+              Client: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  avatarUrl: true,
+                  verified: true,
+                },
+              },
+              Service: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameEn: true,
+                  nameRu: true,
+                  nameHy: true,
+                },
+              },
+              MediaFiles: {
+                select: {
+                  id: true,
+                  fileUrl: true,
+                  fileType: true,
+                },
+                take: 1,
+              },
+              BannerImage: {
+                select: {
+                  id: true,
+                  fileUrl: true,
+                },
+              },
+              Proposals: {
+                select: {
+                  id: true,
+                },
+              },
+              _count: {
+                select: {
+                  Proposals: true,
+                  Reviews: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+      this.prisma.savedOrder.count({
+        where: { userId },
+      }),
+    ]);
+
+    // Filter out any null orders (in case an order was deleted but savedOrder record still exists)
+    const orders = savedOrders
+      .map((so) => so.Order)
+      .filter((order) => order != null);
+
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Check if an order is saved by a user
+   */
+  async isOrderSaved(userId: number, orderId: number): Promise<boolean> {
+    const savedOrder = await this.prisma.savedOrder.findUnique({
+      where: {
+        userId_orderId: {
+          userId,
+          orderId,
+        },
+      },
+    });
+
+    return !!savedOrder;
+  }
+
+  /**
    * Validate media files before creating the order
    * Note: We don't check file accessibility via HTTP since files are stored in Vercel Blob
    * The files were just uploaded, so we trust they exist
