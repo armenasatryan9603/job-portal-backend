@@ -236,6 +236,16 @@ export class OrdersController {
     return this.ordersService.getOrdersBySpecialist(req.user.userId, 1, 50);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(":id/change-history")
+  async getChangeHistory(@Param("id") id: string) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.getOrderChangeHistory(orderId);
+  }
+
   @Get(":id")
   async findOne(@Param("id") id: string) {
     const orderId = parseInt(id, 10);

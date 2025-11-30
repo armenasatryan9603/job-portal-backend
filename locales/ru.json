@@ -919,5 +919,10 @@
   "notificationReferralRewardTitle": "Награда за реферала заработана!",
   "notificationReferralRewardMessage": "Вы заработали {rewardAmount} кредитов за приглашение нового пользователя!",
   "notificationReferralBonusTitle": "Приветственный бонус!",
-  "notificationReferralBonusMessage": "Вы получили {bonusAmount} кредитов в качестве приветственного бонуса за использование реферального кода!"
+  "notificationReferralBonusMessage": "Вы получили {bonusAmount} кредитов в качестве приветственного бонуса за использование реферального кода!",
+  "orderChangeHistory": "История изменений заказа",
+  "changedBy": "Изменено",
+  "from": "С",
+  "to": "На",
+  "title": "Название"
 }

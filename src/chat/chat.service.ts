@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
@@ -16,6 +16,8 @@ export interface GetMessagesDto {
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
@@ -24,6 +26,39 @@ export class ChatService {
     private pusherService: PusherService,
     private creditTransactionsService: CreditTransactionsService
   ) {}
+
+  /**
+   * Helper method to log order changes
+   */
+  private async logOrderChange(
+    orderId: number,
+    fieldChanged: string,
+    oldValue: string | null,
+    newValue: string | null,
+    changedBy: number,
+    reason?: string,
+    tx?: any
+  ) {
+    try {
+      const prismaClient = tx || this.prisma;
+      await prismaClient.orderChangeHistory.create({
+        data: {
+          orderId,
+          fieldChanged,
+          oldValue: oldValue || null,
+          newValue: newValue || null,
+          changedBy,
+          reason: reason || null,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to log order change for order ${orderId}:`,
+        error
+      );
+      // Don't throw error - change logging is non-critical
+    }
+  }
 
   /**
    * Create a new conversation
@@ -1775,6 +1810,19 @@ export class ChatService {
           where: { id: orderId },
           data: { status: "completed" },
         });
+
+        // Log status change if status actually changed
+        if (order.status !== "completed") {
+          await this.logOrderChange(
+            orderId,
+            "status",
+            order.status,
+            "completed",
+            clientId,
+            "Order completed",
+            tx
+          );
+        }
 
         // Get all conversations related to this order before updating
         const conversations = await tx.conversation.findMany({

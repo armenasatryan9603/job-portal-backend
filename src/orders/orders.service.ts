@@ -25,6 +25,39 @@ export class OrdersService {
     private creditTransactionsService: CreditTransactionsService
   ) {}
 
+  /**
+   * Helper method to log order changes
+   */
+  private async logOrderChange(
+    orderId: number,
+    fieldChanged: string,
+    oldValue: string | null,
+    newValue: string | null,
+    changedBy: number,
+    reason?: string,
+    tx?: any
+  ) {
+    try {
+      const prismaClient = tx || this.prisma;
+      await prismaClient.orderChangeHistory.create({
+        data: {
+          orderId,
+          fieldChanged,
+          oldValue: oldValue || null,
+          newValue: newValue || null,
+          changedBy,
+          reason: reason || null,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to log order change for order ${orderId}:`,
+        error
+      );
+      // Don't throw error - change logging is non-critical
+    }
+  }
+
   async createOrder(
     clientId: number,
     serviceId: number | undefined,
@@ -202,6 +235,16 @@ export class OrdersService {
         },
       } as any,
     });
+
+    // Log initial "open" status
+    await this.logOrderChange(
+      order.id,
+      "status",
+      null,
+      "open",
+      clientId,
+      "Order created"
+    );
 
     // Send notifications to users who have notifications enabled for this service
     if (serviceId) {
@@ -712,6 +755,46 @@ export class OrdersService {
       }
     }
 
+    // Log changes before updating
+    if (
+      updateOrderDto.title !== undefined &&
+      updateOrderDto.title !== existingOrder.title
+    ) {
+      await this.logOrderChange(
+        Number(id),
+        "title",
+        existingOrder.title || null,
+        updateOrderDto.title || null,
+        userId
+      );
+    }
+
+    if (
+      updateOrderDto.budget !== undefined &&
+      updateOrderDto.budget !== existingOrder.budget
+    ) {
+      await this.logOrderChange(
+        Number(id),
+        "budget",
+        existingOrder.budget?.toString() || null,
+        updateOrderDto.budget?.toString() || null,
+        userId
+      );
+    }
+
+    if (
+      updateOrderDto.status !== undefined &&
+      updateOrderDto.status !== existingOrder.status
+    ) {
+      await this.logOrderChange(
+        Number(id),
+        "status",
+        existingOrder.status || null,
+        updateOrderDto.status || null,
+        userId
+      );
+    }
+
     return this.prisma.order.update({
       where: { id: Number(id) },
       data: updateData,
@@ -1013,6 +1096,17 @@ export class OrdersService {
       );
     }
 
+    // Only log if status actually changed
+    if (order.status !== status) {
+      await this.logOrderChange(
+        orderId,
+        "status",
+        order.status,
+        status,
+        userId
+      );
+    }
+
     return this.prisma.order.update({
       where: { id: Number(orderId) },
       data: { status },
@@ -1033,6 +1127,30 @@ export class OrdersService {
         },
       },
     });
+  }
+
+  /**
+   * Get order change history
+   */
+  async getOrderChangeHistory(orderId: number) {
+    const history = await this.prisma.orderChangeHistory.findMany({
+      where: { orderId },
+      include: {
+        ChangedBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return history;
   }
 
   async getAvailableOrders(
@@ -1308,6 +1426,17 @@ export class OrdersService {
           }
         }
       }
+
+      // Log initial "open" status within transaction
+      await this.logOrderChange(
+        order.id,
+        "status",
+        null,
+        "open",
+        clientId,
+        "Order created",
+        tx
+      );
 
       const result = {
         ...order,

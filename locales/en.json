@@ -919,5 +919,10 @@
   "notificationReferralRewardTitle": "Referral Reward Earned!",
   "notificationReferralRewardMessage": "You earned {rewardAmount} credits for referring a new user!",
   "notificationReferralBonusTitle": "Welcome Bonus!",
-  "notificationReferralBonusMessage": "You received {bonusAmount} credits as a welcome bonus for using a referral code!"
+  "notificationReferralBonusMessage": "You received {bonusAmount} credits as a welcome bonus for using a referral code!",
+  "orderChangeHistory": "Order Change History",
+  "changedBy": "Changed by",
+  "from": "From",
+  "to": "To",
+  "title": "Title"
 }

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
@@ -9,11 +10,44 @@ import { CreditTransactionsService } from "../credit/credit-transactions.service
 
 @Injectable()
 export class OrderProposalsService {
+  private readonly logger = new Logger(OrderProposalsService.name);
+
   constructor(
     private prisma: PrismaService,
     private orderPricingService: OrderPricingService,
     private creditTransactionsService: CreditTransactionsService
   ) {}
+
+  /**
+   * Helper method to log order changes
+   */
+  private async logOrderChange(
+    orderId: number,
+    fieldChanged: string,
+    oldValue: string | null,
+    newValue: string | null,
+    changedBy: number,
+    reason?: string
+  ) {
+    try {
+      await this.prisma.orderChangeHistory.create({
+        data: {
+          orderId,
+          fieldChanged,
+          oldValue: oldValue || null,
+          newValue: newValue || null,
+          changedBy,
+          reason: reason || null,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to log order change for order ${orderId}:`,
+        error
+      );
+      // Don't throw error - change logging is non-critical
+    }
+  }
 
   async create(createOrderProposalDto: {
     orderId: number;
@@ -557,19 +591,53 @@ export class OrderProposalsService {
         data: { status: "rejected" },
       });
 
+      // Get the order to check current status
+      const order = await this.prisma.order.findUnique({
+        where: { id: existingProposal.orderId },
+      });
+
       // Update the order status to in_progress
       await this.prisma.order.update({
         where: { id: existingProposal.orderId },
         data: { status: "in_progress" },
       });
+
+      // Log status change if status actually changed
+      if (order && order.status !== "in_progress") {
+        await this.logOrderChange(
+          existingProposal.orderId,
+          "status",
+          order.status,
+          "in_progress",
+          existingProposal.userId,
+          "Proposal accepted"
+        );
+      }
     }
 
     // If canceling a proposal, close the order to allow feedback
     if (updateOrderProposalDto.status === "specialist-canceled") {
+      // Get the order to check current status
+      const order = await this.prisma.order.findUnique({
+        where: { id: existingProposal.orderId },
+      });
+
       await this.prisma.order.update({
         where: { id: existingProposal.orderId },
         data: { status: "closed" },
       });
+
+      // Log status change if status actually changed
+      if (order && order.status !== "closed") {
+        await this.logOrderChange(
+          existingProposal.orderId,
+          "status",
+          order.status,
+          "closed",
+          existingProposal.userId,
+          "Proposal canceled by specialist"
+        );
+      }
     }
 
     return this.prisma.orderProposal.update({

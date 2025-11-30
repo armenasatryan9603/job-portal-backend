@@ -920,5 +920,10 @@
   "notificationReferralRewardTitle": "Ռեֆերալային պարգև վաստակվեց!",
   "notificationReferralRewardMessage": "Դուք վաստակել եք {rewardAmount} կրեդիտ նոր օգտատիրոջ հրավիրելու համար!",
   "notificationReferralBonusTitle": "Բարի գալուստ բոնուս!",
-  "notificationReferralBonusMessage": "Դուք ստացել եք {bonusAmount} կրեդիտ որպես բարի գալուստ բոնուս ռեֆերալային կոդ օգտագործելու համար!"
+  "notificationReferralBonusMessage": "Դուք ստացել եք {bonusAmount} կրեդիտ որպես բարի գալուստ բոնուս ռեֆերալային կոդ օգտագործելու համար!",
+  "orderChangeHistory": "Պատվերի փոփոխությունների պատմություն",
+  "changedBy": "Փոխել է",
+  "from": "Սկսած",
+  "to": "Դեպի",
+  "title": "Վերնագիր"
 }
