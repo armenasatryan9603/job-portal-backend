@@ -231,6 +231,52 @@ export class AuthService {
     };
   }
 
+  async updatePreferences(
+    userId: number,
+    preferences: {
+      language?: "en" | "ru" | "hy";
+      theme?: "light" | "dark" | "auto";
+      pushNotificationsEnabled?: boolean;
+      emailNotificationsEnabled?: boolean;
+      timezone?: string;
+      dateFormat?: string;
+    }
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
+
+    // Get existing preferences and merge with new ones
+    const existingPreferences = (user.preferences as any) || {};
+    const updatedPreferences = {
+      ...existingPreferences,
+      ...preferences,
+    };
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        preferences: updatedPreferences,
+      },
+    });
+
+    return {
+      preferences: updatedUser.preferences,
+    };
+  }
+
+  async getPreferences(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException("User not found");
+    }
+
+    return {
+      preferences: user.preferences || {},
+    };
+  }
+
   async updateRole(userId: number, role: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {

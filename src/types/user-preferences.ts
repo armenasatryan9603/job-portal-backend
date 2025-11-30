@@ -6,6 +6,8 @@ export interface UserPreferences {
   theme?: "light" | "dark" | "auto";
   timezone?: string;
   dateFormat?: string;
+  pushNotificationsEnabled?: boolean;
+  emailNotificationsEnabled?: boolean;
   // Add more preferences as needed in the future
 }
 
@@ -15,5 +17,6 @@ export interface UserPreferences {
 export const DEFAULT_PREFERENCES: UserPreferences = {
   language: "en",
   theme: "auto",
+  pushNotificationsEnabled: true,
+  emailNotificationsEnabled: true,
 };
-
