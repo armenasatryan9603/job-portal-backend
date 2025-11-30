@@ -47,6 +47,7 @@ model User {
   UserServices             UserService[]
   OrderChangeHistory       OrderChangeHistory[]      @relation("OrderChangedBy")
   SavedOrders              SavedOrder[]              @relation("SavedOrders")
+  Portfolio                Portfolio[]               @relation("Portfolio")
 }
 
 model Service {
@@ -241,6 +242,24 @@ model MediaFile {
   Order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   User       User     @relation("MediaUploader", fields: [uploadedBy], references: [id])
   BannerFor  Order[]  @relation("BannerImage")
+}
+
+model Portfolio {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  fileName   String
+  fileUrl    String
+  fileType   String
+  mimeType   String
+  fileSize   Int
+  title      String?
+  description String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  User       User     @relation("Portfolio", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Card {
