@@ -176,6 +176,7 @@ model Order {
   descriptionEn  String?
   descriptionRu  String?
   descriptionHy  String?
+  rejectionReason String?
   Conversations  Conversation[]
   MediaFiles     MediaFile[]
   BannerImage    MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
@@ -186,6 +187,8 @@ model Order {
   Reviews        Review[]
   ChangeHistory  OrderChangeHistory[]
   SavedBy        SavedOrder[]
+
+  @@index([status])
 }
 
 model OrderProposal {

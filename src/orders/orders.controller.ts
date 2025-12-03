@@ -14,6 +14,7 @@ import {
 import { OrdersService } from "./orders.service";
 import { AIService } from "../ai/ai.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { AdminGuard } from "../auth/admin.guard";
 
 @Controller("orders")
 export class OrdersController {
@@ -104,7 +105,8 @@ export class OrdersController {
     @Query("status") status?: string,
     @Query("serviceId") serviceId?: string,
     @Query("serviceIds") serviceIds?: string,
-    @Query("clientId") clientId?: string
+    @Query("clientId") clientId?: string,
+    @Request() req?: any
   ) {
     // Parse serviceIds from comma-separated string or single serviceId
     let parsedServiceIds: number[] | undefined;
@@ -115,6 +117,9 @@ export class OrdersController {
         .filter((id) => !isNaN(id));
     }
 
+    // Check if user is admin (optional, for admin access to all orders)
+    const isAdmin = req?.user?.role === "admin";
+
     return this.ordersService.findAll(
       parseInt(page),
       parseInt(limit),
@@ -123,7 +128,8 @@ export class OrdersController {
       parsedServiceIds && parsedServiceIds.length > 0
         ? parsedServiceIds
         : undefined,
-      clientId ? parseInt(clientId) : undefined
+      clientId ? parseInt(clientId) : undefined,
+      isAdmin
     );
   }
 
@@ -161,7 +167,9 @@ export class OrdersController {
       query,
       parseInt(page),
       parseInt(limit),
-      parsedServiceIds && parsedServiceIds.length > 0 ? parsedServiceIds : undefined
+      parsedServiceIds && parsedServiceIds.length > 0
+        ? parsedServiceIds
+        : undefined
     );
   }
 
@@ -331,10 +339,10 @@ export class OrdersController {
     if (isNaN(orderId)) {
       throw new Error(`Invalid order ID: ${id}`);
     }
-    
+
     // Extract useAIEnhancement and exclude it from updateOrderDto
     const { useAIEnhancement, ...updateOrderDto } = body;
-    
+
     return this.ordersService.update(
       orderId,
       updateOrderDto,
@@ -439,5 +447,33 @@ export class OrdersController {
         detectedLanguage: enhanced.detectedLanguage,
       },
     };
+  }
+
+  @UseGuards(AdminGuard)
+  @Post(":id/approve")
+  async approveOrder(@Param("id") id: string, @Request() req) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.approveOrder(orderId, req.user.userId);
+  }
+
+  @UseGuards(AdminGuard)
+  @Post(":id/reject")
+  async rejectOrder(
+    @Param("id") id: string,
+    @Body() body: { reason?: string },
+    @Request() req
+  ) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.rejectOrder(
+      orderId,
+      req.user.userId,
+      body.reason
+    );
   }
 }

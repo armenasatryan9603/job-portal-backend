@@ -195,7 +195,7 @@ export class OrdersService {
         availableDates: formattedAvailableDates,
         location,
         skills: formattedSkills,
-        status: "open",
+        status: "pending_review",
         ...(questions && questions.length > 0
           ? {
               questions: {
@@ -236,14 +236,14 @@ export class OrdersService {
       } as any,
     });
 
-    // Log initial "open" status
+    // Log initial "pending_review" status
     await this.logOrderChange(
       order.id,
       "status",
       null,
-      "open",
+      "pending_review",
       clientId,
-      "Order created"
+      "Order created - pending admin review"
     );
 
     // Send notifications to users who have notifications enabled for this service
@@ -264,13 +264,19 @@ export class OrdersService {
     status?: string,
     serviceId?: number,
     serviceIds?: number[],
-    clientId?: number
+    clientId?: number,
+    isAdmin: boolean = false
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
 
     if (status) {
       where.status = status;
+    } else if (!isAdmin && !clientId) {
+      // For public queries (non-admin, not viewing own orders), exclude pending_review and rejected
+      where.status = {
+        notIn: ["pending_review", "rejected"],
+      };
     }
 
     // Support both single serviceId (backward compatibility) and multiple serviceIds
@@ -282,6 +288,10 @@ export class OrdersService {
 
     if (clientId) {
       where.clientId = clientId;
+      // When viewing own orders, show all statuses
+      if (where.status && where.status.notIn) {
+        delete where.status;
+      }
     }
 
     const [orders, total] = await Promise.all([
@@ -989,6 +999,10 @@ export class OrdersService {
           },
         },
       ],
+      // Exclude pending_review and rejected orders from search results
+      status: {
+        notIn: ["pending_review", "rejected"],
+      },
     };
 
     // Add serviceIds filter if provided
@@ -1163,6 +1177,7 @@ export class OrdersService {
   ) {
     const skip = (page - 1) * limit;
     const where: any = {
+      // Show only open orders (exclude pending_review and rejected)
       status: "open",
     };
 
@@ -1773,5 +1788,204 @@ export class OrdersService {
         );
       }
     }
+  }
+
+  /**
+   * Approve a pending order (admin only)
+   */
+  async approveOrder(orderId: number, adminId: number) {
+    // Verify order exists
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            fcmToken: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Check if order is in pending_review status
+    if (order.status !== "pending_review") {
+      throw new BadRequestException(
+        `Order is not pending review. Current status: ${order.status}`
+      );
+    }
+
+    // Update order status to open (approved orders become open)
+    const updatedOrder = await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "open",
+        rejectionReason: null, // Clear any previous rejection reason
+      } as any,
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        Service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        questions: {
+          orderBy: { order: "asc" },
+        },
+        _count: {
+          select: {
+            Proposals: true,
+            Reviews: true,
+          },
+        },
+      } as any,
+    });
+
+    // Log status change
+    await this.logOrderChange(
+      orderId,
+      "status",
+      "pending_review",
+      "open",
+      adminId,
+      "Order approved by admin"
+    );
+
+    // Send notification to order creator (includes push notification)
+    await this.notificationsService.createNotificationWithPush(
+      order.clientId,
+      "order_approved",
+      "Order Approved", // Will be used as-is if not a translation key
+      `Your order "${order.title || "Untitled"}" has been approved and is now open for specialists to apply.`, // Will be used as-is if not a translation key
+      {
+        orderId: order.id,
+        orderTitle: order.title,
+      }
+    );
+
+    // Send notifications to users who have notifications enabled for this service
+    if (order.serviceId) {
+      await this.sendNewOrderNotifications(
+        order.id,
+        order.serviceId,
+        order.title || ""
+      );
+    }
+
+    this.logger.log(
+      `Order ${orderId} approved by admin ${adminId}. Client: ${order.clientId}`
+    );
+
+    return updatedOrder;
+  }
+
+  /**
+   * Reject a pending order (admin only)
+   */
+  async rejectOrder(orderId: number, adminId: number, reason?: string) {
+    // Verify order exists
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            fcmToken: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Check if order is in pending_review status
+    if (order.status !== "pending_review") {
+      throw new BadRequestException(
+        `Order is not pending review. Current status: ${order.status}`
+      );
+    }
+
+    // Update order status to rejected
+    const updatedOrder = await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "rejected",
+        rejectionReason: reason || null,
+      } as any,
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        Service: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        questions: {
+          orderBy: { order: "asc" },
+        },
+        _count: {
+          select: {
+            Proposals: true,
+            Reviews: true,
+          },
+        },
+      } as any,
+    });
+
+    // Log status change
+    await this.logOrderChange(
+      orderId,
+      "status",
+      "pending_review",
+      "rejected",
+      adminId,
+      reason ? `Order rejected: ${reason}` : "Order rejected by admin"
+    );
+
+    // Prepare notification message
+    const notificationMessage = reason
+      ? `Your order "${order.title || "Untitled"}" has been rejected. Reason: ${reason}`
+      : `Your order "${order.title || "Untitled"}" has been rejected. Please review and resubmit.`;
+
+    // Send notification to order creator (includes push notification)
+    await this.notificationsService.createNotificationWithPush(
+      order.clientId,
+      "order_rejected",
+      "Order Rejected", // Will be used as-is if not a translation key
+      notificationMessage, // Will be used as-is if not a translation key
+      {
+        orderId: order.id,
+        orderTitle: order.title,
+        rejectionReason: reason,
+      }
+    );
+
+    this.logger.log(
+      `Order ${orderId} rejected by admin ${adminId}. Client: ${order.clientId}. Reason: ${reason || "No reason provided"}`
+    );
+
+    return updatedOrder;
   }
 }
