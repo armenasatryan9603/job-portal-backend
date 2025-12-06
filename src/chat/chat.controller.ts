@@ -116,15 +116,21 @@ export class ChatController {
 
   /**
    * Create conversation for order
+   * Body can include proposalId to include peers in group applications
    */
   @Post("orders/:orderId/conversation")
   @UseGuards(JwtAuthGuard)
   async createOrderConversation(
     @Request() req,
-    @Param("orderId", ParseIntPipe) orderId: number
+    @Param("orderId", ParseIntPipe) orderId: number,
+    @Body() body?: { proposalId?: number }
   ) {
     const userId = req.user.userId;
-    return this.chatService.createOrderConversation(orderId, userId);
+    return this.chatService.createOrderConversation(
+      orderId,
+      userId,
+      body?.proposalId
+    );
   }
 
   /**
@@ -142,15 +148,22 @@ export class ChatController {
 
   /**
    * Reject application and refund credit
+   * Body can include proposalId and rejectPeerIds for individual peer rejection
    */
   @Post("orders/:orderId/reject")
   @UseGuards(JwtAuthGuard)
   async rejectApplication(
     @Request() req,
-    @Param("orderId", ParseIntPipe) orderId: number
+    @Param("orderId", ParseIntPipe) orderId: number,
+    @Body() body?: { proposalId?: number; rejectPeerIds?: number[] }
   ) {
     const userId = req.user.userId;
-    return this.chatService.rejectApplication(orderId, userId);
+    return this.chatService.rejectApplication(
+      orderId,
+      userId,
+      body?.proposalId,
+      body?.rejectPeerIds
+    );
   }
 
   /**

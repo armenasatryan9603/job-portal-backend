@@ -20,14 +20,16 @@ export class OrderPricingController {
   constructor(private orderPricingService: OrderPricingService) {}
 
   @Get('cost')
-  async getCreditCost(@Body() body: { orderBudget: number }) {
+  async getCreditCost(@Body() body: { orderBudget: number; isTeamApplication?: boolean }) {
     try {
       const cost = await this.orderPricingService.getCreditCost(
         body.orderBudget,
+        body.isTeamApplication || false,
       );
       return {
         orderBudget: body.orderBudget,
         creditCost: cost,
+        isTeamApplication: body.isTeamApplication || false,
       };
     } catch (error) {
       this.logger.error(
@@ -56,7 +58,9 @@ export class OrderPricingController {
       minBudget: number;
       maxBudget?: number;
       creditCost: number;
+      teamCreditCost?: number;
       refundPercentage?: number;
+      teamRefundPercentage?: number;
       description?: string;
     },
   ) {
@@ -77,7 +81,9 @@ export class OrderPricingController {
       minBudget?: number;
       maxBudget?: number;
       creditCost?: number;
+      teamCreditCost?: number;
       refundPercentage?: number;
+      teamRefundPercentage?: number;
       description?: string;
     },
   ) {
@@ -88,7 +94,9 @@ export class OrderPricingController {
         minBudget: data.minBudget || 0,
         maxBudget: data.maxBudget,
         creditCost: data.creditCost || 1.0,
+        teamCreditCost: data.teamCreditCost,
         refundPercentage: data.refundPercentage,
+        teamRefundPercentage: data.teamRefundPercentage,
         description: data.description,
       });
     } catch (error) {

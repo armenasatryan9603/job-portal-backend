@@ -42,6 +42,8 @@ export class OrderProposalsController {
       orderId: number;
       message?: string;
       questionAnswers?: Array<{ questionId: number; answer: string }>;
+      peerIds?: number[];
+      teamId?: number;
     }
   ) {
     try {
@@ -81,6 +83,8 @@ export class OrderProposalsController {
         message: createOrderProposalDto.message,
         userId: userId,
         questionAnswers: createOrderProposalDto.questionAnswers,
+        peerIds: createOrderProposalDto.peerIds,
+        teamId: createOrderProposalDto.teamId,
       });
     } catch (error) {
       console.error("Error in createWithCreditDeduction:", error);

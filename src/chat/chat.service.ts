@@ -77,10 +77,11 @@ export class ChatService {
       title,
     });
 
-    // For order conversations, ensure we only have 2 participants (client and specialist)
-    if (orderId && allParticipants.length !== 2) {
+    // For order conversations, ensure we have at least 2 participants (client and specialist)
+    // Group applications (with peers/team members) can have more than 2 participants
+    if (orderId && allParticipants.length < 2) {
       throw new Error(
-        "Order conversations must have exactly 2 participants: client and specialist"
+        "Order conversations must have at least 2 participants: client and specialist"
       );
     }
 
@@ -774,9 +775,13 @@ export class ChatService {
   }
 
   /**
-   * Create conversation for order (between client and specialist)
+   * Create conversation for order (between client and specialist, optionally with peers)
    */
-  async createOrderConversation(orderId: number, specialistId: number) {
+  async createOrderConversation(
+    orderId: number,
+    specialistId: number,
+    proposalId?: number
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { Client: true },
@@ -810,140 +815,273 @@ export class ChatService {
       },
     });
 
-    // Verify existing conversation has exactly 2 participants (client and specialist)
+    // Verify existing conversation has client and specialist (and optionally peers)
     if (existingConversation) {
       const activeParticipants = existingConversation.Participants.filter(
         (p) => p.isActive
       );
 
-      if (activeParticipants.length !== 2) {
+      // For group applications, we may have more than 2 participants
+      const hasClient = activeParticipants.some(
+        (p) => p.userId === order.clientId
+      );
+      const hasSpecialist = activeParticipants.some(
+        (p) => p.userId === specialistId
+      );
+
+      if (!hasClient || !hasSpecialist) {
         console.warn(
-          `Existing conversation ${existingConversation.id} has ${activeParticipants.length} participants, expected 2. Creating new conversation.`
+          `Existing conversation ${existingConversation.id} doesn't have both client and specialist. Creating new conversation.`
         );
         // Don't use this conversation, create a new one instead
       } else {
-        // Verify both client and specialist are participants
-        const hasClient = activeParticipants.some(
-          (p) => p.userId === order.clientId
-        );
-        const hasSpecialist = activeParticipants.some(
-          (p) => p.userId === specialistId
-        );
-
-        if (!hasClient || !hasSpecialist) {
-          console.warn(
-            `Existing conversation ${existingConversation.id} doesn't have both client and specialist. Creating new conversation.`
-          );
-          // Don't use this conversation, create a new one instead
-        } else {
-          // Reopen conversation if it's closed (e.g., after rejection)
-          if (
-            existingConversation.status === "closed" ||
-            existingConversation.status === "completed"
-          ) {
-            console.log(
-              `Reopening closed conversation ${existingConversation.id} for order ${orderId}`
-            );
-            await this.prisma.conversation.update({
-              where: { id: existingConversation.id },
-              data: {
-                status: "active",
-                updatedAt: new Date(),
-              },
-            });
-            existingConversation.status = "active";
-          }
-
-          // Check if proposal message was already sent (first message from specialist)
-          const hasProposalMessage = existingConversation.Messages.length > 0;
-
-          // If no messages from specialist yet, send the proposal message
-          if (!hasProposalMessage) {
-            try {
-              const proposal = await this.prisma.orderProposal.findFirst({
+        // If proposalId is provided, check if peers or team members need to be added
+        if (proposalId) {
+          const proposal = (await this.prisma.orderProposal.findUnique({
+            where: { id: proposalId },
+            include: {
+              ProposalPeers: {
                 where: {
-                  orderId: orderId,
-                  userId: specialistId,
+                  status: { not: "rejected" },
                 },
-                orderBy: {
-                  createdAt: "desc",
+              },
+              Team: {
+                select: {
+                  id: true,
+                  name: true,
+                  Members: {
+                    where: {
+                      status: "accepted",
+                      isActive: true,
+                    },
+                    select: {
+                      userId: true,
+                    },
+                  },
                 },
-              });
+              },
+            },
+          })) as any;
 
-              if (proposal && proposal.message && proposal.message.trim()) {
-                // Retry logic to handle timing issues
-                let messageSent = false;
-                let retries = 3;
-                let delay = 500;
+          if (proposal) {
+            let peerIds: number[] = [];
 
-                while (!messageSent && retries > 0) {
-                  try {
-                    // Wait a bit before retrying (except first attempt)
-                    if (retries < 3) {
-                      await new Promise((resolve) =>
-                        setTimeout(resolve, delay)
-                      );
-                      delay *= 2;
-                    }
+            if (proposal.isGroupApplication) {
+              peerIds = proposal.ProposalPeers.map((pp: any) => pp.userId);
+            }
 
-                    const sentMessage = await this.sendMessage(specialistId, {
-                      conversationId: existingConversation.id,
-                      content: proposal.message,
-                      messageType: "text",
-                    });
-                    console.log(
-                      `✅ Sent proposal message to existing conversation ${existingConversation.id}. Message ID: ${sentMessage.id}`
-                    );
-                    messageSent = true;
-                  } catch (messageError: any) {
-                    console.error(
-                      `Failed to send proposal message to existing conversation (attempt ${4 - retries}/3):`,
-                      messageError?.message || messageError
-                    );
-
-                    // If it's a participant error, retry
-                    if (
-                      messageError?.message?.includes("not a participant") ||
-                      messageError?.message?.includes("participant")
-                    ) {
-                      retries--;
-                      if (retries === 0) {
-                        console.error(
-                          "Failed to send proposal message after all retries"
-                        );
-                      }
-                    } else {
-                      // For other errors, don't retry
-                      retries = 0;
-                    }
-                  }
-                }
-              } else {
-                console.log(
-                  `No proposal message found for orderId ${orderId} and specialistId ${specialistId}`
-                );
-              }
-            } catch (error) {
-              console.error(
-                "Error fetching or sending proposal message to existing conversation:",
-                error
+            // If team is associated, add all accepted team members
+            if (proposal.teamId && proposal.Team) {
+              const teamMemberIds = proposal.Team.Members.map(
+                (m: any) => m.userId
               );
+              // Merge with existing peerIds, avoiding duplicates
+              peerIds = [...new Set([...peerIds, ...teamMemberIds])];
+            }
+
+            const missingPeers = peerIds.filter(
+              (peerId) => !activeParticipants.some((p) => p.userId === peerId)
+            );
+
+            // Add missing peers/team members to conversation
+            if (missingPeers.length > 0) {
+              await this.prisma.conversationParticipant.createMany({
+                data: missingPeers.map((peerId) => ({
+                  conversationId: existingConversation.id,
+                  userId: peerId,
+                  isActive: true,
+                })),
+                skipDuplicates: true,
+              });
+            }
+
+            // Update conversation title if team is associated
+            if (proposal.teamId && proposal.Team) {
+              const teamName = proposal.Team.name;
+              const newTitle = `${teamName} & ${order.Client.name}`;
+
+              // Update title if it's different
+              if (existingConversation.title !== newTitle) {
+                await this.prisma.conversation.update({
+                  where: { id: existingConversation.id },
+                  data: {
+                    title: newTitle,
+                  },
+                });
+                existingConversation.title = newTitle;
+              }
             }
           }
+        }
 
-          return this.getConversationById(existingConversation.id);
+        // Reopen conversation if it's closed (e.g., after rejection)
+        if (
+          existingConversation.status === "closed" ||
+          existingConversation.status === "completed"
+        ) {
+          console.log(
+            `Reopening closed conversation ${existingConversation.id} for order ${orderId}`
+          );
+          await this.prisma.conversation.update({
+            where: { id: existingConversation.id },
+            data: {
+              status: "active",
+              updatedAt: new Date(),
+            },
+          });
+          existingConversation.status = "active";
+        }
+
+        // Check if proposal message was already sent (first message from specialist)
+        const hasProposalMessage = existingConversation.Messages.length > 0;
+
+        // If no messages from specialist yet, send the proposal message
+        if (!hasProposalMessage) {
+          try {
+            const proposal = await this.prisma.orderProposal.findFirst({
+              where: {
+                orderId: orderId,
+                userId: specialistId,
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+            });
+
+            if (proposal && proposal.message && proposal.message.trim()) {
+              // Retry logic to handle timing issues
+              let messageSent = false;
+              let retries = 3;
+              let delay = 500;
+
+              while (!messageSent && retries > 0) {
+                try {
+                  // Wait a bit before retrying (except first attempt)
+                  if (retries < 3) {
+                    await new Promise((resolve) => setTimeout(resolve, delay));
+                    delay *= 2;
+                  }
+
+                  const sentMessage = await this.sendMessage(specialistId, {
+                    conversationId: existingConversation.id,
+                    content: proposal.message,
+                    messageType: "text",
+                  });
+                  console.log(
+                    `✅ Sent proposal message to existing conversation ${existingConversation.id}. Message ID: ${sentMessage.id}`
+                  );
+                  messageSent = true;
+                } catch (messageError: any) {
+                  console.error(
+                    `Failed to send proposal message to existing conversation (attempt ${4 - retries}/3):`,
+                    messageError?.message || messageError
+                  );
+
+                  // If it's a participant error, retry
+                  if (
+                    messageError?.message?.includes("not a participant") ||
+                    messageError?.message?.includes("participant")
+                  ) {
+                    retries--;
+                    if (retries === 0) {
+                      console.error(
+                        "Failed to send proposal message after all retries"
+                      );
+                    }
+                  } else {
+                    // For other errors, don't retry
+                    retries = 0;
+                  }
+                }
+              }
+            } else {
+              console.log(
+                `No proposal message found for orderId ${orderId} and specialistId ${specialistId}`
+              );
+            }
+          } catch (error) {
+            console.error(
+              "Error fetching or sending proposal message to existing conversation:",
+              error
+            );
+          }
+        }
+
+        return this.getConversationById(existingConversation.id);
+      }
+    }
+
+    // Get proposal to check for peers and team
+    let peerIds: number[] = [];
+    let teamName: string | null = null;
+    let teamId: number | null = null;
+    if (proposalId) {
+      const proposal = (await this.prisma.orderProposal.findUnique({
+        where: { id: proposalId },
+        include: {
+          ProposalPeers: {
+            where: {
+              status: { not: "rejected" },
+            },
+            include: {
+              User: {
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+          Team: {
+            select: {
+              id: true,
+              name: true,
+              Members: {
+                where: {
+                  status: "accepted",
+                  isActive: true,
+                },
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          },
+        },
+      })) as any;
+
+      if (proposal) {
+        if (proposal.isGroupApplication) {
+          peerIds = proposal.ProposalPeers.map((pp: any) => pp.userId);
+        }
+
+        // If team is associated with proposal, get team name and all accepted team members
+        if (proposal.teamId && proposal.Team) {
+          teamId = proposal.teamId;
+          teamName = proposal.Team.name;
+          // Add all accepted team members to peerIds (they will be added to chat)
+          const teamMemberIds = proposal.Team.Members.map((m: any) => m.userId);
+          // Merge with existing peerIds, avoiding duplicates
+          const allTeamMemberIds = [...new Set([...peerIds, ...teamMemberIds])];
+          peerIds = allTeamMemberIds;
         }
       }
     }
 
-    // Create new conversation
+    // Create new conversation with client, lead specialist, and all peers/team members
+    const allParticipantIds = [order.clientId, specialistId, ...peerIds];
     console.log(
-      `Creating conversation for order ${orderId} with specialist ${specialistId} and client ${order.clientId}`
+      `Creating conversation for order ${orderId} with specialist ${specialistId}, client ${order.clientId}, and ${peerIds.length} peers/team members`
     );
+
+    // Set conversation title: use team name if team is selected, otherwise use order title
+    const conversationTitle = teamName
+      ? `${teamName} & ${order.Client.name}`
+      : `Order: ${order.title || "Untitled"}`;
+
     const conversation = await this.createConversation(specialistId, {
       orderId,
-      title: `Order: ${order.title || "Untitled"}`,
-      participantIds: [order.clientId],
+      title: conversationTitle,
+      participantIds: allParticipantIds,
     });
 
     if (!conversation) {
@@ -1131,8 +1269,15 @@ export class ChatService {
 
   /**
    * Reject application and refund credit
+   * If rejectPeerIds is provided, only reject those specific peers
+   * Otherwise, reject the whole group/proposal
    */
-  async rejectApplication(orderId: number, clientId: number) {
+  async rejectApplication(
+    orderId: number,
+    clientId: number,
+    proposalId?: number,
+    rejectPeerIds?: number[]
+  ) {
     return this.prisma
       .$transaction(async (tx) => {
         // Verify the client owns this order
@@ -1154,27 +1299,133 @@ export class ChatService {
           throw new Error("Order not found or you are not the owner");
         }
 
-        // Get all pending proposals for this order
+        // Handle individual peer rejection
+        if (proposalId && rejectPeerIds && rejectPeerIds.length > 0) {
+          // Reject specific peers only
+          const proposal = await tx.orderProposal.findUnique({
+            where: { id: proposalId },
+            include: {
+              ProposalPeers: true,
+            },
+          });
+
+          if (!proposal || proposal.orderId !== orderId) {
+            throw new Error(
+              "Proposal not found or does not belong to this order"
+            );
+          }
+
+          // Update rejected peers
+          await tx.proposalPeer.updateMany({
+            where: {
+              proposalId,
+              userId: { in: rejectPeerIds },
+              status: { not: "rejected" },
+            },
+            data: {
+              status: "rejected",
+            },
+          });
+
+          // Remove rejected peers from conversation participants
+          const conversations = await tx.conversation.findMany({
+            where: {
+              orderId,
+            },
+            include: {
+              Participants: {
+                where: {
+                  userId: { in: rejectPeerIds },
+                  isActive: true,
+                },
+              },
+            },
+          });
+
+          for (const conversation of conversations) {
+            if (conversation.Participants.length > 0) {
+              await tx.conversationParticipant.updateMany({
+                where: {
+                  conversationId: conversation.id,
+                  userId: { in: rejectPeerIds },
+                  isActive: true,
+                },
+                data: {
+                  isActive: false,
+                },
+              });
+            }
+          }
+
+          // Check if proposal should remain active (if lead or other peers remain)
+          const activePeers = await tx.proposalPeer.findMany({
+            where: {
+              proposalId,
+              status: { not: "rejected" },
+            },
+          });
+
+          // Send notifications to rejected peers only
+          for (const peerId of rejectPeerIds) {
+            try {
+              await this.notificationsService.createNotificationWithPush(
+                peerId,
+                "peer_rejected",
+                "notificationPeerRejectedTitle",
+                "notificationPeerRejectedMessage",
+                {
+                  type: "peer_rejected",
+                  orderId: orderId,
+                  proposalId: proposalId,
+                },
+                {
+                  orderTitle: order.title || "the order",
+                }
+              );
+            } catch (error) {
+              console.error(
+                `Failed to send notification to peer ${peerId}:`,
+                error
+              );
+            }
+          }
+
+          return {
+            message: "Peers rejected successfully",
+            rejectedPeers: rejectPeerIds.length,
+            proposalRemainsActive:
+              activePeers.length > 0 ||
+              (proposal.leadUserId && proposal.userId === proposal.leadUserId),
+          };
+        }
+
+        // Get all pending proposals for this order (whole group rejection)
         const pendingProposals = order.Proposals;
 
-        // Get pricing configuration to calculate refund amount
-        const orderBudget = order.budget || 0;
-        const pricingConfig =
-          await this.orderPricingService.getPricingConfig(orderBudget);
-        const creditCost = pricingConfig.creditCost;
-        const refundAmount = Math.round(
-          creditCost * pricingConfig.refundPercentage
-        );
-
-        console.log(
-          `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${pendingProposals.length} rejected proposals`
-        );
-
-        // Refund credits to all applicants using pricing table
+        // Refund credits to lead applicants only (for group applications)
         for (const proposal of pendingProposals) {
+          // Check if this is a team application
+          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
+          
+          // Get pricing configuration based on whether it's a team application
+          const orderBudget = order.budget || 0;
+          const pricingConfig =
+            await this.orderPricingService.getPricingConfig(orderBudget, isTeamApplication);
+          const creditCost = pricingConfig.creditCost;
+          const refundAmount = Math.round(
+            creditCost * pricingConfig.refundPercentage
+          );
+
+          console.log(
+            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? 'team' : 'individual'})`
+          );
+
+          // For group/team applications, refund only to lead applicant
+          const refundUserId = proposal.leadUserId || proposal.userId;
+
           if (refundAmount > 0) {
             const updatedUser = await tx.user.update({
-              where: { id: proposal.userId },
+              where: { id: refundUserId },
               data: {
                 creditBalance: {
                   increment: refundAmount,
@@ -1185,7 +1436,7 @@ export class ChatService {
 
             // Log credit transaction
             await this.creditTransactionsService.logTransaction({
-              userId: proposal.userId,
+              userId: refundUserId,
               amount: refundAmount,
               balanceAfter: updatedUser.creditBalance,
               type: "rejection_refund",
@@ -1199,6 +1450,9 @@ export class ChatService {
                 refundAmount,
                 creditCost,
                 refundPercentage: pricingConfig.refundPercentage,
+                isGroupApplication: proposal.isGroupApplication,
+                isTeamApplication,
+                teamId: proposal.teamId,
               },
               tx,
             });
@@ -1209,6 +1463,19 @@ export class ChatService {
             where: { id: proposal.id },
             data: { status: "rejected" },
           });
+
+          // Update all proposal peers to rejected
+          if (proposal.isGroupApplication) {
+            await tx.proposalPeer.updateMany({
+              where: {
+                proposalId: proposal.id,
+                status: { not: "rejected" },
+              },
+              data: {
+                status: "rejected",
+              },
+            });
+          }
         }
 
         // Update order status to closed
@@ -1367,23 +1634,32 @@ export class ChatService {
           (p) => p.id !== chosenProposal.id
         );
 
-        // Get pricing configuration to calculate refund amount
         const orderBudget = order.budget || 0;
-        const pricingConfig =
-          await this.orderPricingService.getPricingConfig(orderBudget);
-        const creditCost = pricingConfig.creditCost;
-        const refundAmount = Math.round(
-          creditCost * pricingConfig.refundPercentage
-        );
-
-        console.log(
-          `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for ${otherProposals.length} rejected proposals`
-        );
 
         for (const proposal of otherProposals) {
+          // Check if this is a team application
+          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
+          
+          // Get pricing configuration based on whether it's a team application
+          const pricingConfig =
+            await this.orderPricingService.getPricingConfig(orderBudget, isTeamApplication);
+          const creditCost = pricingConfig.creditCost;
+          const refundAmount = Math.round(
+            creditCost * pricingConfig.refundPercentage
+          );
+
+          console.log(
+            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? 'team' : 'individual'})`
+          );
+
+          // Only refund to lead applicant for team applications
+          const refundUserId = isTeamApplication && proposal.leadUserId
+            ? proposal.leadUserId
+            : proposal.userId;
+
           if (refundAmount > 0) {
             await tx.user.update({
-              where: { id: proposal.userId },
+              where: { id: refundUserId },
               data: {
                 creditBalance: {
                   increment: refundAmount,

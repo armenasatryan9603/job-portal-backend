@@ -7,6 +7,7 @@ import {
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
+import { ConfigService } from "../config/config.service";
 
 @Injectable()
 export class OrderProposalsService {
@@ -15,7 +16,8 @@ export class OrderProposalsService {
   constructor(
     private prisma: PrismaService,
     private orderPricingService: OrderPricingService,
-    private creditTransactionsService: CreditTransactionsService
+    private creditTransactionsService: CreditTransactionsService,
+    private configService: ConfigService
   ) {}
 
   /**
@@ -135,6 +137,8 @@ export class OrderProposalsService {
     price?: number;
     message?: string;
     questionAnswers?: Array<{ questionId: number; answer: string }>;
+    peerIds?: number[];
+    teamId?: number;
   }) {
     console.log("Starting createWithCreditDeduction:", {
       orderId: createOrderProposalDto.orderId,
@@ -219,9 +223,24 @@ export class OrderProposalsService {
 
               // Get dynamic pricing based on order budget
               console.log("Calculating credit cost...");
+
+              // Determine if this is a group/team application
+              // Check if teamId is provided first, then check for peerIds
+              const peerIds = createOrderProposalDto.peerIds || [];
+              const isTeamApplication =
+                createOrderProposalDto.teamId !== undefined;
+              const isGroupApplication =
+                isTeamApplication || peerIds.length > 0;
+
               const applicationCost =
-                await this.orderPricingService.getCreditCost(order.budget || 0);
-              console.log("Application cost:", applicationCost);
+                await this.orderPricingService.getCreditCost(
+                  order.budget || 0,
+                  isTeamApplication
+                );
+              console.log(
+                `Application cost (${isTeamApplication ? "team" : "individual"}):`,
+                applicationCost
+              );
 
               // Check if order is still open
               if (order.status !== "open") {
@@ -271,6 +290,84 @@ export class OrderProposalsService {
                 );
               }
               console.log("No existing proposal found");
+
+              // Handle peer applications
+              // Note: peerIds and isGroupApplication are already defined above for pricing calculation
+
+              if (isGroupApplication) {
+                // Validate peer limit
+                const maxPeers =
+                  await this.configService.getMaxPeersPerApplication();
+                if (peerIds.length > maxPeers) {
+                  throw new BadRequestException(
+                    `Maximum ${maxPeers} peers allowed per application. You provided ${peerIds.length} peers.`
+                  );
+                }
+
+                // Validate all peers are unique and not the lead applicant
+                const uniquePeerIds = [...new Set(peerIds)];
+                if (uniquePeerIds.length !== peerIds.length) {
+                  throw new BadRequestException(
+                    "Duplicate peers are not allowed"
+                  );
+                }
+
+                if (peerIds.includes(createOrderProposalDto.userId)) {
+                  throw new BadRequestException("Cannot add self as peer");
+                }
+
+                // Validate all peers exist and are specialists
+                const peers = await tx.user.findMany({
+                  where: {
+                    id: { in: peerIds },
+                    role: "specialist",
+                  },
+                  select: { id: true, role: true },
+                });
+
+                if (peers.length !== peerIds.length) {
+                  throw new BadRequestException(
+                    "One or more peers not found or are not specialists"
+                  );
+                }
+
+                // Check if any peer already has a proposal for this order (individually or in another group)
+                const existingPeerProposals = await tx.orderProposal.findMany({
+                  where: {
+                    orderId: createOrderProposalDto.orderId,
+                    userId: { in: peerIds },
+                  },
+                });
+
+                if (existingPeerProposals.length > 0) {
+                  const conflictingPeers = existingPeerProposals.map(
+                    (p) => p.userId
+                  );
+                  throw new BadRequestException(
+                    `One or more peers already have a proposal for this order: ${conflictingPeers.join(", ")}`
+                  );
+                }
+
+                // Check if any peer is already a peer in another proposal for this order
+                const existingProposalPeers = await tx.proposalPeer.findMany({
+                  where: {
+                    userId: { in: peerIds },
+                    Proposal: {
+                      orderId: createOrderProposalDto.orderId,
+                    },
+                    status: { not: "rejected" },
+                  },
+                });
+
+                if (existingProposalPeers.length > 0) {
+                  const conflictingPeers = existingProposalPeers.map(
+                    (pp) => pp.userId
+                  );
+                  throw new BadRequestException(
+                    `One or more peers are already part of another proposal for this order: ${conflictingPeers.join(", ")}`
+                  );
+                }
+              }
 
               // Deduct credits from user
               console.log("Deducting credits from user...");
@@ -337,8 +434,21 @@ export class OrderProposalsService {
                 data: {
                   orderId: createOrderProposalDto.orderId,
                   userId: createOrderProposalDto.userId,
+                  leadUserId: isGroupApplication
+                    ? createOrderProposalDto.userId
+                    : null,
+                  teamId: createOrderProposalDto.teamId || null,
+                  isGroupApplication,
                   message: formattedMessage,
                   price: createOrderProposalDto.price,
+                  ProposalPeers: isGroupApplication
+                    ? {
+                        create: peerIds.map((peerId) => ({
+                          userId: peerId,
+                          status: "pending",
+                        })),
+                      }
+                    : undefined,
                 },
                 include: {
                   Order: {
@@ -362,11 +472,25 @@ export class OrderProposalsService {
                       verified: true,
                     },
                   },
+                  ProposalPeers: {
+                    include: {
+                      User: {
+                        select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                          avatarUrl: true,
+                          verified: true,
+                        },
+                      },
+                    },
+                  },
                 },
               });
               console.log(
                 "Proposal created successfully with ID:",
-                proposal.id
+                proposal.id,
+                isGroupApplication ? `with ${peerIds.length} peers` : ""
               );
 
               // Note: Conversation creation is handled by the frontend after proposal creation

@@ -168,6 +168,24 @@ export class EmailNotificationService {
       const resendApiKey = process.env.RESEND_API_KEY;
       const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@example.com";
       const fromName = process.env.RESEND_FROM_NAME || "Job Portal";
+      const resendTestEmail = process.env.RESEND_TEST_EMAIL; // For testing, only send to this email
+      const isDevelopment = process.env.NODE_ENV !== "production";
+
+      // In development/testing mode with Resend, check if we should only send to test email
+      if (isDevelopment && resendTestEmail && to.toLowerCase() !== resendTestEmail.toLowerCase()) {
+        this.logger.warn(
+          `⚠️ [Email] Resend testing mode: Skipping email to ${to} (only sending to ${resendTestEmail} in development)`
+        );
+        this.logger.log("═══════════════════════════════════════════════════════");
+        this.logger.log("📧 EMAIL (Resend Testing Mode - Not Sent):");
+        this.logger.log("═══════════════════════════════════════════════════════");
+        this.logger.log(`To: ${toName} <${to}>`);
+        this.logger.log(`Subject: ${subject}`);
+        this.logger.log(`Body: ${textBody || this.htmlToText(htmlBody)}`);
+        this.logger.log("═══════════════════════════════════════════════════════");
+        // Return true in dev mode so notifications continue
+        return true;
+      }
 
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -186,6 +204,38 @@ export class EmailNotificationService {
 
       if (!response.ok) {
         const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+
+        // Handle Resend's 403 validation error (testing tier restriction)
+        if (response.status === 403 && errorData.message?.includes("testing emails")) {
+          this.logger.warn(
+            `⚠️ [Email] Resend 403: Can only send to verified email in testing tier. Skipping email to ${to}`
+          );
+          this.logger.warn(
+            `   To send to other recipients, verify a domain at resend.com/domains`
+          );
+          
+          // In development, log the email and continue
+          if (isDevelopment) {
+            this.logger.log("═══════════════════════════════════════════════════════");
+            this.logger.log("📧 EMAIL (Resend Testing Restriction - Not Sent):");
+            this.logger.log("═══════════════════════════════════════════════════════");
+            this.logger.log(`To: ${toName} <${to}>`);
+            this.logger.log(`Subject: ${subject}`);
+            this.logger.log(`Body: ${textBody || this.htmlToText(htmlBody)}`);
+            this.logger.log("═══════════════════════════════════════════════════════");
+            // Return true in dev mode so notifications continue
+            return true;
+          }
+          
+          return false;
+        }
+
         this.logger.error(`Resend API error: ${response.status} - ${errorText}`);
         return false;
       }

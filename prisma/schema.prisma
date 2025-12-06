@@ -30,7 +30,7 @@ model User {
   referralCredits          Float                     @default(0)
   referredBy               Int?
   preferences              Json?
-  languages                 Json?
+  languages                Json?
   Cards                    Card[]
   ConversationParticipants ConversationParticipant[]
   CreditTransactions       CreditTransaction[]
@@ -49,6 +49,12 @@ model User {
   OrderChangeHistory       OrderChangeHistory[]      @relation("OrderChangedBy")
   SavedOrders              SavedOrder[]              @relation("SavedOrders")
   Portfolio                Portfolio[]               @relation("Portfolio")
+  PeerRelationships        PeerRelationship[]        @relation("PeerRelationships")
+  PeerOf                   PeerRelationship[]        @relation("PeerOf")
+  TeamMembers              TeamMember[]
+  CreatedTeams             Team[]                    @relation("TeamCreator")
+  ProposalPeers            ProposalPeer[]
+  LeadProposals            OrderProposal[]           @relation("LeadProposals")
 }
 
 model Service {
@@ -159,49 +165,55 @@ model UserService {
 }
 
 model Order {
-  id             Int                  @id @default(autoincrement())
-  clientId       Int
-  serviceId      Int?
-  title          String?
-  description    String?
-  budget         Float?
-  availableDates String[]             @default([])
-  location       String?
-  skills         String[]             @default([])
-  status         String               @default("open")
-  createdAt      DateTime             @default(now())
-  bannerImageId  Int?
-  titleEn        String?
-  titleRu        String?
-  titleHy        String?
-  descriptionEn  String?
-  descriptionRu  String?
-  descriptionHy  String?
+  id              Int                  @id @default(autoincrement())
+  clientId        Int
+  serviceId       Int?
+  title           String?
+  description     String?
+  budget          Float?
+  availableDates  String[]             @default([])
+  location        String?
+  skills          String[]             @default([])
+  status          String               @default("open")
+  createdAt       DateTime             @default(now())
+  bannerImageId   Int?
+  titleEn         String?
+  titleRu         String?
+  titleHy         String?
+  descriptionEn   String?
+  descriptionRu   String?
+  descriptionHy   String?
   rejectionReason String?
-  Conversations  Conversation[]
-  MediaFiles     MediaFile[]
-  BannerImage    MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
-  Client         User                 @relation("ClientOrders", fields: [clientId], references: [id])
-  Service        Service?             @relation(fields: [serviceId], references: [id])
-  Proposals      OrderProposal[]
-  questions      OrderQuestion[]
-  Reviews        Review[]
-  ChangeHistory  OrderChangeHistory[]
-  SavedBy        SavedOrder[]
+  Conversations   Conversation[]
+  MediaFiles      MediaFile[]
+  BannerImage     MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
+  Client          User                 @relation("ClientOrders", fields: [clientId], references: [id])
+  Service         Service?             @relation(fields: [serviceId], references: [id])
+  Proposals       OrderProposal[]
+  questions       OrderQuestion[]
+  Reviews         Review[]
+  ChangeHistory   OrderChangeHistory[]
+  SavedBy         SavedOrder[]
 
   @@index([status])
 }
 
 model OrderProposal {
-  id        Int      @id @default(autoincrement())
-  orderId   Int
-  userId    Int
-  price     Float?
-  message   String?
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
-  Order     Order    @relation(fields: [orderId], references: [id])
-  User      User     @relation(fields: [userId], references: [id])
+  id                 Int            @id @default(autoincrement())
+  orderId            Int
+  userId             Int
+  leadUserId         Int?
+  teamId             Int?
+  isGroupApplication Boolean        @default(false)
+  price              Float?
+  message            String?
+  status             String         @default("pending")
+  createdAt          DateTime       @default(now())
+  Order              Order          @relation(fields: [orderId], references: [id])
+  User               User           @relation(fields: [userId], references: [id])
+  LeadUser           User?          @relation("LeadProposals", fields: [leadUserId], references: [id])
+  Team               Team?          @relation(fields: [teamId], references: [id])
+  ProposalPeers      ProposalPeer[]
 }
 
 model OrderQuestion {
@@ -249,18 +261,18 @@ model MediaFile {
 }
 
 model Portfolio {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  fileName   String
-  fileUrl    String
-  fileType   String
-  mimeType   String
-  fileSize   Int
-  title      String?
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  fileName    String
+  fileUrl     String
+  fileType    String
+  mimeType    String
+  fileSize    Int
+  title       String?
   description String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  User       User     @relation("Portfolio", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  User        User     @relation("Portfolio", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([createdAt])
@@ -368,7 +380,9 @@ model OrderPricing {
   minBudget        Float
   maxBudget        Float?
   creditCost       Float
+  teamCreditCost   Float?   // Separate pricing for team applications
   refundPercentage Float    @default(0.5)
+  teamRefundPercentage Float? @default(0.5) // Separate refund percentage for team applications
   description      String?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
@@ -473,4 +487,81 @@ model SavedOrder {
   @@index([userId])
   @@index([orderId])
   @@index([createdAt])
+}
+
+model PeerRelationship {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  peerId    Int
+  status    String   @default("pending") // "pending", "accepted", "rejected"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  User      User     @relation("PeerRelationships", fields: [userId], references: [id], onDelete: Cascade)
+  Peer      User     @relation("PeerOf", fields: [peerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, peerId])
+  @@index([userId])
+  @@index([peerId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model Team {
+  id        Int            @id @default(autoincrement())
+  name      String
+  createdBy Int
+  createdAt DateTime       @default(now())
+  isActive  Boolean        @default(true)
+  Members   TeamMember[]
+  Creator   User           @relation("TeamCreator", fields: [createdBy], references: [id])
+  Proposals OrderProposal[]
+
+  @@index([createdBy])
+  @@index([isActive])
+}
+
+model TeamMember {
+  id       Int      @id @default(autoincrement())
+  teamId   Int
+  userId   Int
+  role     String   @default("member") // "lead" or "member"
+  status   String   @default("pending") // "pending", "accepted", "rejected" (only for non-lead members)
+  joinedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive Boolean  @default(true)
+  Team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model ProposalPeer {
+  id         Int           @id @default(autoincrement())
+  proposalId Int
+  userId     Int
+  status     String        @default("pending") // "pending", "accepted", "rejected"
+  joinedAt   DateTime      @default(now())
+  Proposal   OrderProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  User       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, userId])
+  @@index([proposalId])
+  @@index([userId])
+  @@index([status])
+}
+
+model SystemConfig {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
 }

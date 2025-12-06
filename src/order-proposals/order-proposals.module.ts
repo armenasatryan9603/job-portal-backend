@@ -5,11 +5,12 @@ import { OrderProposalsService } from "./order-proposals.service";
 import { OrderPricingModule } from "../order-pricing/order-pricing.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { CreditModule } from "../credit/credit.module";
+import { ConfigService } from "../config/config.service";
 
 @Module({
   imports: [NotificationsModule, CreditModule, OrderPricingModule],
   controllers: [OrderProposalsController],
-  providers: [OrderProposalsService, PrismaService],
+  providers: [OrderProposalsService, PrismaService, ConfigService],
   exports: [OrderProposalsService],
 })
 export class OrderProposalsModule {}

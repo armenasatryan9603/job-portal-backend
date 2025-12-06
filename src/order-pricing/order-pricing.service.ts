@@ -16,9 +16,10 @@ export class OrderPricingService {
   /**
    * Get the credit cost based on order budget
    * @param orderBudget - The budget amount of the order
+   * @param isTeamApplication - Whether this is a team application (default: false)
    * @returns Credit cost for the operation
    */
-  async getCreditCost(orderBudget: number): Promise<number> {
+  async getCreditCost(orderBudget: number, isTeamApplication: boolean = false): Promise<number> {
     try {
       // Find pricing tier that matches the order budget
       const pricing = await this.prisma.orderPricing.findFirst({
@@ -33,16 +34,21 @@ export class OrderPricingService {
       });
 
       if (pricing) {
+        // Use team pricing if available and this is a team application
+        const creditCost = isTeamApplication && pricing.teamCreditCost !== null
+          ? pricing.teamCreditCost
+          : pricing.creditCost;
+        
         this.logger.log(
-          `Found pricing for order budget $${orderBudget}: ${pricing.creditCost} credits`
+          `Found pricing for order budget $${orderBudget} (${isTeamApplication ? 'team' : 'individual'}): ${creditCost} credits`
         );
-        return pricing.creditCost;
+        return creditCost;
       }
 
       // Default fallback pricing (percentage of budget)
-      const defaultPricing = this.getDefaultPricing(orderBudget);
+      const defaultPricing = this.getDefaultPricing(orderBudget, isTeamApplication);
       this.logger.warn(
-        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits`
+        `No pricing found for order budget $${orderBudget} (${isTeamApplication ? 'team' : 'individual'}), using default: ${defaultPricing} credits`
       );
       return defaultPricing;
     } catch (error) {
@@ -51,16 +57,17 @@ export class OrderPricingService {
         error
       );
       // Return default pricing on error
-      return this.getDefaultPricing(orderBudget);
+      return this.getDefaultPricing(orderBudget, isTeamApplication);
     }
   }
 
   /**
    * Get pricing configuration for order budget (including refund percentage)
    * @param orderBudget - The budget amount of the order
+   * @param isTeamApplication - Whether this is a team application (default: false)
    * @returns Pricing configuration with credit cost and refund percentage
    */
-  async getPricingConfig(orderBudget: number): Promise<{
+  async getPricingConfig(orderBudget: number, isTeamApplication: boolean = false): Promise<{
     creditCost: number;
     refundPercentage: number;
   }> {
@@ -78,19 +85,28 @@ export class OrderPricingService {
       });
 
       if (pricing) {
+        // Use team pricing if available and this is a team application
+        const creditCost = isTeamApplication && pricing.teamCreditCost !== null
+          ? pricing.teamCreditCost
+          : pricing.creditCost;
+        
+        const refundPercentage = isTeamApplication && pricing.teamRefundPercentage !== null
+          ? pricing.teamRefundPercentage
+          : pricing.refundPercentage;
+        
         this.logger.log(
-          `Found pricing config for order budget $${orderBudget}: ${pricing.creditCost} credits, ${pricing.refundPercentage * 100}% refund`
+          `Found pricing config for order budget $${orderBudget} (${isTeamApplication ? 'team' : 'individual'}): ${creditCost} credits, ${refundPercentage * 100}% refund`
         );
         return {
-          creditCost: pricing.creditCost,
-          refundPercentage: pricing.refundPercentage,
+          creditCost,
+          refundPercentage,
         };
       }
 
       // Default fallback pricing
-      const defaultPricing = this.getDefaultPricing(orderBudget);
+      const defaultPricing = this.getDefaultPricing(orderBudget, isTeamApplication);
       this.logger.warn(
-        `No pricing found for order budget $${orderBudget}, using default: ${defaultPricing} credits, 50% refund`
+        `No pricing found for order budget $${orderBudget} (${isTeamApplication ? 'team' : 'individual'}), using default: ${defaultPricing} credits, 50% refund`
       );
       return {
         creditCost: defaultPricing,
@@ -102,7 +118,7 @@ export class OrderPricingService {
         error
       );
       // Return default pricing on error
-      const defaultPricing = this.getDefaultPricing(orderBudget);
+      const defaultPricing = this.getDefaultPricing(orderBudget, isTeamApplication);
       return {
         creditCost: defaultPricing,
         refundPercentage: 0.5, // Default 50% refund
@@ -127,14 +143,18 @@ export class OrderPricingService {
     minBudget: number;
     maxBudget?: number;
     creditCost: number;
+    teamCreditCost?: number;
     refundPercentage?: number;
+    teamRefundPercentage?: number;
     description?: string;
   }): Promise<any> {
     const {
       minBudget,
       maxBudget,
       creditCost,
+      teamCreditCost,
       refundPercentage = 0.5,
+      teamRefundPercentage = 0.5,
       description,
     } = data;
 
@@ -152,7 +172,9 @@ export class OrderPricingService {
         where: { id: existing.id },
         data: {
           creditCost,
+          teamCreditCost: teamCreditCost !== undefined ? teamCreditCost : existing.teamCreditCost,
           refundPercentage,
+          teamRefundPercentage: teamRefundPercentage !== undefined ? teamRefundPercentage : existing.teamRefundPercentage,
           description,
           updatedAt: new Date(),
         },
@@ -164,7 +186,9 @@ export class OrderPricingService {
           minBudget,
           maxBudget,
           creditCost,
+          teamCreditCost,
           refundPercentage,
+          teamRefundPercentage,
           description,
         },
       });
@@ -183,11 +207,13 @@ export class OrderPricingService {
 
   /**
    * Get default pricing based on order budget when no configuration exists
+   * @param orderBudget - The budget amount of the order
+   * @param isTeamApplication - Whether this is a team application (default: false)
    */
-  private getDefaultPricing(orderBudget: number): number {
-    // Default: 5% of order budget as credit cost
+  private getDefaultPricing(orderBudget: number, isTeamApplication: boolean = false): number {
+    // Default: 5% of order budget as credit cost for individual, 7% for team
     // Minimum 1 credit, maximum 100 credits
-    const percentage = 0.05; // 5%
+    const percentage = isTeamApplication ? 0.07 : 0.05; // 7% for teams, 5% for individuals
     const creditCost = Math.max(
       1,
       Math.min(100, Math.round(orderBudget * percentage))
@@ -208,20 +234,7 @@ export class OrderPricingService {
     orderBudget: number
   ): Promise<void> {
     try {
-      // Get pricing configuration for refund percentage
-      const pricingConfig = await this.getPricingConfig(orderBudget);
-      const refundAmount = Math.round(
-        pricingConfig.creditCost * pricingConfig.refundPercentage
-      );
-
-      if (refundAmount <= 0) {
-        this.logger.log(
-          `No refund needed for order ${orderId} (refund amount: ${refundAmount})`
-        );
-        return;
-      }
-
-      // Get all rejected proposals for this order
+      // Get all rejected proposals for this order (to check if they are team applications)
       const rejectedProposals = await this.prisma.orderProposal.findMany({
         where: {
           orderId: orderId,
@@ -240,9 +253,35 @@ export class OrderPricingService {
       // Process refunds in a transaction
       await this.prisma.$transaction(async (tx) => {
         for (const proposal of rejectedProposals) {
+          // Check if this is a team application
+          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
+          
+          // Get pricing configuration based on whether it's a team application
+          const pricingConfig = await this.getPricingConfig(orderBudget, isTeamApplication);
+          const refundAmount = Math.round(
+            pricingConfig.creditCost * pricingConfig.refundPercentage
+          );
+
+          if (refundAmount <= 0) {
+            this.logger.log(
+              `No refund needed for proposal ${proposal.id} (refund amount: ${refundAmount})`
+            );
+            // Still update proposal status to rejected
+            await tx.orderProposal.update({
+              where: { id: proposal.id },
+              data: { status: "rejected" },
+            });
+            continue;
+          }
+
+          // Only refund to lead applicant for team applications
+          const refundUserId = isTeamApplication && proposal.leadUserId
+            ? proposal.leadUserId
+            : proposal.userId;
+
           // Refund credits to the user
           const updatedUser = await tx.user.update({
-            where: { id: proposal.userId },
+            where: { id: refundUserId },
             data: {
               creditBalance: { increment: refundAmount },
             },
@@ -251,7 +290,7 @@ export class OrderPricingService {
 
           // Log credit transaction
           await this.creditTransactionsService.logTransaction({
-            userId: proposal.userId,
+            userId: refundUserId,
             amount: refundAmount,
             balanceAfter: updatedUser.creditBalance,
             type: "selection_refund",
@@ -266,6 +305,8 @@ export class OrderPricingService {
               refundAmount,
               creditCost: pricingConfig.creditCost,
               refundPercentage: pricingConfig.refundPercentage,
+              isTeamApplication,
+              teamId: proposal.teamId,
             },
             tx,
           });
@@ -280,16 +321,29 @@ export class OrderPricingService {
           // We'll send the push notification after the transaction completes
 
           this.logger.log(
-            `Refunded ${refundAmount} credits to user ${proposal.userId} for rejected proposal ${proposal.id}`
+            `Refunded ${refundAmount} credits to user ${refundUserId} for rejected proposal ${proposal.id} (${isTeamApplication ? 'team' : 'individual'})`
           );
         }
       });
 
       // Send push notifications for rejected applicants
+      // Note: We need to recalculate refund amounts for notifications since they're per-proposal
       for (const proposal of rejectedProposals) {
         try {
+          // Recalculate refund amount for this proposal (same logic as in transaction)
+          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
+          const pricingConfig = await this.getPricingConfig(orderBudget, isTeamApplication);
+          const refundAmount = Math.round(
+            pricingConfig.creditCost * pricingConfig.refundPercentage
+          );
+
+          // Only send notification to lead applicant for team applications
+          const notificationUserId = isTeamApplication && proposal.leadUserId
+            ? proposal.leadUserId
+            : proposal.userId;
+
           await this.notificationsService.createNotificationWithPush(
-            proposal.userId,
+            notificationUserId,
             "proposal_rejected",
             "notificationProposalRejectedTitle",
             "notificationProposalRejectedWithRefundMessage",
@@ -333,28 +387,36 @@ export class OrderPricingService {
         minBudget: 0,
         maxBudget: 500,
         creditCost: 1,
+        teamCreditCost: 1.5, // 50% more for teams
         refundPercentage: 0.5,
+        teamRefundPercentage: 0.5,
         description: "Small orders ($0-$500)",
       },
       {
         minBudget: 500,
         maxBudget: 2000,
         creditCost: 5,
+        teamCreditCost: 7.5, // 50% more for teams
         refundPercentage: 0.6,
+        teamRefundPercentage: 0.6,
         description: "Medium orders ($500-$2000)",
       },
       {
         minBudget: 2000,
         maxBudget: 5000,
         creditCost: 10,
+        teamCreditCost: 15, // 50% more for teams
         refundPercentage: 0.7,
+        teamRefundPercentage: 0.7,
         description: "Large orders ($2000-$5000)",
       },
       {
         minBudget: 5000,
         maxBudget: undefined,
         creditCost: 20,
+        teamCreditCost: 30, // 50% more for teams
         refundPercentage: 0.8,
+        teamRefundPercentage: 0.8,
         description: "Premium orders ($5000+)",
       },
     ];
