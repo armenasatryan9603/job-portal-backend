@@ -5,6 +5,10 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import * as bcrypt from "bcrypt";
+import {
+  UserLanguage,
+  isValidUserLanguage,
+} from "../types/user-languages";
 
 @Injectable()
 export class UsersService {
@@ -99,6 +103,7 @@ export class UsersService {
       avatarUrl?: string;
       role?: string;
       verified?: boolean;
+      languages?: UserLanguage[];
     }
   ) {
     // Check if user exists
@@ -121,9 +126,35 @@ export class UsersService {
       }
     }
 
+    // Validate languages if provided
+    if (updateData.languages !== undefined) {
+      if (!Array.isArray(updateData.languages)) {
+        throw new BadRequestException("Languages must be an array");
+      }
+
+      // Validate each language object
+      for (const lang of updateData.languages) {
+        if (!isValidUserLanguage(lang)) {
+          throw new BadRequestException(
+            `Invalid language: ${JSON.stringify(lang)}`
+          );
+        }
+      }
+
+      // Check for duplicate language codes
+      const languageCodes = updateData.languages.map((lang) => lang.code);
+      const uniqueCodes = new Set(languageCodes);
+      if (languageCodes.length !== uniqueCodes.size) {
+        throw new BadRequestException("Duplicate language codes are not allowed");
+      }
+    }
+
+    // Prepare update data
+    const dataToUpdate: any = { ...updateData };
+
     return this.prisma.user.update({
       where: { id },
-      data: updateData,
+      data: dataToUpdate,
       select: {
         id: true,
         name: true,
@@ -134,6 +165,7 @@ export class UsersService {
         bio: true,
         creditBalance: true,
         verified: true,
+        languages: true,
         createdAt: true,
       },
     });

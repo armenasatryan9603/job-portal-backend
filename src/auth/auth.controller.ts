@@ -10,6 +10,7 @@ import {
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AuthGuard } from "@nestjs/passport";
+import { UserLanguage } from "../types/user-languages";
 
 @Controller("auth")
 export class AuthController {
@@ -88,6 +89,7 @@ export class AuthController {
       role: user.role,
       creditBalance: user.creditBalance || 0,
       verified: user.verified || false,
+      languages: (user.languages as unknown as UserLanguage[]) || [],
       createdAt: user.createdAt,
     };
   }
@@ -106,6 +108,7 @@ export class AuthController {
       avatarUrl?: string;
       location?: string;
       role?: string;
+      languages?: UserLanguage[];
     }
   ) {
     const userId = req.user.userId;

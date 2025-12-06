@@ -30,6 +30,7 @@ model User {
   referralCredits          Float                     @default(0)
   referredBy               Int?
   preferences              Json?
+  languages                 Json?
   Cards                    Card[]
   ConversationParticipants ConversationParticipant[]
   CreditTransactions       CreditTransaction[]

@@ -1,10 +1,19 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import * as bcrypt from "bcrypt";
 import { JwtService } from "@nestjs/jwt";
 import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
 import { ReferralsService } from "../referrals/referrals.service";
 import { UniClient } from "uni-sdk";
+import {
+  UserLanguage,
+  isValidUserLanguage,
+  LanguageProficiencyLevel,
+} from "../types/user-languages";
 
 @Injectable()
 export class AuthService {
@@ -207,6 +216,7 @@ export class AuthService {
       avatarUrl?: string;
       location?: string;
       role?: string;
+      languages?: UserLanguage[];
     }
   ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -214,9 +224,40 @@ export class AuthService {
       throw new UnauthorizedException("User not found");
     }
 
+    // Validate languages if provided
+    if (updateData.languages !== undefined) {
+      if (!Array.isArray(updateData.languages)) {
+        throw new BadRequestException("Languages must be an array");
+      }
+
+      // Validate each language object
+      for (const lang of updateData.languages) {
+        if (!isValidUserLanguage(lang)) {
+          throw new BadRequestException(
+            `Invalid language: ${JSON.stringify(lang)}`
+          );
+        }
+      }
+
+      // Check for duplicate language codes
+      const languageCodes = updateData.languages.map((lang) => lang.code);
+      const uniqueCodes = new Set(languageCodes);
+      if (languageCodes.length !== uniqueCodes.size) {
+        throw new BadRequestException(
+          "Duplicate language codes are not allowed"
+        );
+      }
+    }
+
+    // Prepare update data
+    const dataToUpdate: any = { ...updateData };
+    if (updateData.languages !== undefined) {
+      dataToUpdate.languages = updateData.languages;
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id: userId },
-      data: updateData,
+      data: dataToUpdate,
     });
 
     return {
@@ -227,6 +268,7 @@ export class AuthService {
       bio: updatedUser.bio,
       avatarUrl: updatedUser.avatarUrl,
       role: updatedUser.role,
+      languages: (updatedUser.languages as unknown as UserLanguage[]) || [],
       createdAt: updatedUser.createdAt,
     };
   }
