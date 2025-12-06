@@ -85,4 +85,44 @@ export class HiringController {
       throw error;
     }
   }
+
+  @Post('team')
+  @UseGuards(JwtAuthGuard)
+  async hireTeam(
+    @Request() req,
+    @Body()
+    hireData: {
+      teamId: number;
+      message: string;
+      orderId: number;
+    },
+  ) {
+    try {
+      // Log the hiring attempt
+      this.logger.log(
+        `Hiring attempt: Client ${req.user.userId} trying to hire team ${hireData.teamId} for order ${hireData.orderId}`,
+      );
+
+      const result = await this.hiringService.hireTeam({
+        ...hireData,
+        clientId: req.user.userId,
+      });
+
+      // Log successful hiring
+      this.logger.log(
+        `Hiring successful: Client ${req.user.userId} hired team ${hireData.teamId} for order ${hireData.orderId}`,
+      );
+
+      return result;
+    } catch (error) {
+      // Log the error
+      this.logger.error(
+        `Hiring failed: Client ${req.user.userId} failed to hire team ${hireData.teamId} for order ${hireData.orderId}`,
+        error.stack,
+      );
+
+      // Re-throw the error to let NestJS handle it
+      throw error;
+    }
+  }
 }
