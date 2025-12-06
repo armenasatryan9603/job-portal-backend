@@ -217,6 +217,7 @@ export class AuthService {
       location?: string;
       role?: string;
       languages?: UserLanguage[];
+      experienceYears?: number;
     }
   ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -270,6 +271,7 @@ export class AuthService {
       role: updatedUser.role,
       languages: (updatedUser.languages as unknown as UserLanguage[]) || [],
       createdAt: updatedUser.createdAt,
+      experienceYears: updatedUser.experienceYears || undefined,
     };
   }
 

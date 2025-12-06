@@ -5,10 +5,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import * as bcrypt from "bcrypt";
-import {
-  UserLanguage,
-  isValidUserLanguage,
-} from "../types/user-languages";
+import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
 
 @Injectable()
 export class UsersService {
@@ -71,6 +68,11 @@ export class UsersService {
         creditBalance: true,
         verified: true,
         createdAt: true,
+        experienceYears: true,
+        priceMin: true,
+        priceMax: true,
+        location: true,
+        languages: true,
         Orders: {
           take: 5,
           orderBy: { createdAt: "desc" },
@@ -145,7 +147,9 @@ export class UsersService {
       const languageCodes = updateData.languages.map((lang) => lang.code);
       const uniqueCodes = new Set(languageCodes);
       if (languageCodes.length !== uniqueCodes.size) {
-        throw new BadRequestException("Duplicate language codes are not allowed");
+        throw new BadRequestException(
+          "Duplicate language codes are not allowed"
+        );
       }
     }
 

@@ -91,6 +91,10 @@ export class AuthController {
       verified: user.verified || false,
       languages: (user.languages as unknown as UserLanguage[]) || [],
       createdAt: user.createdAt,
+      experienceYears: user.experienceYears || undefined,
+      priceMin: user.priceMin,
+      priceMax: user.priceMax,
+      location: user.location,
     };
   }
 
@@ -109,6 +113,7 @@ export class AuthController {
       location?: string;
       role?: string;
       languages?: UserLanguage[];
+      experienceYears?: number;
     }
   ) {
     const userId = req.user.userId;
