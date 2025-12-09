@@ -86,6 +86,7 @@ export class AuthController {
       phone: user.phone,
       bio: user.bio,
       avatarUrl: user.avatarUrl,
+      bannerUrl: user.bannerUrl,
       role: user.role,
       creditBalance: user.creditBalance || 0,
       verified: user.verified || false,

@@ -15,6 +15,7 @@ model User {
   phone                    String?                   @unique
   passwordHash             String
   avatarUrl                String?
+  bannerUrl                String?
   bio                      String?
   creditBalance            Float                     @default(0)
   verified                 Boolean                   @default(false)

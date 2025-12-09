@@ -214,6 +214,7 @@ export class AuthService {
       email?: string;
       bio?: string;
       avatarUrl?: string;
+      bannerUrl?: string;
       location?: string;
       role?: string;
       languages?: UserLanguage[];
@@ -268,6 +269,7 @@ export class AuthService {
       phone: updatedUser.phone,
       bio: updatedUser.bio,
       avatarUrl: updatedUser.avatarUrl,
+      bannerUrl: updatedUser.bannerUrl,
       role: updatedUser.role,
       languages: (updatedUser.languages as unknown as UserLanguage[]) || [],
       createdAt: updatedUser.createdAt,
