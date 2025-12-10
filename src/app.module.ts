@@ -20,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ReasonsModule } from './reasons/reasons.module';
 import { TranslationsModule } from './translations/translations.module';
 import { PeerRelationshipsModule } from './peer-relationships/peer-relationships.module';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { PeerRelationshipsModule } from './peer-relationships/peer-relationships
     ReasonsModule,
     TranslationsModule,
     PeerRelationshipsModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
