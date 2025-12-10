@@ -62,7 +62,8 @@ export class ServicesService {
     return {
       ...service,
       name: service[langFields.name] || service.name || "",
-      description: service[langFields.description] || service.description || null,
+      description:
+        service[langFields.description] || service.description || null,
       features,
       technologies,
     };
@@ -82,6 +83,8 @@ export class ServicesService {
     averagePrice?: number;
     minPrice?: number;
     maxPrice?: number;
+    currency?: string;
+    rateUnit?: string;
     features?: string[];
     featuresEn?: string[];
     featuresRu?: string[];
@@ -276,6 +279,8 @@ export class ServicesService {
       averagePrice?: number;
       minPrice?: number;
       maxPrice?: number;
+      currency?: string;
+      rateUnit?: string;
       features?: string[];
       featuresEn?: string[];
       featuresRu?: string[];
@@ -470,13 +475,30 @@ export class ServicesService {
     const searchConditions: Prisma.ServiceWhereInput = {
       OR: [
         { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        { description: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        {
+          description: { contains: query, mode: Prisma.QueryMode.insensitive },
+        },
         { nameEn: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        { descriptionEn: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        {
+          descriptionEn: {
+            contains: query,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
         { nameRu: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        { descriptionRu: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        {
+          descriptionRu: {
+            contains: query,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
         { nameHy: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        { descriptionHy: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        {
+          descriptionHy: {
+            contains: query,
+            mode: Prisma.QueryMode.insensitive,
+          },
+        },
       ],
     };
 

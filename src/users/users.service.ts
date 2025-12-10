@@ -305,6 +305,8 @@ export class UsersService {
       priceMin?: number;
       priceMax?: number;
       location?: string;
+      currency?: string;
+      rateUnit?: string;
     }
   ) {
     // Check if user exists
@@ -416,10 +418,29 @@ export class UsersService {
           priceMin: true,
           priceMax: true,
           location: true,
+          currency: true,
+          rateUnit: true,
           createdAt: true,
           UserServices: {
-            include: {
-              Service: true,
+            select: {
+              Service: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  imageUrl: true,
+                  parentId: true,
+                  averagePrice: true,
+                  minPrice: true,
+                  maxPrice: true,
+                  currency: true,
+                  rateUnit: true,
+                  completionRate: true,
+                  isActive: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+              },
             },
           },
           Reviews: {
@@ -427,8 +448,21 @@ export class UsersService {
             orderBy: {
               createdAt: "desc",
             },
-            include: {
-              Order: true,
+            select: {
+              id: true,
+              orderId: true,
+              reviewerId: true,
+              specialistId: true,
+              rating: true,
+              comment: true,
+              createdAt: true,
+              Order: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                },
+              },
             },
           },
         },
@@ -455,6 +489,8 @@ export class UsersService {
           priceMin: specialist.priceMin,
           priceMax: specialist.priceMax,
           location: specialist.location,
+          currency: specialist.currency,
+          rateUnit: specialist.rateUnit,
           User: {
             id: specialist.id,
             name: specialist.name,

@@ -64,6 +64,8 @@ export class OrdersService {
     title: string,
     description: string,
     budget: number,
+    currency?: string,
+    rateUnit?: string,
     availableDates?: string[],
     location?: string,
     skills?: string[],
@@ -192,6 +194,8 @@ export class OrdersService {
         descriptionRu,
         descriptionHy,
         budget,
+        currency: currency || undefined,
+        rateUnit: rateUnit || undefined,
         availableDates: formattedAvailableDates,
         location,
         skills: formattedSkills,
@@ -523,6 +527,8 @@ export class OrdersService {
       title?: string;
       description?: string;
       budget?: number;
+      currency?: string;
+      rateUnit?: string;
       status?: string;
       titleEn?: string;
       titleRu?: string;
@@ -1238,6 +1244,8 @@ export class OrdersService {
     title: string,
     description: string,
     budget: number,
+    currency?: string,
+    rateUnit?: string,
     availableDates?: string[],
     location?: string,
     skills?: string[],
@@ -1357,6 +1365,8 @@ export class OrdersService {
           descriptionRu,
           descriptionHy,
           budget,
+          currency: currency || undefined,
+          rateUnit: rateUnit || undefined,
           availableDates: availableDates || [],
           location,
           skills: skills || [],

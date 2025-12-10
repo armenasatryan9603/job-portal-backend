@@ -136,6 +136,8 @@ export class UsersController {
       priceMin?: number;
       priceMax?: number;
       location?: string;
+      currency?: string;
+      rateUnit?: string;
     }
   ) {
     return this.usersService.createSpecialistProfile(+id, specialistData);

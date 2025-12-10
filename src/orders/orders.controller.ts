@@ -33,6 +33,8 @@ export class OrdersController {
       title: string;
       description: string;
       budget: number;
+      currency?: string;
+      rateUnit?: string;
       availableDates?: string[];
       location?: string;
       skills?: string[];
@@ -51,6 +53,8 @@ export class OrdersController {
       body.title,
       body.description,
       body.budget,
+      body.currency,
+      body.rateUnit,
       body.availableDates,
       body.location,
       body.skills,
@@ -69,6 +73,8 @@ export class OrdersController {
       title: string;
       description: string;
       budget: number;
+      currency?: string;
+      rateUnit?: string;
       availableDates?: string[];
       location?: string;
       skills?: string[];
@@ -89,6 +95,8 @@ export class OrdersController {
       body.title,
       body.description,
       body.budget,
+      body.currency,
+      body.rateUnit,
       body.availableDates,
       body.location,
       body.skills,
@@ -323,6 +331,8 @@ export class OrdersController {
       title?: string;
       description?: string;
       budget?: number;
+      currency?: string;
+      rateUnit?: string;
       status?: string;
       useAIEnhancement?: boolean;
       titleEn?: string;

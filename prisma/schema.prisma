@@ -26,6 +26,8 @@ model User {
   priceMin                 Float?
   priceMax                 Float?
   location                 String?
+  currency                 String?
+  rateUnit                 String?
   fcmToken                 String?
   referralCode             String?                   @unique
   referralCredits          Float                     @default(0)
@@ -72,6 +74,8 @@ model Service {
   averagePrice        Float?
   minPrice            Float?
   maxPrice            Float?
+  currency            String?
+  rateUnit            String?
   completionRate      Float?              @default(0)
   isActive            Boolean             @default(true)
   createdAt           DateTime            @default(now())
@@ -172,6 +176,8 @@ model Order {
   title           String?
   description     String?
   budget          Float?
+  currency        String               @default("AMD")
+  rateUnit        String               @default("per_project")
   availableDates  String[]             @default([])
   location        String?
   skills          String[]             @default([])
@@ -380,8 +386,8 @@ model OrderPricing {
   id               Int      @id @default(autoincrement())
   minBudget        Float
   maxBudget        Float?
-  creditCost       Float
-  teamCreditCost   Float?   // Separate pricing for team applications
+  creditCost       Float    // Percentage of order budget (e.g., 5.0 for 5%)
+  teamCreditCost   Float?   // Percentage for team applications (e.g., 7.0 for 7%)
   refundPercentage Float    @default(0.5)
   teamRefundPercentage Float? @default(0.5) // Separate refund percentage for team applications
   description      String?

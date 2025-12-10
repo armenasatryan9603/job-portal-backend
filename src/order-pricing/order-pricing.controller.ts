@@ -9,22 +9,24 @@ import {
   UseGuards,
   Request,
   Logger,
-} from '@nestjs/common';
-import { OrderPricingService } from './order-pricing.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+} from "@nestjs/common";
+import { OrderPricingService } from "./order-pricing.service";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller('order-pricing')
+@Controller("order-pricing")
 export class OrderPricingController {
   private readonly logger = new Logger(OrderPricingController.name);
 
   constructor(private orderPricingService: OrderPricingService) {}
 
-  @Get('cost')
-  async getCreditCost(@Body() body: { orderBudget: number; isTeamApplication?: boolean }) {
+  @Get("cost")
+  async getCreditCost(
+    @Body() body: { orderBudget: number; isTeamApplication?: boolean }
+  ) {
     try {
       const cost = await this.orderPricingService.getCreditCost(
         body.orderBudget,
-        body.isTeamApplication || false,
+        body.isTeamApplication || false
       );
       return {
         orderBudget: body.orderBudget,
@@ -34,7 +36,7 @@ export class OrderPricingController {
     } catch (error) {
       this.logger.error(
         `Error getting credit cost for order budget $${body.orderBudget}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -45,7 +47,7 @@ export class OrderPricingController {
     try {
       return await this.orderPricingService.getAllPricing();
     } catch (error) {
-      this.logger.error('Error getting all pricing:', error);
+      this.logger.error("Error getting all pricing:", error);
       throw error;
     }
   }
@@ -57,35 +59,35 @@ export class OrderPricingController {
     data: {
       minBudget: number;
       maxBudget?: number;
-      creditCost: number;
-      teamCreditCost?: number;
+      creditCost: number; // Percentage (e.g., 5.0 for 5%)
+      teamCreditCost?: number; // Percentage (e.g., 7.0 for 7%)
       refundPercentage?: number;
       teamRefundPercentage?: number;
       description?: string;
-    },
+    }
   ) {
     try {
       return await this.orderPricingService.setPricing(data);
     } catch (error) {
-      this.logger.error('Error setting pricing:', error);
+      this.logger.error("Error setting pricing:", error);
       throw error;
     }
   }
 
-  @Put(':id')
+  @Put(":id")
   @UseGuards(JwtAuthGuard)
   async updatePricing(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body()
     data: {
       minBudget?: number;
       maxBudget?: number;
-      creditCost?: number;
-      teamCreditCost?: number;
+      creditCost?: number; // Percentage (e.g., 5.0 for 5%)
+      teamCreditCost?: number; // Percentage (e.g., 7.0 for 7%)
       refundPercentage?: number;
       teamRefundPercentage?: number;
       description?: string;
-    },
+    }
   ) {
     try {
       const pricingId = parseInt(id);
@@ -93,7 +95,7 @@ export class OrderPricingController {
       return await this.orderPricingService.setPricing({
         minBudget: data.minBudget || 0,
         maxBudget: data.maxBudget,
-        creditCost: data.creditCost || 1.0,
+        creditCost: data.creditCost || 5.0,
         teamCreditCost: data.teamCreditCost,
         refundPercentage: data.refundPercentage,
         teamRefundPercentage: data.teamRefundPercentage,
@@ -105,9 +107,9 @@ export class OrderPricingController {
     }
   }
 
-  @Delete(':id')
+  @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  async deactivatePricing(@Param('id') id: string) {
+  async deactivatePricing(@Param("id") id: string) {
     try {
       const pricingId = parseInt(id);
       return await this.orderPricingService.deactivatePricing(pricingId);
@@ -117,16 +119,16 @@ export class OrderPricingController {
     }
   }
 
-  @Post('initialize-defaults')
+  @Post("initialize-defaults")
   @UseGuards(JwtAuthGuard)
   async initializeDefaults() {
     try {
       await this.orderPricingService.initializeDefaultPricing();
       return {
-        message: 'Default pricing configurations initialized successfully',
+        message: "Default pricing configurations initialized successfully",
       };
     } catch (error) {
-      this.logger.error('Error initializing default pricing:', error);
+      this.logger.error("Error initializing default pricing:", error);
       throw error;
     }
   }
