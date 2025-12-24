@@ -892,6 +892,7 @@
   "helpDetailRightToObject": "• Right to object to processing",
   "tapImageToSetAsBanner": "Tap image to set as banner",
   "addBanner": "Add banner",
+  "perProject": "per project",
   "viewed": "Viewed",
   "removeBanner": "Remove Banner",
   "uploadBanner": "Upload Banner",
@@ -1106,5 +1107,14 @@
   "uploadWorkSamplesHint": "Upload your best work to showcase your skills",
   "workSamples": "Work Samples",
   "years": "years",
-  "yearsOfExperience": "Years of Experience"
+  "yearsOfExperience": "Years of Experience",
+  "jobScheduledToday": "Job Scheduled Today",
+  "jobScheduledTomorrow": "Job Scheduled Tomorrow",
+  "calendarReminder": "Calendar Reminder",
+  "noAppliedApplications": "No Applied Applications",
+  "noScheduledApplications": "No Scheduled Applications",
+  "noAppliedOnDate": "No applied items on this date",
+  "noAppliedDesc": "You haven't applied to any jobs yet",
+  "noScheduledOnDate": "No scheduled items on this date",
+  "noScheduledDesc": "No scheduled dates available"
 }

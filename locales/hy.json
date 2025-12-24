@@ -769,6 +769,7 @@
   "questionsForSpecialists": "Հարցեր մասնագետների համար",
   "addQuestionsForApplicants": "Ավելացնել հարցեր պատվերների համար",
   "price": "Գին",
+  "perProject": "պրոյեկտով",
   "noProfileDataAvailable": "Պրոֆիլի տվյալները հասանելի չեն",
   "helpDetailDownloadApp": "1. Ներբեռնեք և բացեք հավելվածը",
   "helpDetailSignUp": "2. Սեղմեք 'Գրանցվել' կամ 'Սկսել'",
@@ -1106,5 +1107,14 @@
   "uploadWorkSamplesHint": "Վերբեռնեք ձեր լավագույն աշխատանքները՝ ձեր հմտությունները ցուցադրելու համար",
   "workSamples": "Աշխատանքի օրինակներ",
   "years": "տարի",
-  "yearsOfExperience": "Փորձի տարիներ"
+  "yearsOfExperience": "Փորձի տարիներ",
+  "jobScheduledToday": "Աշխատանքը պլանավորված է այսօր",
+  "jobScheduledTomorrow": "Աշխատանքը պլանավորված է վաղը",
+  "calendarReminder": "Օրացույցի հիշեցում",
+  "noAppliedApplications": "Դիմումներ չկան",
+  "noScheduledApplications": "Պլանավորված դիմումներ չկան",
+  "noAppliedOnDate": "Այս ամսաթվի համար դիմումներ չկան",
+  "noAppliedDesc": "Դուք դեռ չեք դիմել որևէ աշխատանքի",
+  "noScheduledOnDate": "Այս ամսաթվի համար պլանավորված դիմումներ չկան",
+  "noScheduledDesc": "Պլանավորված ամսաթվեր հասանելի չեն"
 }
