@@ -706,10 +706,30 @@ export class PeerRelationshipsService {
 
   /**
    * Update team name
+   * @deprecated Use updateTeam instead
    */
   async updateTeamName(
     teamId: number,
     newName: string,
+    requestingUserId: number
+  ) {
+    return this.updateTeam(
+      teamId,
+      { name: newName },
+      requestingUserId
+    );
+  }
+
+  /**
+   * Update team information
+   */
+  async updateTeam(
+    teamId: number,
+    updateData: {
+      name?: string;
+      bannerUrl?: string | null;
+      description?: string | null;
+    },
     requestingUserId: number
   ) {
     // Verify team exists
@@ -726,20 +746,38 @@ export class PeerRelationshipsService {
       throw new BadRequestException("Cannot update inactive team");
     }
 
-    // Only team creator can update team name
+    // Only team creator can update team
     if (team.createdBy !== requestingUserId) {
-      throw new BadRequestException("Only team creator can update team name");
+      throw new BadRequestException("Only team creator can update team");
     }
 
-    if (!newName || newName.trim().length === 0) {
-      throw new BadRequestException("Team name cannot be empty");
+    // Validate name if provided
+    if (updateData.name !== undefined) {
+      if (!updateData.name || updateData.name.trim().length === 0) {
+        throw new BadRequestException("Team name cannot be empty");
+      }
+    }
+
+    // Prepare update data
+    const dataToUpdate: any = {};
+    if (updateData.name !== undefined) {
+      dataToUpdate.name = updateData.name.trim();
+    }
+    if (updateData.bannerUrl !== undefined) {
+      dataToUpdate.bannerUrl = updateData.bannerUrl?.trim() || null;
+    }
+    if (updateData.description !== undefined) {
+      dataToUpdate.description = updateData.description?.trim() || null;
+    }
+
+    // Check if there's anything to update
+    if (Object.keys(dataToUpdate).length === 0) {
+      throw new BadRequestException("No fields to update");
     }
 
     return this.prisma.team.update({
       where: { id: teamId },
-      data: {
-        name: newName.trim(),
-      },
+      data: dataToUpdate,
       include: {
         Creator: {
           select: {

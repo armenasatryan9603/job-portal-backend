@@ -285,6 +285,24 @@ model Portfolio {
   @@index([createdAt])
 }
 
+model TeamPortfolio {
+  id          Int      @id @default(autoincrement())
+  teamId      Int
+  fileName    String
+  fileUrl     String
+  fileType    String
+  mimeType    String
+  fileSize    Int
+  title       String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([createdAt])
+}
+
 model Card {
   id              Int      @id @default(autoincrement())
   userId          Int
@@ -383,17 +401,17 @@ model Message {
 }
 
 model OrderPricing {
-  id               Int      @id @default(autoincrement())
-  minBudget        Float
-  maxBudget        Float?
-  creditCost       Float    // Percentage of order budget (e.g., 5.0 for 5%)
-  teamCreditCost   Float?   // Percentage for team applications (e.g., 7.0 for 7%)
-  refundPercentage Float    @default(0.5)
-  teamRefundPercentage Float? @default(0.5) // Separate refund percentage for team applications
-  description      String?
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  minBudget            Float
+  maxBudget            Float?
+  creditCost           Float // Percentage of order budget (e.g., 5.0 for 5%)
+  teamCreditCost       Float? // Percentage for team applications (e.g., 7.0 for 7%)
+  refundPercentage     Float    @default(0.5)
+  teamRefundPercentage Float?   @default(0.5) // Separate refund percentage for team applications
+  description          String?
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([minBudget])
   @@index([maxBudget])
@@ -515,30 +533,33 @@ model PeerRelationship {
 }
 
 model Team {
-  id        Int            @id @default(autoincrement())
-  name      String
-  createdBy Int
-  createdAt DateTime       @default(now())
-  isActive  Boolean        @default(true)
-  Members   TeamMember[]
-  Creator   User           @relation("TeamCreator", fields: [createdBy], references: [id])
-  Proposals OrderProposal[]
+  id          Int             @id @default(autoincrement())
+  name        String
+  description String?
+  bannerUrl   String?
+  createdBy   Int
+  createdAt   DateTime        @default(now())
+  isActive    Boolean         @default(true)
+  Members     TeamMember[]
+  Creator     User            @relation("TeamCreator", fields: [createdBy], references: [id])
+  Proposals   OrderProposal[]
+  Gallery     TeamPortfolio[]
 
   @@index([createdBy])
   @@index([isActive])
 }
 
 model TeamMember {
-  id       Int      @id @default(autoincrement())
-  teamId   Int
-  userId   Int
-  role     String   @default("member") // "lead" or "member"
-  status   String   @default("pending") // "pending", "accepted", "rejected" (only for non-lead members)
-  joinedAt DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  teamId    Int
+  userId    Int
+  role      String   @default("member") // "lead" or "member"
+  status    String   @default("pending") // "pending", "accepted", "rejected" (only for non-lead members)
+  joinedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
-  isActive Boolean  @default(true)
-  Team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive  Boolean  @default(true)
+  Team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
   @@index([teamId])

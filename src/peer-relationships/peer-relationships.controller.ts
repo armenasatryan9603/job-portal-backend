@@ -9,15 +9,26 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
+import { extname } from "path";
+import { v4 as uuidv4 } from "uuid";
 import { PeerRelationshipsService } from "./peer-relationships.service";
+import { TeamPortfolioService } from "./team-portfolio.service";
+import { VercelBlobService } from "../storage/vercel-blob.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 
 @Controller("peers")
 export class PeerRelationshipsController {
   constructor(
-    private readonly peerRelationshipsService: PeerRelationshipsService
+    private readonly peerRelationshipsService: PeerRelationshipsService,
+    private readonly teamPortfolioService: TeamPortfolioService,
+    private readonly vercelBlobService: VercelBlobService
   ) {}
 
   @Post()
@@ -194,6 +205,32 @@ export class PeerRelationshipsController {
 
   @Patch("teams/:teamId")
   @UseGuards(JwtAuthGuard)
+  async updateTeam(
+    @Request() req,
+    @Param("teamId", ParseIntPipe) teamId: number,
+    @Body()
+    body: {
+      name?: string;
+      bannerUrl?: string | null;
+      description?: string | null;
+    }
+  ) {
+    const requestingUserId = req.user?.userId;
+    if (!requestingUserId) {
+      throw new Error("User ID not found in authentication token");
+    }
+    return this.peerRelationshipsService.updateTeam(
+      teamId,
+      body,
+      requestingUserId
+    );
+  }
+
+  /**
+   * @deprecated Use PATCH /teams/:teamId instead
+   */
+  @Patch("teams/:teamId/name")
+  @UseGuards(JwtAuthGuard)
   async updateTeamName(
     @Request() req,
     @Param("teamId", ParseIntPipe) teamId: number,
@@ -203,9 +240,124 @@ export class PeerRelationshipsController {
     if (!requestingUserId) {
       throw new Error("User ID not found in authentication token");
     }
-    return this.peerRelationshipsService.updateTeamName(
+    return this.peerRelationshipsService.updateTeam(
       teamId,
-      body.name,
+      { name: body.name },
+      requestingUserId
+    );
+  }
+
+  // Team Portfolio/Gallery endpoints
+  @Get("teams/:teamId/gallery")
+  @UseGuards(OptionalJwtAuthGuard)
+  async getTeamGallery(
+    @Param("teamId", ParseIntPipe) teamId: number
+  ) {
+    return this.teamPortfolioService.getTeamPortfolioByTeam(teamId);
+  }
+
+  @Post("teams/:teamId/gallery/upload")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      fileFilter: (req, file, callback) => {
+        // Allow only images
+        const allowedMimes = [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+        ];
+
+        if (allowedMimes.includes(file.mimetype)) {
+          callback(null, true);
+        } else {
+          callback(new BadRequestException("File type not supported"), false);
+        }
+      },
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB limit
+      },
+    })
+  )
+  async uploadTeamGalleryItem(
+    @Request() req,
+    @Param("teamId", ParseIntPipe) teamId: number,
+    @UploadedFile() file: any,
+    @Body() body: { title?: string; description?: string }
+  ) {
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+
+    const requestingUserId = req.user?.userId;
+    if (!requestingUserId) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    // Generate unique filename for Vercel Blob
+    const pathPrefix = `team-portfolio/${teamId}`;
+    const uniqueName = `${pathPrefix}/${uuidv4()}${extname(file.originalname)}`;
+
+    // Upload to Vercel Blob
+    const fileUrl = await this.vercelBlobService.uploadFile(
+      file.buffer,
+      uniqueName,
+      file.mimetype,
+      0 // No orderId for portfolio items
+    );
+
+    const fileType = file.mimetype.startsWith("image/") ? "image" : "video";
+
+    return this.teamPortfolioService.createTeamPortfolioItem(
+      teamId,
+      requestingUserId,
+      file.originalname,
+      fileUrl,
+      fileType,
+      file.mimetype,
+      file.size,
+      body.title,
+      body.description
+    );
+  }
+
+  @Patch("teams/:teamId/gallery/:id")
+  @UseGuards(JwtAuthGuard)
+  async updateTeamGalleryItem(
+    @Request() req,
+    @Param("teamId", ParseIntPipe) teamId: number,
+    @Param("id", ParseIntPipe) id: number,
+    @Body() body: { title?: string; description?: string }
+  ) {
+    const requestingUserId = req.user?.userId;
+    if (!requestingUserId) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    return this.teamPortfolioService.updateTeamPortfolioItem(
+      id,
+      requestingUserId,
+      body.title,
+      body.description
+    );
+  }
+
+  @Delete("teams/:teamId/gallery/:id")
+  @UseGuards(JwtAuthGuard)
+  async deleteTeamGalleryItem(
+    @Request() req,
+    @Param("teamId", ParseIntPipe) teamId: number,
+    @Param("id", ParseIntPipe) id: number
+  ) {
+    const requestingUserId = req.user?.userId;
+    if (!requestingUserId) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    return this.teamPortfolioService.deleteTeamPortfolioItem(
+      id,
       requestingUserId
     );
   }
