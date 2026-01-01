@@ -1,8 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "currency" TEXT,
-ADD COLUMN IF NOT EXISTS "rateUnit" TEXT;
-
--- AlterTable
-ALTER TABLE "Service" ADD COLUMN IF NOT EXISTS "currency" TEXT,
-ADD COLUMN IF NOT EXISTS "rateUnit" TEXT;
-
