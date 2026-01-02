@@ -9,6 +9,7 @@ import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { AIService } from "../ai/ai.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
+import { SkillsService } from "../skills/skills.service";
 
 @Injectable()
 export class OrdersService {
@@ -22,7 +23,8 @@ export class OrdersService {
     private orderPricingService: OrderPricingService,
     private notificationsService: NotificationsService,
     private aiService: AIService,
-    private creditTransactionsService: CreditTransactionsService
+    private creditTransactionsService: CreditTransactionsService,
+    private skillsService: SkillsService
   ) {}
 
   /**
@@ -69,6 +71,7 @@ export class OrdersService {
     availableDates?: string[],
     location?: string,
     skills?: string[],
+    skillIds?: number[],
     useAIEnhancement: boolean = false,
     questions?: string[]
   ) {
@@ -99,11 +102,34 @@ export class OrdersService {
         ? [availableDates]
         : [];
 
-    const formattedSkills = Array.isArray(skills)
-      ? skills
-      : skills
-        ? [skills]
-        : [];
+    // Handle skills: support both skillIds (new) and skills (backward compatibility)
+    // When both are present, combine them (skillIds for existing, skills for new ones to create)
+    this.logger.log(`[createOrder] Received skillIds: ${JSON.stringify(skillIds)}, skills: ${JSON.stringify(skills)}`);
+    let finalSkillIds: number[] = [];
+    
+    // First, add existing skill IDs
+    if (skillIds && skillIds.length > 0) {
+      finalSkillIds = skillIds.filter((id) => !isNaN(id) && id > 0);
+      this.logger.log(`[createOrder] Added existing skillIds: ${JSON.stringify(finalSkillIds)}`);
+    }
+    
+    // Then, handle new skills (skill names without IDs)
+    // This can happen when both skillIds and skills are sent (mixed scenario)
+    if (skills && skills.length > 0) {
+      const skillNames = skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+      this.logger.log(`[createOrder] Processing new skill names: ${JSON.stringify(skillNames)}`);
+      
+      if (skillNames.length > 0) {
+        const createdSkills = await this.skillsService.findOrCreateSkills(
+          skillNames
+        );
+        this.logger.log(`[createOrder] Created/found ${createdSkills.length} skills`);
+        const newSkillIds = createdSkills.map((s) => s.id);
+        // Combine existing skillIds with newly created skill IDs
+        finalSkillIds = [...finalSkillIds, ...newSkillIds];
+        this.logger.log(`[createOrder] Final skillIds: ${JSON.stringify(finalSkillIds)}`);
+      }
+    }
 
     // Handle AI enhancement if requested
     let titleEn: string | undefined;
@@ -198,8 +224,16 @@ export class OrdersService {
         rateUnit: rateUnit || undefined,
         availableDates: formattedAvailableDates,
         location,
-        skills: formattedSkills,
         status: "pending_review",
+        ...(finalSkillIds.length > 0
+          ? {
+              OrderSkills: {
+                create: finalSkillIds.map((skillId) => ({
+                  skillId,
+                })),
+              },
+            }
+          : {}),
         ...(questions && questions.length > 0
           ? {
               questions: {
@@ -319,6 +353,11 @@ export class OrdersService {
               fileType: true,
             },
           },
+          OrderSkills: {
+            include: {
+              Skill: true,
+            },
+          },
           Proposals: {
             take: 3,
             orderBy: { createdAt: "desc" },
@@ -339,15 +378,25 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
-    // Calculate credit cost for each order
+    // Calculate credit cost for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
         const creditCost = await this.orderPricingService.getCreditCost(
           order.budget || 0
         );
+        
+        // Transform OrderSkills to skills array for backward compatibility
+        const skills = (order as any).OrderSkills
+          ? (order as any).OrderSkills.map((os: any) => {
+              // Return skill name based on language preference (default to nameEn)
+              return os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || "";
+            }).filter((name: string) => name)
+          : [];
+
         return {
           ...order,
           creditCost,
+          skills,
         };
       })
     );
@@ -433,6 +482,11 @@ export class OrdersService {
         questions: {
           orderBy: { order: "asc" },
         },
+        OrderSkills: {
+          include: {
+            Skill: true,
+          },
+        },
         _count: {
           select: {
             Proposals: true,
@@ -445,6 +499,14 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
+
+    // Transform OrderSkills to skills array for backward compatibility
+    (order as any).skills = order.OrderSkills
+      ? order.OrderSkills.map((os) => {
+          // Return skill name based on language preference (default to nameEn)
+          return os.Skill.nameEn || os.Skill.nameRu || os.Skill.nameHy;
+        })
+      : [];
 
     // Calculate credit cost for the order
     const creditCost = await this.orderPricingService.getCreditCost(
@@ -537,6 +599,8 @@ export class OrdersService {
       descriptionRu?: string;
       descriptionHy?: string;
       questions?: string[];
+      skills?: string[];
+      skillIds?: number[];
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -721,10 +785,42 @@ export class OrdersService {
       );
     }
 
-    // Prepare update data (exclude useAIEnhancement and questions as they're handled separately)
+    // Handle skills update if provided
+    let finalSkillIds: number[] | undefined = undefined;
+    // Handle skills: support both skillIds (new) and skills (backward compatibility)
+    // When both are present, combine them (skillIds for existing, skills for new ones to create)
+    finalSkillIds = [];
+    
+    // First, add existing skill IDs
+    if (updateOrderDto.skillIds !== undefined) {
+      finalSkillIds = Array.isArray(updateOrderDto.skillIds)
+        ? updateOrderDto.skillIds.filter((id) => !isNaN(id) && id > 0)
+        : [];
+    }
+    
+    // Then, handle new skills (skill names without IDs)
+    // This can happen when both skillIds and skills are sent (mixed scenario)
+    if (updateOrderDto.skills !== undefined) {
+      if (Array.isArray(updateOrderDto.skills) && updateOrderDto.skills.length > 0) {
+        const skillNames = updateOrderDto.skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+        
+        if (skillNames.length > 0) {
+          const createdSkills = await this.skillsService.findOrCreateSkills(
+            skillNames
+          );
+          const newSkillIds = createdSkills.map((s) => s.id);
+          // Combine existing skillIds with newly created skill IDs
+          finalSkillIds = [...finalSkillIds, ...newSkillIds];
+        }
+      }
+    }
+
+    // Prepare update data (exclude useAIEnhancement, questions, skills, and skillIds as they're handled separately)
     const {
       useAIEnhancement: _,
       questions,
+      skills: __,
+      skillIds: ___,
       ...updateData
     } = updateOrderDto as any;
 
@@ -811,6 +907,24 @@ export class OrdersService {
       );
     }
 
+    // Handle skills update if provided
+    if (finalSkillIds !== undefined) {
+      // Delete existing OrderSkills
+      await (this.prisma as any).orderSkill.deleteMany({
+        where: { orderId: Number(id) },
+      });
+
+      // Create new OrderSkills if any
+      if (finalSkillIds.length > 0) {
+        await (this.prisma as any).orderSkill.createMany({
+          data: finalSkillIds.map((skillId) => ({
+            orderId: Number(id),
+            skillId,
+          })),
+        });
+      }
+    }
+
     return this.prisma.order.update({
       where: { id: Number(id) },
       data: updateData,
@@ -825,6 +939,11 @@ export class OrdersService {
         },
         questions: {
           orderBy: { order: "asc" },
+        },
+        OrderSkills: {
+          include: {
+            Skill: true,
+          },
         },
         _count: {
           select: {
@@ -1004,6 +1123,19 @@ export class OrdersService {
             name: { contains: query, mode: "insensitive" },
           },
         },
+        {
+          OrderSkills: {
+            some: {
+              Skill: {
+                OR: [
+                  { nameEn: { contains: query, mode: "insensitive" } },
+                  { nameRu: { contains: query, mode: "insensitive" } },
+                  { nameHy: { contains: query, mode: "insensitive" } },
+                ],
+              },
+            },
+          },
+        },
       ],
       // Exclude pending_review and rejected orders from search results
       status: {
@@ -1043,6 +1175,11 @@ export class OrdersService {
               fileType: true,
             },
           },
+          OrderSkills: {
+            include: {
+              Skill: true,
+            },
+          },
           Proposals: {
             take: 3,
             orderBy: { createdAt: "desc" },
@@ -1063,15 +1200,25 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
-    // Calculate credit cost for each order
+    // Calculate credit cost for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
         const creditCost = await this.orderPricingService.getCreditCost(
           order.budget || 0
         );
+        
+        // Transform OrderSkills to skills array for backward compatibility
+        const skills = (order as any).OrderSkills
+          ? (order as any).OrderSkills.map((os: any) => {
+              // Return skill name based on language preference (default to nameEn)
+              return os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || "";
+            }).filter((name: string) => name)
+          : [];
+
         return {
           ...order,
           creditCost,
+          skills,
         };
       })
     );
@@ -1249,6 +1396,7 @@ export class OrdersService {
     availableDates?: string[],
     location?: string,
     skills?: string[],
+    skillIds?: number[],
     mediaFiles: Array<{
       fileName: string;
       fileUrl: string;
@@ -1321,6 +1469,30 @@ export class OrdersService {
       }
     }
 
+    // Handle skills: support both skillIds (new) and skills (backward compatibility)
+    // When both are present, combine them (skillIds for existing, skills for new ones to create)
+    let finalSkillIds: number[] = [];
+    
+    // First, add existing skill IDs
+    if (skillIds && skillIds.length > 0) {
+      finalSkillIds = skillIds.filter((id) => !isNaN(id) && id > 0);
+    }
+    
+    // Then, handle new skills (skill names without IDs)
+    // This can happen when both skillIds and skills are sent (mixed scenario)
+    if (skills && skills.length > 0) {
+      const skillNames = skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+      
+      if (skillNames.length > 0) {
+        const createdSkills = await this.skillsService.findOrCreateSkills(
+          skillNames
+        );
+        const newSkillIds = createdSkills.map((s) => s.id);
+        // Combine existing skillIds with newly created skill IDs
+        finalSkillIds = [...finalSkillIds, ...newSkillIds];
+      }
+    }
+
     // Use Prisma transaction to ensure atomicity
     return this.prisma.$transaction(async (tx) => {
       // Deduct credits if AI enhancement was used
@@ -1369,8 +1541,16 @@ export class OrdersService {
           rateUnit: rateUnit || undefined,
           availableDates: availableDates || [],
           location,
-          skills: skills || [],
           status: "open",
+          ...(finalSkillIds.length > 0
+            ? {
+                OrderSkills: {
+                  create: finalSkillIds.map((skillId) => ({
+                    skillId,
+                  })),
+                },
+              }
+            : {}),
           ...(questions && questions.length > 0
             ? {
                 questions: {
@@ -1401,6 +1581,11 @@ export class OrdersService {
           },
           questions: {
             orderBy: { order: "asc" },
+          },
+          OrderSkills: {
+            include: {
+              Skill: true,
+            },
           },
           _count: {
             select: {

@@ -38,6 +38,7 @@ export class OrdersController {
       availableDates?: string[];
       location?: string;
       skills?: string[];
+      skillIds?: number[];
       useAIEnhancement?: boolean;
       questions?: string[];
     }
@@ -58,6 +59,7 @@ export class OrdersController {
       body.availableDates,
       body.location,
       body.skills,
+      body.skillIds,
       body.useAIEnhancement ?? false,
       body.questions
     );
@@ -78,6 +80,7 @@ export class OrdersController {
       availableDates?: string[];
       location?: string;
       skills?: string[];
+      skillIds?: number[];
       mediaFiles?: Array<{
         fileName: string;
         fileUrl: string;
@@ -100,6 +103,7 @@ export class OrdersController {
       body.availableDates,
       body.location,
       body.skills,
+      body.skillIds,
       body.mediaFiles || [],
       body.useAIEnhancement ?? false,
       body.questions
@@ -342,6 +346,8 @@ export class OrdersController {
       descriptionRu?: string;
       descriptionHy?: string;
       questions?: string[];
+      skills?: string[];
+      skillIds?: number[];
     },
     @Request() req
   ) {

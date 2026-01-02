@@ -180,7 +180,6 @@ model Order {
   rateUnit        String               @default("per_project")
   availableDates  String[]             @default([])
   location        String?
-  skills          String[]             @default([])
   status          String               @default("open")
   createdAt       DateTime             @default(now())
   bannerImageId   Int?
@@ -201,6 +200,7 @@ model Order {
   Reviews         Review[]
   ChangeHistory   OrderChangeHistory[]
   SavedBy         SavedOrder[]
+  OrderSkills     OrderSkill[]
 
   @@index([status])
 }
@@ -592,4 +592,34 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+}
+
+model Skill {
+  id            Int         @id @default(autoincrement())
+  nameEn        String
+  nameRu        String
+  nameHy        String
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  OrderSkills   OrderSkill[]
+
+  @@index([nameEn])
+  @@index([nameRu])
+  @@index([nameHy])
+}
+
+model OrderSkill {
+  id        Int      @id @default(autoincrement())
+  orderId  Int
+  skillId  Int
+  createdAt DateTime @default(now())
+  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, skillId])
+  @@index([orderId])
+  @@index([skillId])
 }

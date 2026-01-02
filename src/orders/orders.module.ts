@@ -8,9 +8,10 @@ import { OrderPricingModule } from "../order-pricing/order-pricing.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { AIModule } from "../ai/ai.module";
 import { CreditModule } from "../credit/credit.module";
+import { SkillsModule } from "../skills/skills.module";
 
 @Module({
-  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, NotificationsService, AIService, and CreditTransactionsService
+  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, NotificationsService, AIService, CreditTransactionsService, and SkillsService
   controllers: [OrdersController],
   providers: [OrdersService, PrismaService],
 })
