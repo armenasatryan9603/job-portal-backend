@@ -465,6 +465,11 @@ export class UsersService {
               },
             },
           },
+          _count: {
+            select: {
+              Reviews: true,
+            },
+          },
         },
         orderBy: {
           createdAt: "desc",
@@ -476,10 +481,44 @@ export class UsersService {
       // Check hired status for each specialist if currentUserId is provided
       // Removed isHired logic - will be checked per order in hiring dialog
 
+      // Get all specialist IDs
+      const specialistIds = specialists.map((s) => s.id);
+
+      // Calculate average ratings and review counts for all specialists in one query
+      const ratingAggregates = await Promise.all(
+        specialistIds.map((specialistId) =>
+          this.prisma.review.aggregate({
+            where: { specialistId },
+            _avg: { rating: true },
+            _count: { rating: true },
+          })
+        )
+      );
+
+      // Create a map of specialistId -> { averageRating, reviewCount }
+      const ratingMap = new Map(
+        specialistIds.map((id, index) => [
+          id,
+          {
+            averageRating:
+              ratingAggregates[index]._avg.rating != null
+                ? Math.round(ratingAggregates[index]._avg.rating * 10) / 10
+                : 0,
+            reviewCount: ratingAggregates[index]._count.rating,
+          },
+        ])
+      );
+
       // Transform the data to match frontend expectations
       const transformedSpecialists = specialists.map((specialist) => {
         // Get the primary service (first one) for the specialist
         const primaryService = specialist.UserServices?.[0]?.Service;
+
+        // Get rating data from the map
+        const ratingData = ratingMap.get(specialist.id) || {
+          averageRating: 0,
+          reviewCount: 0,
+        };
 
         return {
           id: specialist.id,
@@ -505,8 +544,8 @@ export class UsersService {
           _count: {
             Proposals: 0, // This would need to be calculated separately if needed
           },
-          averageRating: 0, // This would need to be calculated from reviews
-          reviewCount: specialist.Reviews?.length || 0,
+          averageRating: ratingData.averageRating,
+          reviewCount: ratingData.reviewCount,
         };
       });
 
@@ -552,6 +591,20 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { id, role: "specialist" },
       include: {
+        UserServices: {
+          include: {
+            Service: {
+              include: {
+                ServiceTechnologies: {
+                  include: {
+                    Technology: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 1,
+        },
         Proposals: {
           take: 10,
           orderBy: { createdAt: "desc" },
@@ -616,8 +669,35 @@ export class UsersService {
         : 0;
 
     // Transform the data to match frontend expectations
+    const roundedAverageRating = Math.round(averageRating * 10) / 10;
+    const reviewCountValue = reviews.length;
+    
+    // Get the first service from UserServices
+    const primaryUserService = user.UserServices?.[0];
+    const service = primaryUserService?.Service;
+    
+    // Transform ServiceTechnologies to technologies array format expected by frontend
+    const technologies = service?.ServiceTechnologies?.map((st: any) => ({
+      id: st.Technology.id,
+      name: st.Technology.name,
+      nameEn: st.Technology.nameEn,
+      nameRu: st.Technology.nameRu,
+      nameHy: st.Technology.nameHy,
+    })) || [];
+    
     return {
       id: user.id,
+      userId: user.id,
+      serviceId: service?.id,
+      experienceYears: user.experienceYears,
+      priceMin: user.priceMin,
+      priceMax: user.priceMax,
+      location: user.location,
+      currency: user.currency,
+      rateUnit: user.rateUnit,
+      averageRating: roundedAverageRating,
+      reviewCount: reviewCountValue,
+      reviews: reviews,
       User: {
         id: user.id,
         name: user.name,
@@ -631,12 +711,21 @@ export class UsersService {
         priceMax: user.priceMax,
         location: user.location,
         createdAt: user.createdAt,
-        Proposals: user.Proposals,
-        _count: user._count,
-        reviews,
-        averageRating: Math.round(averageRating * 10) / 10,
-        reviewCount: reviews.length,
       },
+      Service: service ? {
+        id: service.id,
+        name: service.name,
+        nameEn: service.nameEn,
+        nameRu: service.nameRu,
+        nameHy: service.nameHy,
+        description: service.description,
+        descriptionEn: service.descriptionEn,
+        descriptionRu: service.descriptionRu,
+        descriptionHy: service.descriptionHy,
+        completionRate: service.completionRate,
+        technologies: technologies,
+      } : null,
+      _count: user._count,
     };
   }
 
