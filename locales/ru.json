@@ -542,6 +542,7 @@
   "addTimes": "Добавить время",
   "allDay": "Весь день",
   "enterQuestion": "Введите вопрос...",
+  "noSpecialistsAvailable": "Нет доступных специалистов на данный момент",
   "allServices": "Все сервисы",
   "applicationCost": "Стоимость заявки",
   "applicationSubmittedSuccessfully": "Заявка успешно отправлена!",

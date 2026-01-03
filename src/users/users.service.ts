@@ -704,6 +704,7 @@ export class UsersService {
         email: user.email,
         phone: user.phone,
         avatarUrl: user.avatarUrl,
+        bannerUrl: user.bannerUrl,
         bio: user.bio,
         verified: user.verified,
         experienceYears: user.experienceYears,
