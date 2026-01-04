@@ -303,12 +303,70 @@ export class OrdersService {
     serviceId?: number,
     serviceIds?: number[],
     clientId?: number,
-    isAdmin: boolean = false
+    isAdmin: boolean = false,
+    userId?: number
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
 
-    if (status) {
+    // Handle "not_applied" status specially
+    if (status === "not_applied") {
+      if (!userId) {
+        // If user is not authenticated, "not_applied" doesn't make sense
+        // Return empty results or treat as "all"
+        this.logger.warn(
+          "not_applied status requested but user is not authenticated"
+        );
+        // Return empty results
+        return {
+          orders: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
+      }
+
+      // Get all order IDs that the user has applied to
+      const proposals = await this.prisma.orderProposal.findMany({
+        where: {
+          userId: userId,
+        },
+        select: {
+          orderId: true,
+        },
+      });
+      
+      // Extract unique order IDs
+      const appliedOrderIds = Array.from(
+        new Set(proposals.map(p => p.orderId))
+      );
+
+      this.logger.debug(
+        `User ${userId} has applied to ${appliedOrderIds.length} orders`
+      );
+
+      // Filter out:
+      // 1. Orders the user has applied to
+      // 2. Orders the user created
+      if (appliedOrderIds.length > 0) {
+        where.id = {
+          notIn: appliedOrderIds,
+        };
+      }
+      
+      // Filter out orders the user created
+      where.clientId = {
+        not: userId,
+      };
+      
+      // "not_applied" should only show "open" orders
+      where.status = "open";
+    } else if (status) {
       where.status = status;
     } else if (!isAdmin && !clientId) {
       // For public queries (non-admin, not viewing own orders), exclude pending_review and rejected
@@ -325,10 +383,14 @@ export class OrdersService {
     }
 
     if (clientId) {
-      where.clientId = clientId;
-      // When viewing own orders, show all statuses
-      if (where.status && where.status.notIn) {
-        delete where.status;
+      // Don't allow clientId to override "not_applied" filter
+      // "not_applied" explicitly excludes user's own orders
+      if (status !== "not_applied") {
+        where.clientId = clientId;
+        // When viewing own orders, show all statuses
+        if (where.status && where.status.notIn) {
+          delete where.status;
+        }
       }
     }
 

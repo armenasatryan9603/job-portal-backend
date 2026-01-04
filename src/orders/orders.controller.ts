@@ -15,6 +15,7 @@ import { OrdersService } from "./orders.service";
 import { AIService } from "../ai/ai.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
+import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 
 @Controller("orders")
 export class OrdersController {
@@ -110,6 +111,7 @@ export class OrdersController {
     );
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get()
   async findAll(
     @Query("page") page: string = "1",
@@ -131,6 +133,8 @@ export class OrdersController {
 
     // Check if user is admin (optional, for admin access to all orders)
     const isAdmin = req?.user?.role === "admin";
+    // Get authenticated user ID (optional - endpoint is public but can have authenticated users)
+    const userId = req?.user?.userId;
 
     return this.ordersService.findAll(
       parseInt(page),
@@ -141,7 +145,8 @@ export class OrdersController {
         ? parsedServiceIds
         : undefined,
       clientId ? parseInt(clientId) : undefined,
-      isAdmin
+      isAdmin,
+      userId
     );
   }
 
