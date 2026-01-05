@@ -513,7 +513,14 @@ export class ReviewsService {
       feedbackDto.reviewerId,
     );
 
-    if (!isClient && !isHiredSpecialist) {
+    // Also check if user is a participant in a conversation for this order
+    // This is a fallback for cases where proposal status might not be 'accepted' or 'specialist-canceled'
+    const isConversationParticipant = await this.isConversationParticipant(
+      order.id,
+      feedbackDto.reviewerId,
+    );
+
+    if (!isClient && !isHiredSpecialist && !isConversationParticipant) {
       throw new BadRequestException(
         'Only the client or hired specialist can provide feedback for this order',
       );
@@ -525,8 +532,9 @@ export class ReviewsService {
       // If client is providing feedback, get the hired specialist
       const acceptedProposal = await this.getAcceptedProposal(order.id);
       specialistId = acceptedProposal?.userId;
-    } else if (isHiredSpecialist) {
+    } else if (isHiredSpecialist || isConversationParticipant) {
       // If specialist is providing feedback, they are providing feedback about the client
+      // Set specialistId to the reviewer's ID (the specialist themselves)
       specialistId = feedbackDto.reviewerId;
     }
 
@@ -682,5 +690,27 @@ export class ReviewsService {
         status: 'accepted',
       },
     });
+  }
+
+  /**
+   * Helper method to check if a user is a participant in a conversation for an order
+   * This is used as a fallback when proposal status might not match expected values
+   */
+  private async isConversationParticipant(
+    orderId: number,
+    userId: number,
+  ): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        orderId,
+        Participants: {
+          some: {
+            userId,
+            isActive: true,
+          },
+        },
+      },
+    });
+    return !!conversation;
   }
 }

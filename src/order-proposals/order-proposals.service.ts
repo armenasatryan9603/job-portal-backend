@@ -416,7 +416,7 @@ export class OrderProposalsService {
                 const qaSection = order.questions
                   .map((question) => {
                     const answer = answerMap.get(question.id);
-                    return `Q: ${question.question}\nA: ${answer || ""}`;
+                    return `question: ${question.question}\nanswer: ${answer || ""}`;
                   })
                   .join("\n\n");
 
