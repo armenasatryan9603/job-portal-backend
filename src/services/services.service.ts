@@ -33,28 +33,48 @@ export class ServicesService {
 
     const langFields = languageMap[language] || languageMap["en"];
 
-    // Transform features
+    // Helper to get language-specific name
+    const getLocalizedName = (item: any, defaultName: string) => {
+      if (!item) return defaultName;
+      const nameField = langFields.name; // nameEn, nameRu, or nameHy
+      return item[nameField] || item.name || defaultName;
+    };
+
+    // Helper to get language-specific description
+    const getLocalizedDescription = (
+      item: any,
+      defaultDescription?: string
+    ) => {
+      if (!item) return defaultDescription;
+      const descField = langFields.description; // descriptionEn, descriptionRu, or descriptionHy
+      return item[descField] || item.description || defaultDescription;
+    };
+
+    // Transform features with language-specific names
     const features = service.ServiceFeatures
       ? service.ServiceFeatures.map((sf: any) => {
           const feature = sf?.Feature;
           if (!feature) return null;
           return {
             id: feature.id,
-            name: feature.name,
-            description: feature.description,
+            name: getLocalizedName(feature, feature.name || ""),
+            description: getLocalizedDescription(feature, feature.description),
           };
         }).filter((f: any) => f !== null)
       : [];
 
-    // Transform technologies
+    // Transform technologies with language-specific names
     const technologies = service.ServiceTechnologies
       ? service.ServiceTechnologies.map((st: any) => {
           const technology = st?.Technology;
           if (!technology) return null;
           return {
             id: technology.id,
-            name: technology.name,
-            description: technology.description,
+            name: getLocalizedName(technology, technology.name || ""),
+            description: getLocalizedDescription(
+              technology,
+              technology.description
+            ),
           };
         }).filter((t: any) => t !== null)
       : [];

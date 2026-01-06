@@ -43,213 +43,227 @@ ALTER SEQUENCE "ServiceTechnology_id_seq" RESTART WITH 1;
 
 -- Insert Features
 INSERT INTO "Feature" (name, "nameEn", "nameRu", "nameHy", description, "descriptionEn", "descriptionRu", "descriptionHy", "isActive", "createdAt", "updatedAt") VALUES
-('Responsive Design', 'Responsive Design', 'Адаптивный дизайн', 'Ադապտիվ դիզայն', 'Mobile-friendly design that works on all devices', 'Mobile-friendly design that works on all devices', 'Мобильный дизайн, который работает на всех устройствах', 'Բջջային դիզայն, որը աշխատում է բոլոր սարքերում', true, NOW(), NOW()),
-('SEO Optimization', 'SEO Optimization', 'SEO оптимизация', 'SEO օպտիմիզացում', 'Search engine optimization for better visibility', 'Search engine optimization for better visibility', 'Оптимизация поисковых систем для лучшей видимости', 'Որոնման համակարգերի օպտիմիզացում ավելի լավ տեսանելիության համար', true, NOW(), NOW()),
-('Payment Integration', 'Payment Integration', 'Интеграция платежей', 'Վճարումների ինտեգրացիա', 'Secure payment processing with multiple gateways', 'Secure payment processing with multiple gateways', 'Безопасная обработка платежей с несколькими шлюзами', 'Անվտանգ վճարումների մշակում բազմաթիվ դարպասներով', true, NOW(), NOW()),
-('User Authentication', 'User Authentication', 'Аутентификация пользователей', 'Օգտագործողների իսկության ստուգում', 'Secure login and user management system', 'Secure login and user management system', 'Безопасная система входа и управления пользователями', 'Անվտանգ մուտքի և օգտագործողների կառավարման համակարգ', true, NOW(), NOW()),
-('Real-time Updates', 'Real-time Updates', 'Обновления в реальном времени', 'Ժամանակակից թարմացումներ', 'Live updates and notifications', 'Live updates and notifications', 'Живые обновления и уведомления', 'Կենդանի թարմացումներ և ծանուցումներ', true, NOW(), NOW()),
-('Admin Dashboard', 'Admin Dashboard', 'Панель администратора', 'Ադմինիստրատորի վահանակ', 'Comprehensive admin panel for management', 'Comprehensive admin panel for management', 'Комплексная панель администратора для управления', 'Ընդհանուր ադմինիստրատորի վահանակ կառավարման համար', true, NOW(), NOW()),
-('Analytics & Reporting', 'Analytics & Reporting', 'Аналитика и отчетность', 'Վերլուծություն և հաշվետվություն', 'Detailed analytics and business intelligence', 'Detailed analytics and business intelligence', 'Детальная аналитика и бизнес-аналитика', 'Մանրամասն վերլուծություն և բիզնես-վերլուծություն', true, NOW(), NOW()),
-('Content Management', 'Content Management', 'Управление контентом', 'Բովանդակության կառավարում', 'Easy content creation and editing system', 'Easy content creation and editing system', 'Простая система создания и редактирования контента', 'Հեշտ բովանդակության ստեղծման և խմբագրման համակարգ', true, NOW(), NOW());
+('Deep Cleaning', 'Deep Cleaning', 'Глубокая уборка', 'Խորը մաքրում', 'Thorough cleaning of all surfaces and hard-to-reach areas', 'Thorough cleaning of all surfaces and hard-to-reach areas', 'Тщательная уборка всех поверхностей и труднодоступных мест', 'Բոլոր մակերեսների և դժվար հասանելի տարածքների մանրակրկիտ մաքրում', true, NOW(), NOW()),
+('Eco-Friendly Products', 'Eco-Friendly Products', 'Экологичные средства', 'Էկոլոգիապես մաքուր արտադրանք', 'Safe and environmentally friendly cleaning products', 'Safe and environmentally friendly cleaning products', 'Безопасные и экологически чистые чистящие средства', 'Անվտանգ և էկոլոգիապես մաքուր մաքրման միջոցներ', true, NOW(), NOW()),
+('Professional Equipment', 'Professional Equipment', 'Профессиональное оборудование', 'Պրոֆեսիոնալ սարքավորում', 'High-quality professional tools and equipment', 'High-quality professional tools and equipment', 'Высококачественные профессиональные инструменты и оборудование', 'Բարձրորակ պրոֆեսիոնալ գործիքներ և սարքավորում', true, NOW(), NOW()),
+('Time-Efficient', 'Time-Efficient', 'Быстрое выполнение', 'Ժամանակի խնայողություն', 'Fast and efficient service delivery', 'Fast and efficient service delivery', 'Быстрое и эффективное выполнение услуг', 'Արագ և արդյունավետ ծառայություն', true, NOW(), NOW()),
+('Interior Detailing', 'Interior Detailing', 'Детальная чистка салона', 'Ներքին մանրակրկիտ մաքրում', 'Comprehensive interior cleaning and detailing', 'Comprehensive interior cleaning and detailing', 'Комплексная чистка и детализация салона', 'Ներքին մանրակրկիտ մաքրում և մանրամասնություն', true, NOW(), NOW()),
+('Exterior Washing', 'Exterior Washing', 'Мойка кузова', 'Արտաքին լվացում', 'Professional exterior car washing', 'Professional exterior car washing', 'Профессиональная мойка кузова автомобиля', 'Պրոֆեսիոնալ արտաքին լվացում', true, NOW(), NOW()),
+('Wax Protection', 'Wax Protection', 'Защита воском', 'Վաքսի պաշտպանություն', 'Wax application for shine and protection', 'Wax application for shine and protection', 'Нанесение воска для блеска и защиты', 'Վաքսի կիրառում փայլի և պաշտպանության համար', true, NOW(), NOW()),
+('Plant Care Expertise', 'Plant Care Expertise', 'Экспертиза по уходу за растениями', 'Բույսերի խնամքի փորձ', 'Expert knowledge in plant care and maintenance', 'Expert knowledge in plant care and maintenance', 'Экспертные знания по уходу и содержанию растений', 'Բույսերի խնամքի և պահպանման փորձ', true, NOW(), NOW()),
+('Seasonal Maintenance', 'Seasonal Maintenance', 'Сезонное обслуживание', 'Սեզոնային խնամք', 'Year-round seasonal garden maintenance', 'Year-round seasonal garden maintenance', 'Круглогодичное сезонное обслуживание сада', 'Տարվա ընթացքում սեզոնային այգու խնամք', true, NOW(), NOW()),
+('Emergency Service', 'Emergency Service', 'Экстренная служба', 'Արտակարգ ծառայություն', '24/7 emergency repair services', '24/7 emergency repair services', 'Круглосуточные экстренные ремонтные услуги', 'Օրական 24/7 արտակարգ վերանորոգման ծառայություններ', true, NOW(), NOW()),
+('Quality Materials', 'Quality Materials', 'Качественные материалы', 'Բարձրորակ նյութեր', 'High-quality materials and supplies', 'High-quality materials and supplies', 'Высококачественные материалы и расходные материалы', 'Բարձրորակ նյութեր և պարագաներ', true, NOW(), NOW()),
+('Safety Certified', 'Safety Certified', 'Сертифицированная безопасность', 'Անվտանգության հավաստագրում', 'Certified safety standards and practices', 'Certified safety standards and practices', 'Сертифицированные стандарты и практики безопасности', 'Հավաստագրված անվտանգության ստանդարտներ և պրակտիկա', true, NOW(), NOW()),
+('Code Compliance', 'Code Compliance', 'Соответствие нормам', 'Նորմերի համապատասխանություն', 'Full compliance with building codes and regulations', 'Full compliance with building codes and regulations', 'Полное соответствие строительным нормам и правилам', 'Շինարարական նորմերի և կանոնների լիակատար համապատասխանություն', true, NOW(), NOW()),
+('Multi-Skilled', 'Multi-Skilled', 'Многофункциональный', 'Բազմակողմանի', 'Versatile skills for various repair tasks', 'Versatile skills for various repair tasks', 'Универсальные навыки для различных ремонтных работ', 'Տարբեր վերանորոգման աշխատանքների համար բազմակողմանի հմտություններ', true, NOW(), NOW());
 
 -- Insert Technologies
 INSERT INTO "Technology" (name, "nameEn", "nameRu", "nameHy", description, "descriptionEn", "descriptionRu", "descriptionHy", "isActive", "createdAt", "updatedAt") VALUES
-('React', 'React', 'React', 'React', 'Modern JavaScript library for building user interfaces', 'Modern JavaScript library for building user interfaces', 'Современная JavaScript библиотека для создания пользовательских интерфейсов', 'Ժամանակակից JavaScript գրադարան օգտագործողի ինտերֆեյսներ ստեղծելու համար', true, NOW(), NOW()),
-('Node.js', 'Node.js', 'Node.js', 'Node.js', 'JavaScript runtime for server-side development', 'JavaScript runtime for server-side development', 'JavaScript среда выполнения для серверной разработки', 'JavaScript կատարման միջավայր սերվերային մշակման համար', true, NOW(), NOW()),
-('TypeScript', 'TypeScript', 'TypeScript', 'TypeScript', 'Typed superset of JavaScript for better development', 'Typed superset of JavaScript for better development', 'Типизированное надмножество JavaScript для лучшей разработки', 'JavaScript-ի տիպիզացված գերբազմություն ավելի լավ մշակման համար', true, NOW(), NOW()),
-('PostgreSQL', 'PostgreSQL', 'PostgreSQL', 'PostgreSQL', 'Advanced open-source relational database', 'Advanced open-source relational database', 'Передовая открытая реляционная база данных', 'Ընդլայնված բաց կոդով ռելացիոն տվյալների բազա', true, NOW(), NOW()),
-('MongoDB', 'MongoDB', 'MongoDB', 'MongoDB', 'NoSQL document database for flexible data storage', 'NoSQL document database for flexible data storage', 'NoSQL документная база данных для гибкого хранения данных', 'NoSQL փաստաթղթային տվյալների բազա ճկուն տվյալների պահպանման համար', true, NOW(), NOW()),
-('AWS', 'AWS', 'AWS', 'AWS', 'Amazon Web Services cloud platform', 'Amazon Web Services cloud platform', 'Облачная платформа Amazon Web Services', 'Amazon Web Services ամպային հարթակ', true, NOW(), NOW()),
-('Docker', 'Docker', 'Docker', 'Docker', 'Containerization platform for application deployment', 'Containerization platform for application deployment', 'Платформа контейнеризации для развертывания приложений', 'Կոնտեյներացման հարթակ հավելվածների տեղակայման համար', true, NOW(), NOW()),
-('Figma', 'Figma', 'Figma', 'Figma', 'Collaborative design tool for UI/UX', 'Collaborative design tool for UI/UX', 'Инструмент совместного дизайна для UI/UX', 'UI/UX համագործակցային դիզայնի գործիք', true, NOW(), NOW()),
-('Adobe Creative Suite', 'Adobe Creative Suite', 'Adobe Creative Suite', 'Adobe Creative Suite', 'Professional design and creative software', 'Professional design and creative software', 'Профессиональное программное обеспечение для дизайна и творчества', 'Պրոֆեսիոնալ դիզայնի և ստեղծագործական ծրագրակազմ', true, NOW(), NOW()),
-('Google Analytics', 'Google Analytics', 'Google Analytics', 'Google Analytics', 'Web analytics service for tracking and reporting', 'Web analytics service for tracking and reporting', 'Веб-аналитический сервис для отслеживания и отчетности', 'Վեբ վերլուծական ծառայություն հետևման և հաշվետվության համար', true, NOW(), NOW()),
-('Stripe', 'Stripe', 'Stripe', 'Stripe', 'Payment processing platform for online businesses', 'Payment processing platform for online businesses', 'Платформа обработки платежей для онлайн-бизнеса', 'Վճարումների մշակման հարթակ առցանց բիզնեսի համար', true, NOW(), NOW()),
-('Mailchimp', 'Mailchimp', 'Mailchimp', 'Mailchimp', 'Email marketing and automation platform', 'Email marketing and automation platform', 'Платформа email-маркетинга и автоматизации', 'Email մարքեթինգի և ավտոմատացման հարթակ', true, NOW(), NOW());
+('Vacuum Cleaners', 'Vacuum Cleaners', 'Пылесосы', 'Փոշեկուլներ', 'Professional-grade vacuum cleaning equipment', 'Professional-grade vacuum cleaning equipment', 'Профессиональное пылесосное оборудование', 'Պրոֆեսիոնալ փոշեկուլային սարքավորում', true, NOW(), NOW()),
+('Steam Cleaners', 'Steam Cleaners', 'Парогенераторы', 'Գոլորշի մաքրիչներ', 'High-pressure steam cleaning systems', 'High-pressure steam cleaning systems', 'Системы паровой очистки высокого давления', 'Բարձր ճնշման գոլորշի մաքրման համակարգեր', true, NOW(), NOW()),
+('Eco-Friendly Cleaning Products', 'Eco-Friendly Cleaning Products', 'Экологичные чистящие средства', 'Էկոլոգիապես մաքուր մաքրման միջոցներ', 'Environmentally safe cleaning solutions', 'Environmentally safe cleaning solutions', 'Экологически безопасные чистящие растворы', 'Էկոլոգիապես անվտանգ մաքրման լուծումներ', true, NOW(), NOW()),
+('Car Wash Equipment', 'Car Wash Equipment', 'Оборудование для мойки автомобилей', 'Ավտոմեքենաների լվացման սարքավորում', 'Professional car washing and detailing equipment', 'Professional car washing and detailing equipment', 'Профессиональное оборудование для мойки и детализации автомобилей', 'Պրոֆեսիոնալ ավտոմեքենաների լվացման և մանրակրկիտ մաքրման սարքավորում', true, NOW(), NOW()),
+('Wax Products', 'Wax Products', 'Восковые продукты', 'Վաքսի արտադրանք', 'High-quality car wax and polish products', 'High-quality car wax and polish products', 'Высококачественные восковые и полировальные продукты для автомобилей', 'Բարձրորակ ավտոմեքենաների վաքսի և փայլեցման արտադրանք', true, NOW(), NOW()),
+('Lawn Mowers', 'Lawn Mowers', 'Газонокосилки', 'Խոտհնձիչներ', 'Professional lawn mowing equipment', 'Professional lawn mowing equipment', 'Профессиональное оборудование для стрижки газонов', 'Պրոֆեսիոնալ խոտհնձիչ սարքավորում', true, NOW(), NOW()),
+('Trimming Tools', 'Trimming Tools', 'Инструменты для обрезки', 'Կտրման գործիքներ', 'Tree and shrub trimming equipment', 'Tree and shrub trimming equipment', 'Оборудование для обрезки деревьев и кустарников', 'Ծառերի և թփերի կտրման սարքավորում', true, NOW(), NOW()),
+('Gardening Equipment', 'Gardening Equipment', 'Садовый инвентарь', 'Այգեգործական սարքավորում', 'Professional gardening tools and equipment', 'Professional gardening tools and equipment', 'Профессиональные садовые инструменты и оборудование', 'Պրոֆեսիոնալ այգեգործական գործիքներ և սարքավորում', true, NOW(), NOW()),
+('Plumbing Tools', 'Plumbing Tools', 'Сантехнические инструменты', 'Սանտեխնիկական գործիքներ', 'Professional plumbing repair tools', 'Professional plumbing repair tools', 'Профессиональные инструменты для сантехнического ремонта', 'Պրոֆեսիոնալ սանտեխնիկական վերանորոգման գործիքներ', true, NOW(), NOW()),
+('Pipe Materials', 'Pipe Materials', 'Трубные материалы', 'Խողովակների նյութեր', 'Quality pipes and fittings', 'Quality pipes and fittings', 'Качественные трубы и фитинги', 'Բարձրորակ խողովակներ և միակցիչներ', true, NOW(), NOW()),
+('Electrical Tools', 'Electrical Tools', 'Электрические инструменты', 'Էլեկտրական գործիքներ', 'Professional electrical repair tools', 'Professional electrical repair tools', 'Профессиональные инструменты для электрического ремонта', 'Պրոֆեսիոնալ էլեկտրական վերանորոգման գործիքներ', true, NOW(), NOW()),
+('Safety Equipment', 'Safety Equipment', 'Оборудование безопасности', 'Անվտանգության սարքավորում', 'Electrical safety gear and equipment', 'Electrical safety gear and equipment', 'Средства и оборудование для электробезопасности', 'Էլեկտրական անվտանգության պարագաներ և սարքավորում', true, NOW(), NOW()),
+('Hand Tools', 'Hand Tools', 'Ручные инструменты', 'Ձեռքի գործիքներ', 'Essential hand tools for home repairs', 'Essential hand tools for home repairs', 'Основные ручные инструменты для домашнего ремонта', 'Տնային վերանորոգման համար անհրաժեշտ ձեռքի գործիքներ', true, NOW(), NOW()),
+('Power Tools', 'Power Tools', 'Электроинструменты', 'Էլեկտրական գործիքներ', 'Professional power tools for repairs', 'Professional power tools for repairs', 'Профессиональные электроинструменты для ремонта', 'Վերանորոգման համար պրոֆեսիոնալ էլեկտրական գործիքներ', true, NOW(), NOW()),
+('Paint & Finishing Materials', 'Paint & Finishing Materials', 'Краски и отделочные материалы', 'Ներկեր և ավարտական նյութեր', 'Quality paints and finishing supplies', 'Quality paints and finishing supplies', 'Качественные краски и отделочные материалы', 'Բարձրորակ ներկեր և ավարտական նյութեր', true, NOW(), NOW());
 
 -- Insert Services (hierarchical structure)
-INSERT INTO "Service" (name, description, "nameEn", "nameRu", "nameHy", "descriptionEn", "descriptionRu", "descriptionHy", "imageUrl", "parentId", "averagePrice", "minPrice", "maxPrice", "updatedAt") VALUES
+INSERT INTO "Service" (name, description, "nameEn", "nameRu", "nameHy", "descriptionEn", "descriptionRu", "descriptionHy", "imageUrl", "parentId", "averagePrice", "minPrice", "maxPrice", "completionRate", "isActive", "createdAt", "updatedAt", currency, "rateUnit") VALUES
 -- Parent services
-('Technology', 'Software development, IT consulting, and technical services', 'Technology', 'Технологии', 'Տեխնոլոգիա', 'Software development, IT consulting, and technical services', 'Разработка программного обеспечения, ИТ-консалтинг и технические услуги', 'Ծրագրային ապահովման մշակում, ՏՏ խորհրդատվություն և տեխնիկական ծառայություններ', 'https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=400&h=300&fit=crop', NULL, 75.00, 50.00, 150.00, NOW()),
-('Design', 'Creative design services for digital and print media', 'Design', 'Дизайн', 'Դիզայն', 'Creative design services for digital and print media', 'Креативные дизайнерские услуги для цифровых и печатных медиа', 'Կրեատիվ դիզայնի ծառայություններ թվային և տպագիր մեդիայի համար', 'https://images.unsplash.com/photo-1558655146-d09347e92766?w=400&h=300&fit=crop', NULL, 60.00, 30.00, 120.00, NOW()),
-('Marketing', 'Digital marketing, advertising, and promotional services', 'Marketing', 'Маркетинг', 'Մարքեթինգ', 'Digital marketing, advertising, and promotional services', 'Цифровой маркетинг, реклама и рекламные услуги', 'Թվային մարքեթինգ, գովազդ և գովազդային ծառայություններ', 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop', NULL, 50.00, 25.00, 100.00, NOW()),
-('Business', 'Business consulting, strategy, and operational services', 'Business', 'Бизнес', 'Բիզնես', 'Business consulting, strategy, and operational services', 'Бизнес-консалтинг, стратегия и операционные услуги', 'Բիզնես խորհրդատվություն, ռազմավարություն և գործառնական ծառայություններ', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop', NULL, 80.00, 40.00, 150.00, NOW()),
-('Writing', 'Content creation, copywriting, and editorial services', 'Writing', 'Письмо', 'Գրել', 'Content creation, copywriting, and editorial services', 'Создание контента, копирайтинг и редакционные услуги', 'Բովանդակության ստեղծում, կոպիրայթինգ և խմբագրական ծառայություններ', 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=300&fit=crop', NULL, 35.00, 20.00, 70.00, NOW()),
+('Home Cleaning', 'Cleaning of apartments and houses', 'Home Cleaning', 'Уборка дома', 'Տնային մաքրում', 'Cleaning of apartments and houses', 'Уборка квартир и домов', 'Բնակարանների և տների մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4711658-512.png', NULL, 50.00, 30.00, 100.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Car Cleaning', 'Exterior and interior cleaning of cars', 'Car Cleaning', 'Мойка автомобиля', 'Ավտոմեքենայի մաքրում', 'Exterior and interior cleaning of cars', 'Очистка салона и кузова автомобиля', 'Ավտոմեքենայի ներքին և արտաքին մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4711664-512.png', NULL, 30.00, 20.00, 60.00, 0, true, NOW(), NOW(), 'USD', 'per car'),
+('Garden Services', 'Planting and garden maintenance', 'Garden Services', 'Садовые услуги', 'Այգու ծառայություններ', 'Planting and garden maintenance', 'Посадка растений и уход за садом', 'Այգու տնկում և խնամք', 'https://static.thenounproject.com/png/cleaner-service-icon-4711643-512.png', NULL, 40.00, 20.00, 80.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Plumbing', 'Repair and pipe work', 'Plumbing', 'Сантехника', 'Սանտեխնիկա', 'Repair and pipe work', 'Ремонт труб и сантехники', 'Խողովակների և սանտեխնիկայի վերանորոգում', 'https://static.thenounproject.com/png/cleaner-service-icon-4709287-512.png', NULL, 50.00, 30.00, 120.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Electrician Work', 'Electrical repair and installation', 'Electrician Work', 'Электрик', 'Էլեկտրիկ աշխատանքներ', 'Electrical repair and installation', 'Ремонт и установка электрооборудования', 'Էլեկտրական համակարգերի տեղադրում և վերանորոգում', 'https://static.thenounproject.com/png/cleaner-service-icon-4706611-512.png', NULL, 45.00, 25.00, 100.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Home Repairs', 'Minor repair services at home', 'Home Repairs', 'Домашний ремонт', 'Տան վերանորոգում', 'Minor repair services at home', 'Мелкий ремонт дома', 'Փոքր վերանորոգում տանը', 'https://static.thenounproject.com/png/cleaner-service-icon-4711671-512.png', NULL, 35.00, 20.00, 70.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
 
--- Technology sub-services
-('Web Development', 'Custom website and web application development', 'Web Development', 'Веб-разработка', 'Վեբ մշակում', 'Custom website and web application development', 'Разработка пользовательских веб-сайтов и веб-приложений', 'Անհատական կայքերի և վեբ հավելվածների մշակում', 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400&h=300&fit=crop', 1, 80.00, 50.00, 150.00, NOW()),
-('Mobile Development', 'iOS and Android app development', 'Mobile Development', 'Мобильная разработка', 'Բջջային մշակում', 'iOS and Android app development', 'Разработка приложений для iOS и Android', 'iOS և Android հավելվածների մշակում', 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=300&fit=crop', 1, 90.00, 60.00, 180.00, NOW()),
-('Backend Development', 'Server-side development and API creation', 'Backend Development', 'Backend разработка', 'Backend մշակում', 'Server-side development and API creation', 'Серверная разработка и создание API', 'Սերվերի մշակում և API ստեղծում', 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=300&fit=crop', 1, 85.00, 55.00, 160.00, NOW()),
-('DevOps', 'Infrastructure, deployment, and automation services', 'DevOps', 'DevOps', 'DevOps', 'Infrastructure, deployment, and automation services', 'Инфраструктура, развертывание и услуги автоматизации', 'Ինֆրակառուցվածք, տեղակայում և ավտոմատացման ծառայություններ', 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=400&h=300&fit=crop', 1, 95.00, 65.00, 170.00, NOW()),
-('Data Science', 'Data analysis, machine learning, and AI solutions', 'Data Science', 'Наука о данных', 'Տվյալների գիտություն', 'Data analysis, machine learning, and AI solutions', 'Анализ данных, машинное обучение и решения ИИ', 'Տվյալների վերլուծություն, մեքենայական ուսուցում և AI լուծումներ', 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop', 1, 100.00, 70.00, 200.00, NOW()),
+-- Home Cleaning sub-services
+('Kitchen Cleaning', 'Deep cleaning of kitchen surfaces', 'Kitchen Cleaning', 'Уборка кухни', 'Խոհանոցի մաքրում', 'Deep cleaning of kitchen surfaces', 'Глубокая уборка кухни', 'Խոհանոցի մակերեսների խորը մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4711651-512.png', 1, 25.00, 15.00, 40.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Bathroom Cleaning', 'Bathroom, shower, toilet cleaning', 'Bathroom Cleaning', 'Уборка ванной', 'Լոգարանի մաքրում', 'Bathroom, shower, toilet cleaning', 'Уборка ванной комнаты', 'Լոգարանի մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4709075-512.png', 1, 20.00, 10.00, 35.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Window Cleaning', 'Interior and exterior window cleaning', 'Window Cleaning', 'Мытьё окон', 'Պատուհանների մաքրում', 'Interior and exterior window cleaning', 'Мытье окон внутри и снаружи', 'Պատուհանների ներսի և դրսի մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4711649-512.png', 1, 30.00, 20.00, 60.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
 
--- Design sub-services
-('UI/UX Design', 'User interface and user experience design', 'UI/UX Design', 'UI/UX Дизайн', 'UI/UX Դիզայն', 'User interface and user experience design', 'Дизайн пользовательского интерфейса и пользовательского опыта', 'Օգտագործողի ինտերֆեյսի և օգտագործողի փորձի դիզայն', 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=300&fit=crop', 2, 70.00, 40.00, 130.00, NOW()),
-('Graphic Design', 'Logo design, branding, and visual identity', 'Graphic Design', 'Графический дизайн', 'Գրաֆիկական դիզայն', 'Logo design, branding, and visual identity', 'Дизайн логотипов, брендинг и визуальная идентичность', 'Լոգոյի դիզայն, բրենդինգ և տեսողական ինքնություն', 'https://images.unsplash.com/photo-1558655146-d09347e92766?w=400&h=300&fit=crop', 2, 55.00, 30.00, 100.00, NOW()),
-('Web Design', 'Website layout and visual design', 'Web Design', 'Веб-дизайн', 'Վեբ դիզայն', 'Website layout and visual design', 'Макет веб-сайта и визуальный дизайн', 'Կայքի դասավորություն և տեսողական դիզայն', 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=300&fit=crop', 2, 65.00, 35.00, 120.00, NOW()),
-('Print Design', 'Business cards, flyers, and print materials', 'Print Design', 'Печатный дизайн', 'Տպագիր դիզայն', 'Business cards, flyers, and print materials', 'Визитки, флаеры и печатные материалы', 'Այցեքարտեր, թռուցիկներ և տպագիր նյութեր', 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=400&h=300&fit=crop', 2, 45.00, 25.00, 80.00, NOW()),
+-- Car Cleaning sub-services
+('Interior Car Cleaning', 'Cleaning car interior surfaces', 'Interior Car Cleaning', 'Чистка салона', 'Ավտոմեքենայի սրահի մաքրում', 'Cleaning car interior surfaces', 'Чистка салона автомобиля', 'Ավտոմեքենայի սրահի մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4706605-512.png', 2, 20.00, 15.00, 30.00, 0, true, NOW(), NOW(), 'USD', 'per car'),
+('Exterior Car Cleaning', 'Washing car exterior surfaces', 'Exterior Car Cleaning', 'Мойка кузова', 'Արտաքին մեքենայի մաքրում', 'Washing car exterior surfaces', 'Мойка кузова автомобиля', 'Արտաքին մեքենայի մաքրում', 'https://static.thenounproject.com/png/cleaner-service-icon-4706608-512.png', 2, 15.00, 10.00, 25.00, 0, true, NOW(), NOW(), 'USD', 'per car'),
+('Car Waxing', 'Wax car for shine & protection', 'Car Waxing', 'Нанесение воска', 'Վաքսի կիրառում մեքենայի համար', 'Wax car for shine & protection', 'Нанесение воска для защиты', 'Մեքենայի փայլեցում վաքսով', 'https://static.thenounproject.com/png/cleaner-service-icon-4706594-512.png', 2, 40.00, 30.00, 70.00, 0, true, NOW(), NOW(), 'USD', 'per car'),
 
--- Marketing sub-services
-('Digital Marketing', 'Online marketing strategies and campaigns', 'Digital Marketing', 'Цифровой маркетинг', 'Թվային մարքեթինգ', 'Online marketing strategies and campaigns', 'Онлайн маркетинговые стратегии и кампании', 'Առցանց մարքեթինգային ռազմավարություններ և արշավներ', 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop', 3, 60.00, 30.00, 120.00, NOW()),
-('SEO', 'Search engine optimization services', 'SEO', 'SEO', 'SEO', 'Search engine optimization services', 'Услуги по оптимизации поисковых систем', 'Որոնման համակարգերի օպտիմիզացման ծառայություններ', 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop', 3, 55.00, 25.00, 100.00, NOW()),
-('Social Media Marketing', 'Social media strategy and management', 'Social Media Marketing', 'Маркетинг в социальных сетях', 'Սոցիալական մեդիայի մարքեթինգ', 'Social media strategy and management', 'Стратегия и управление социальными сетями', 'Սոցիալական մեդիայի ռազմավարություն և կառավարում', 'https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=400&h=300&fit=crop', 3, 45.00, 20.00, 80.00, NOW()),
-('Content Marketing', 'Content strategy and creation', 'Content Marketing', 'Контент-маркетинг', 'Բովանդակության մարքեթինգ', 'Content strategy and creation', 'Стратегия контента и создание', 'Բովանդակության ռազմավարություն և ստեղծում', 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=300&fit=crop', 3, 50.00, 25.00, 90.00, NOW()),
+-- Garden Services sub-services
+('Lawn Mowing', 'Lawn cutting and care', 'Lawn Mowing', 'Стрижка газона', 'Խոտի կտրում', 'Lawn cutting and care', 'Стрижка и уход за газоном', 'Խոտի խնամք', 'https://static.thenounproject.com/png/cleaner-service-icon-4706612-512.png', 3, 25.00, 15.00, 50.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
+('Tree Trimming', 'Trim and shape trees', 'Tree Trimming', 'Обрезка деревьев', 'Ծառերի սահում', 'Trim and shape trees', 'Обрезка и формирование деревьев', 'Ծառերի ձևավորում', 'https://static.thenounproject.com/png/cleaner-service-icon-4711654-512.png', 3, 30.00, 20.00, 60.00, 0, true, NOW(), NOW(), 'USD', 'per tree'),
+('Planting', 'Plant flowers & shrubs', 'Planting', 'Посадка растений', 'Բույսերի տնկում', 'Plant flowers & shrubs', 'Посадка цветов и кустарников', 'Ծաղիկների և թփերի տնկում', 'https://static.thenounproject.com/png/cleaner-service-icon-4706597-512.png', 3, 20.00, 10.00, 40.00, 0, true, NOW(), NOW(), 'USD', 'per hour'),
 
--- Business sub-services
-('Business Consulting', 'Strategic business advice and planning', 'Business Consulting', 'Бизнес-консалтинг', 'Բիզնես խորհրդատվություն', 'Strategic business advice and planning', 'Стратегические бизнес-советы и планирование', 'Ռազմավարական բիզնես խորհուրդներ և պլանավորում', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop', 4, 90.00, 50.00, 180.00, NOW()),
-('Project Management', 'Project planning and execution services', 'Project Management', 'Управление проектами', 'Ծրագրերի կառավարում', 'Project planning and execution services', 'Услуги планирования и выполнения проектов', 'Ծրագրերի պլանավորման և կատարման ծառայություններ', 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop', 4, 70.00, 40.00, 130.00, NOW()),
-('Financial Consulting', 'Financial planning and analysis', 'Financial Consulting', 'Финансовый консалтинг', 'Ֆինանսական խորհրդատվություն', 'Financial planning and analysis', 'Финансовое планирование и анализ', 'Ֆինանսական պլանավորում և վերլուծություն', 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=300&fit=crop', 4, 85.00, 45.00, 160.00, NOW()),
-
--- Writing sub-services
-('Content Writing', 'Blog posts, articles, and web content', 'Content Writing', 'Написание контента', 'Բովանդակության գրում', 'Blog posts, articles, and web content', 'Блог-посты, статьи и веб-контент', 'Բլոգ գրառումներ, հոդվածներ և վեբ բովանդակություն', 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=300&fit=crop', 5, 30.00, 15.00, 60.00, NOW()),
-('Copywriting', 'Sales copy and marketing materials', 'Copywriting', 'Копирайтинг', 'Կոպիրայթինգ', 'Sales copy and marketing materials', 'Продающие тексты и маркетинговые материалы', 'Վաճառքի տեքստեր և մարքեթինգային նյութեր', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop', 5, 40.00, 20.00, 80.00, NOW()),
-('Technical Writing', 'Documentation and technical content', 'Technical Writing', 'Техническое письмо', 'Տեխնիկական գրում', 'Documentation and technical content', 'Документация и технический контент', 'Փաստաթղթավորում и տեխնիկական բովանդակություն', 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=300&fit=crop', 5, 45.00, 25.00, 85.00, NOW());
+-- Home Repairs sub-services
+('Furniture Assembly', 'Assemble furniture at home', 'Furniture Assembly', 'Сборка мебели', 'Կահույքի հավաքում', 'Assemble furniture at home', 'Сборка мебели дома', 'Կահույքի հավաքում տանը', 'https://static.thenounproject.com/png/cleaner-service-icon-4711668-512.png', 6, 20.00, 10.00, 40.00, 0, true, NOW(), NOW(), 'USD', 'per item'),
+('Painting Walls', 'Paint and finish walls', 'Painting Walls', 'Покраска стен', 'Պատի ներկում', 'Paint and finish walls', 'Покраска и отделка стен', 'Պատի ներկում և ավարտական աշխատանքներ', 'https://static.thenounproject.com/png/cleaner-service-icon-4706600-512.png', 6, 30.00, 20.00, 60.00, 0, true, NOW(), NOW(), 'USD', 'per hour');
 
 -- Insert ServiceFeature relationships
 INSERT INTO "ServiceFeature" ("serviceId", "featureId", "createdAt") VALUES
--- Web Development features
-(6, 1, NOW()), -- Responsive Design
-(6, 2, NOW()), -- SEO Optimization
-(6, 3, NOW()), -- Payment Integration
-(6, 4, NOW()), -- User Authentication
-(6, 5, NOW()), -- Real-time Updates
-(6, 6, NOW()), -- Admin Dashboard
-(6, 7, NOW()), -- Analytics & Reporting
-(6, 8, NOW()), -- Content Management
+-- Home Cleaning (1) features
+(1, 1, NOW()), -- Deep Cleaning
+(1, 2, NOW()), -- Eco-Friendly Products
+(1, 3, NOW()), -- Professional Equipment
+(1, 4, NOW()), -- Time-Efficient
 
--- Mobile Development features
-(7, 1, NOW()), -- Responsive Design
-(7, 4, NOW()), -- User Authentication
-(7, 5, NOW()), -- Real-time Updates
-(7, 6, NOW()), -- Admin Dashboard
-(7, 7, NOW()), -- Analytics & Reporting
+-- Car Cleaning (2) features
+(2, 5, NOW()), -- Interior Detailing
+(2, 6, NOW()), -- Exterior Washing
+(2, 7, NOW()), -- Wax Protection
+(2, 3, NOW()), -- Professional Equipment
 
--- Backend Development features
-(8, 3, NOW()), -- Payment Integration
-(8, 4, NOW()), -- User Authentication
-(8, 5, NOW()), -- Real-time Updates
-(8, 6, NOW()), -- Admin Dashboard
-(8, 7, NOW()), -- Analytics & Reporting
+-- Garden Services (3) features
+(3, 8, NOW()), -- Plant Care Expertise
+(3, 9, NOW()), -- Seasonal Maintenance
+(3, 3, NOW()), -- Professional Equipment
 
--- DevOps features
-(9, 6, NOW()), -- Admin Dashboard
-(9, 7, NOW()), -- Analytics & Reporting
+-- Plumbing (4) features
+(4, 10, NOW()), -- Emergency Service
+(4, 11, NOW()), -- Quality Materials
+(4, 3, NOW()), -- Professional Equipment
 
--- Data Science features
-(10, 6, NOW()), -- Admin Dashboard
-(10, 7, NOW()), -- Analytics & Reporting
+-- Electrician Work (5) features
+(5, 10, NOW()), -- Emergency Service
+(5, 12, NOW()), -- Safety Certified
+(5, 13, NOW()), -- Code Compliance
+(5, 3, NOW()), -- Professional Equipment
 
--- UI/UX Design features
-(11, 1, NOW()), -- Responsive Design
-(11, 8, NOW()), -- Content Management
+-- Home Repairs (6) features
+(6, 14, NOW()), -- Multi-Skilled
+(6, 11, NOW()), -- Quality Materials
+(6, 3, NOW()), -- Professional Equipment
 
--- Graphic Design features
-(12, 8, NOW()), -- Content Management
+-- Kitchen Cleaning (7) features
+(7, 1, NOW()), -- Deep Cleaning
+(7, 2, NOW()), -- Eco-Friendly Products
+(7, 4, NOW()), -- Time-Efficient
 
--- Web Design features
-(13, 1, NOW()), -- Responsive Design
-(13, 2, NOW()), -- SEO Optimization
-(13, 8, NOW()), -- Content Management
+-- Bathroom Cleaning (8) features
+(8, 1, NOW()), -- Deep Cleaning
+(8, 2, NOW()), -- Eco-Friendly Products
+(8, 4, NOW()), -- Time-Efficient
 
--- Print Design features
-(14, 8, NOW()), -- Content Management
+-- Window Cleaning (9) features
+(9, 1, NOW()), -- Deep Cleaning
+(9, 3, NOW()), -- Professional Equipment
+(9, 4, NOW()), -- Time-Efficient
 
--- Digital Marketing features
-(15, 2, NOW()), -- SEO Optimization
-(15, 7, NOW()), -- Analytics & Reporting
-(15, 8, NOW()), -- Content Management
+-- Interior Car Cleaning (10) features
+(10, 5, NOW()), -- Interior Detailing
+(10, 3, NOW()), -- Professional Equipment
 
--- SEO features
-(16, 2, NOW()), -- SEO Optimization
-(16, 7, NOW()), -- Analytics & Reporting
+-- Exterior Car Cleaning (11) features
+(11, 6, NOW()), -- Exterior Washing
+(11, 3, NOW()), -- Professional Equipment
 
--- Social Media Marketing features
-(17, 7, NOW()), -- Analytics & Reporting
-(17, 8, NOW()), -- Content Management
+-- Car Waxing (12) features
+(12, 7, NOW()), -- Wax Protection
+(12, 3, NOW()), -- Professional Equipment
 
--- Content Marketing features
-(18, 2, NOW()), -- SEO Optimization
-(18, 7, NOW()), -- Analytics & Reporting
-(18, 8, NOW()), -- Content Management
+-- Lawn Mowing (13) features
+(13, 8, NOW()), -- Plant Care Expertise
+(13, 3, NOW()), -- Professional Equipment
+(13, 4, NOW()), -- Time-Efficient
 
--- Business Consulting features
-(19, 6, NOW()), -- Admin Dashboard
-(19, 7, NOW()), -- Analytics & Reporting
+-- Tree Trimming (14) features
+(14, 8, NOW()), -- Plant Care Expertise
+(14, 3, NOW()), -- Professional Equipment
 
--- Project Management features
-(20, 6, NOW()), -- Admin Dashboard
-(20, 7, NOW()), -- Analytics & Reporting
+-- Planting (15) features
+(15, 8, NOW()), -- Plant Care Expertise
+(15, 3, NOW()), -- Professional Equipment
 
--- Financial Consulting features
-(21, 6, NOW()), -- Admin Dashboard
-(21, 7, NOW()), -- Analytics & Reporting
+-- Furniture Assembly (16) features
+(16, 14, NOW()), -- Multi-Skilled
+(16, 3, NOW()), -- Professional Equipment
+(16, 4, NOW()), -- Time-Efficient
 
--- Content Writing features
-(22, 8, NOW()), -- Content Management
-
--- Copywriting features
-(23, 8, NOW()), -- Content Management
-
--- Technical Writing features
-(24, 8, NOW()); -- Content Management
+-- Painting Walls (17) features
+(17, 11, NOW()), -- Quality Materials
+(17, 3, NOW()), -- Professional Equipment
+(17, 4, NOW()); -- Time-Efficient
 
 -- Insert ServiceTechnology relationships
 INSERT INTO "ServiceTechnology" ("serviceId", "technologyId", "createdAt") VALUES
--- Web Development technologies
-(6, 1, NOW()), -- React
-(6, 2, NOW()), -- Node.js
-(6, 3, NOW()), -- TypeScript
-(6, 4, NOW()), -- PostgreSQL
-(6, 10, NOW()), -- Stripe
+-- Home Cleaning (1) technologies
+(1, 1, NOW()), -- Vacuum Cleaners
+(1, 2, NOW()), -- Steam Cleaners
+(1, 3, NOW()), -- Eco-Friendly Cleaning Products
 
--- Mobile Development technologies
-(7, 1, NOW()), -- React
-(7, 2, NOW()), -- Node.js
-(7, 3, NOW()), -- TypeScript
-(7, 4, NOW()), -- PostgreSQL
+-- Car Cleaning (2) technologies
+(2, 4, NOW()), -- Car Wash Equipment
+(2, 1, NOW()), -- Vacuum Cleaners
+(2, 5, NOW()), -- Wax Products
 
--- Backend Development technologies
-(8, 2, NOW()), -- Node.js
-(8, 3, NOW()), -- TypeScript
-(8, 4, NOW()), -- PostgreSQL
-(8, 5, NOW()), -- MongoDB
+-- Garden Services (3) technologies
+(3, 6, NOW()), -- Lawn Mowers
+(3, 7, NOW()), -- Trimming Tools
+(3, 8, NOW()), -- Gardening Equipment
 
--- DevOps technologies
-(9, 6, NOW()), -- AWS
-(9, 7, NOW()), -- Docker
+-- Plumbing (4) technologies
+(4, 9, NOW()), -- Plumbing Tools
+(4, 10, NOW()), -- Pipe Materials
 
--- Data Science technologies
-(10, 4, NOW()), -- PostgreSQL
-(10, 5, NOW()), -- MongoDB
-(10, 6, NOW()), -- AWS
+-- Electrician Work (5) technologies
+(5, 11, NOW()), -- Electrical Tools
+(5, 12, NOW()), -- Safety Equipment
 
--- UI/UX Design technologies
-(11, 8, NOW()), -- Figma
+-- Home Repairs (6) technologies
+(6, 13, NOW()), -- Hand Tools
+(6, 14, NOW()), -- Power Tools
 
--- Graphic Design technologies
-(12, 9, NOW()), -- Adobe Creative Suite
+-- Kitchen Cleaning (7) technologies
+(7, 1, NOW()), -- Vacuum Cleaners
+(7, 2, NOW()), -- Steam Cleaners
+(7, 3, NOW()), -- Eco-Friendly Cleaning Products
 
--- Web Design technologies
-(13, 1, NOW()), -- React
-(13, 8, NOW()), -- Figma
+-- Bathroom Cleaning (8) technologies
+(8, 1, NOW()), -- Vacuum Cleaners
+(8, 2, NOW()), -- Steam Cleaners
+(8, 3, NOW()), -- Eco-Friendly Cleaning Products
 
--- Print Design technologies
-(14, 9, NOW()), -- Adobe Creative Suite
+-- Window Cleaning (9) technologies
+(9, 2, NOW()), -- Steam Cleaners
+(9, 3, NOW()), -- Eco-Friendly Cleaning Products
 
--- Digital Marketing technologies
-(15, 10, NOW()), -- Google Analytics
-(15, 12, NOW()), -- Mailchimp
+-- Interior Car Cleaning (10) technologies
+(10, 1, NOW()), -- Vacuum Cleaners
+(10, 4, NOW()), -- Car Wash Equipment
 
--- SEO technologies
-(16, 10, NOW()), -- Google Analytics
+-- Exterior Car Cleaning (11) technologies
+(11, 4, NOW()), -- Car Wash Equipment
+(11, 3, NOW()), -- Eco-Friendly Cleaning Products
 
--- Social Media Marketing technologies
-(17, 10, NOW()), -- Google Analytics
-(17, 12, NOW()), -- Mailchimp
+-- Car Waxing (12) technologies
+(12, 5, NOW()), -- Wax Products
+(12, 4, NOW()), -- Car Wash Equipment
 
--- Content Marketing technologies
-(18, 10, NOW()), -- Google Analytics
-(18, 12, NOW()); -- Mailchimp
+-- Lawn Mowing (13) technologies
+(13, 6, NOW()), -- Lawn Mowers
+(13, 8, NOW()), -- Gardening Equipment
+
+-- Tree Trimming (14) technologies
+(14, 7, NOW()), -- Trimming Tools
+(14, 8, NOW()), -- Gardening Equipment
+
+-- Planting (15) technologies
+(15, 8, NOW()), -- Gardening Equipment
+
+-- Furniture Assembly (16) technologies
+(16, 13, NOW()), -- Hand Tools
+(16, 14, NOW()), -- Power Tools
+
+-- Painting Walls (17) technologies
+(17, 15, NOW()), -- Paint & Finishing Materials
+(17, 13, NOW()), -- Hand Tools
+(17, 14, NOW()); -- Power Tools
 
 -- Insert Users (mix of clients and specialists)
 INSERT INTO "User" (role, name, email, phone, "passwordHash", "avatarUrl", bio, "creditBalance", verified, "experienceYears", "priceMin", "priceMax", location, "createdAt") VALUES
