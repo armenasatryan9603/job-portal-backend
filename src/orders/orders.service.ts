@@ -256,12 +256,7 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
-        Service: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        Service: true,
         questions: {
           orderBy: { order: "asc" },
         },
@@ -408,6 +403,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
+          Service: true,
           BannerImage: {
             select: {
               id: true,
@@ -1224,12 +1220,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
-          Service: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          Service: true,
           BannerImage: {
             select: {
               id: true,
