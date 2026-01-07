@@ -620,6 +620,8 @@
   "proposalsSent": "предложений отправлено",
   "reviewsGiven": "Данных отзывов",
   "description": "Описание",
+  "applyWithPeers": "Подать заявку с помощником",
+  "applyWithPeersDescription": "Подать заявку с помощником, чтобы увеличить ваши шансы на найм.",
   "selectAvailableDates": "Выберите доступные даты",
   "selectAvailableTimes": "Выберите доступное время",
   "selectMedia": "Выбрать медиа",
