@@ -9,11 +9,7 @@ import { JwtService } from "@nestjs/jwt";
 import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
 import { ReferralsService } from "../referrals/referrals.service";
 import { UniClient } from "uni-sdk";
-import {
-  UserLanguage,
-  isValidUserLanguage,
-  LanguageProficiencyLevel,
-} from "../types/user-languages";
+import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
 
 @Injectable()
 export class AuthService {
@@ -51,63 +47,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Send SMS via Unimtx
-   */
-  private async sendSMS(phone: string, message: string): Promise<boolean> {
-    if (!this.unimtxClient) {
-      console.error("❌ Unimtx client not initialized");
-      return false;
-    }
-
-    try {
-      // Clean phone number: remove spaces and dashes
-      let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-
-      // Format phone number: ensure E.164 format with country code
-      if (!cleanPhone.startsWith("+")) {
-        // If it starts with 0, remove it and add country code
-        if (cleanPhone.startsWith("0")) {
-          cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
-        } else if (cleanPhone.startsWith("374")) {
-          // Already has country code without +
-          cleanPhone = "+" + cleanPhone;
-        } else {
-          // Assume it's a local number, add country code
-          cleanPhone = "+374" + cleanPhone;
-        }
-      }
-      // If it already starts with +, keep it as is
-
-      const response = await this.unimtxClient.messages.send({
-        to: cleanPhone,
-        text: message,
-      });
-
-      if (
-        response &&
-        ((response as any).id ||
-          (response as any).messageId ||
-          (response as any).message_id)
-      ) {
-        const messageId =
-          (response as any).id ||
-          (response as any).messageId ||
-          (response as any).message_id;
-        console.log(
-          `📱 SMS sent to ${phone} via Unimtx (MessageId: ${messageId})`
-        );
-        return true;
-      } else {
-        console.error("❌ Unimtx error: No MessageId returned");
-        return false;
-      }
-    } catch (error) {
-      console.error("❌ Failed to send SMS via Unimtx:", error.message);
-      return false;
-    }
-  }
-
   async signup(
     name: string,
     email: string,
@@ -125,7 +64,10 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Get welcome bonus amount from environment variable
-    const welcomeBonus = parseFloat(process.env.WELCOME_BONUS_AMOUNT || "5.0");
+    const welcomeBonusEnv = process.env.WELCOME_BONUS_AMOUNT || "5.0";
+    const parsedBonus = parseFloat(welcomeBonusEnv);
+    const welcomeBonus =
+      isNaN(parsedBonus) || parsedBonus < 0 ? 5.0 : parsedBonus;
 
     const user = await this.prisma.user.create({
       data: {
@@ -133,7 +75,7 @@ export class AuthService {
         email,
         passwordHash: hashedPassword,
         role: "user",
-        creditBalance: welcomeBonus, // Give welcome bonus to all new users
+        creditBalance: welcomeBonus,
       },
     });
 
@@ -378,6 +320,13 @@ export class AuthService {
 
     // Store OTP in database with expiration (5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Get welcome bonus for new users
+    const welcomeBonusEnv = process.env.WELCOME_BONUS_AMOUNT || "5.0";
+    const parsedBonus = parseFloat(welcomeBonusEnv);
+    const welcomeBonus =
+      isNaN(parsedBonus) || parsedBonus < 0 ? 5.0 : parsedBonus;
+
     try {
       await this.prisma.user.upsert({
         where: { phone: cleanPhone },
@@ -390,6 +339,7 @@ export class AuthService {
           name: "",
           passwordHash: "temp_password",
           role: "user",
+          creditBalance: welcomeBonus,
           otpCode: otp,
           otpExpiresAt: expiresAt,
         },
@@ -538,13 +488,10 @@ export class AuthService {
       }
     }
 
-    // Check phone verification before proceeding - use cleanPhone
+    // Check phone verification before proceeding
     try {
-      const phoneCheck =
-        await this.phoneVerificationService.checkPhoneNumber(cleanPhone);
-      console.log("📱 Phone verification result:", phoneCheck);
+      await this.phoneVerificationService.checkPhoneNumber(cleanPhone);
     } catch (error) {
-      console.error("❌ Error checking phone number:", error.message);
       // Continue anyway - don't fail the whole process
     }
 
@@ -555,29 +502,27 @@ export class AuthService {
         where: { phone: cleanPhone },
       });
 
+      // Get welcome bonus amount from environment variable
+      const welcomeBonusEnv = process.env.WELCOME_BONUS_AMOUNT || "5.0";
+      const parsedBonus = parseFloat(welcomeBonusEnv);
+      const welcomeBonus =
+        isNaN(parsedBonus) || parsedBonus < 0 ? 5.0 : parsedBonus;
+
       if (!user) {
         // Create new user if doesn't exist
-        console.log(`📝 Creating new user with phone: ${cleanPhone}`);
-
-        // Get welcome bonus amount from environment variable
-        const welcomeBonus = parseFloat(
-          process.env.WELCOME_BONUS_AMOUNT || "5.0"
-        );
-
         user = await this.prisma.user.create({
           data: {
-            phone: cleanPhone, // Use formatted phone number
+            phone: cleanPhone,
             name: name?.trim() || "",
             passwordHash: "temp_password",
             role: "user",
-            creditBalance: welcomeBonus, // Give welcome bonus to all new users
+            creditBalance: welcomeBonus,
           },
         });
         console.log(
           `✅ User created with ID: ${user.id} - Welcome bonus: ${welcomeBonus} credits`
         );
       } else {
-        console.log(`👤 Found existing user with ID: ${user.id}`);
         // Update existing user
         const updateData: any = {};
 
@@ -585,12 +530,16 @@ export class AuthService {
           updateData.name = name.trim();
         }
 
+        // If existing user has 0 creditBalance, give them the welcome bonus
+        if (user.creditBalance === 0 || user.creditBalance === null) {
+          updateData.creditBalance = welcomeBonus;
+        }
+
         if (Object.keys(updateData).length > 0) {
           user = await this.prisma.user.update({
             where: { id: user.id },
             data: updateData,
           });
-          console.log(`✅ User updated`);
         }
       }
     } catch (error) {
@@ -599,11 +548,10 @@ export class AuthService {
       throw new Error(`Failed to create or update user: ${error.message}`);
     }
 
-    // Track phone number for new account - use cleanPhone
+    // Track phone number for new account
     try {
       await this.phoneVerificationService.trackNewAccount(cleanPhone);
     } catch (error) {
-      console.error("❌ Error tracking phone number:", error.message);
       // Continue anyway - don't fail the whole process
     }
 
@@ -618,13 +566,6 @@ export class AuthService {
         // Only apply if user hasn't been referred before
         if (!existingReferral) {
           await this.referralsService.applyReferralCode(referralCode, user.id);
-          console.log(
-            `✅ Referral code ${referralCode} applied for user ${user.id}`
-          );
-        } else {
-          console.log(
-            `ℹ️ User ${user.id} was already referred, skipping referral code`
-          );
         }
       } catch (error) {
         // Log error but don't fail signup if referral fails
@@ -644,11 +585,12 @@ export class AuthService {
       access_token: token,
       user: {
         id: user.id,
-        email: user.email || "", // Handle null email
+        email: user.email || "",
         name: user.name,
         phone: user.phone,
         avatarUrl: user.avatarUrl,
         role: user.role,
+        creditBalance: user.creditBalance,
       },
     };
   }
@@ -696,6 +638,12 @@ export class AuthService {
     // Store new OTP in database with expiration (5 minutes)
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
 
+    // Get welcome bonus for new users
+    const welcomeBonusEnv = process.env.WELCOME_BONUS_AMOUNT || "5.0";
+    const parsedBonus = parseFloat(welcomeBonusEnv);
+    const welcomeBonus =
+      isNaN(parsedBonus) || parsedBonus < 0 ? 5.0 : parsedBonus;
+
     await this.prisma.user.upsert({
       where: { phone: cleanPhone },
       update: {
@@ -707,6 +655,7 @@ export class AuthService {
         name: "",
         passwordHash: "temp_password",
         role: "user",
+        creditBalance: welcomeBonus,
         otpCode: otp,
         otpExpiresAt: expiresAt,
       },

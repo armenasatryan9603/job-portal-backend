@@ -23,6 +23,7 @@ import { PeerRelationshipsModule } from "./peer-relationships/peer-relationships
 import { StatsModule } from "./stats/stats.module";
 import { ConstantsModule } from "./constants/constants.module";
 import { SkillsModule } from "./skills/skills.module";
+import { AdminModule } from "./admin/admin.module";
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SkillsModule } from "./skills/skills.module";
     StatsModule,
     ConstantsModule,
     SkillsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

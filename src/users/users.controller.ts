@@ -9,7 +9,8 @@ import {
   Query,
   UseGuards,
   BadRequestException,
-  Request,
+  ForbiddenException,
+  Req,
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
@@ -120,8 +121,18 @@ export class UsersController {
 
   @Delete(":id")
   @UseGuards(JwtAuthGuard)
-  async remove(@Param("id") id: string) {
-    return this.usersService.remove(+id);
+  async remove(@Param("id") id: string, @Req() req: any) {
+    const currentUserId = req?.user?.userId;
+    const targetUserId = +id;
+
+    // Users can only delete their own account (unless they're admin)
+    if (currentUserId !== targetUserId && req?.user?.role !== "admin") {
+      throw new ForbiddenException(
+        "You can only delete your own account"
+      );
+    }
+
+    return this.usersService.remove(targetUserId);
   }
 
   // Specialist endpoints
@@ -145,7 +156,7 @@ export class UsersController {
 
   @Get("specialists")
   async getSpecialists(
-    @Request() req,
+    @Req() req,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
     @Query("serviceId") serviceId?: string,
@@ -388,7 +399,7 @@ export class UsersController {
     })
   )
   async uploadPortfolioItem(
-    @Request() req,
+    @Req() req,
     @UploadedFile() file: any,
     @Body() body: { title?: string; description?: string }
   ) {
@@ -431,7 +442,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   async updatePortfolioItem(
     @Param("id") id: string,
-    @Request() req,
+    @Req() req,
     @Body() body: { title?: string; description?: string }
   ) {
     const portfolioId = parseInt(id, 10);
@@ -448,7 +459,7 @@ export class UsersController {
 
   @Delete("portfolio/:id")
   @UseGuards(JwtAuthGuard)
-  async deletePortfolioItem(@Param("id") id: string, @Request() req) {
+  async deletePortfolioItem(@Param("id") id: string, @Req() req) {
     const portfolioId = parseInt(id, 10);
     if (isNaN(portfolioId)) {
       throw new BadRequestException(`Invalid portfolio ID: ${id}`);

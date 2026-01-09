@@ -1,6 +1,7 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { NestExpressApplication } from "@nestjs/platform-express";
+import { ValidationPipe } from "@nestjs/common";
 import { join } from "path";
 import * as express from "express";
 
@@ -14,6 +15,15 @@ async function bootstrap() {
       logger: ["error", "warn", "log", "debug"],
     });
 
+    // Enable validation
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      })
+    );
+
     // Configure JSON body parser
     app.use(express.json({ limit: "10mb" }));
     app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -23,8 +33,12 @@ async function bootstrap() {
 
     // Enable CORS
     const corsOrigins = process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",")
-      : ["http://localhost:3000", "http://localhost:3001"];
+      ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+      : [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "http://localhost:5173",
+        ];
 
     console.log("CORS origins:", corsOrigins);
 
@@ -37,16 +51,31 @@ async function bootstrap() {
           return callback(null, true);
         }
 
-        // Check if origin is in allowed list or if wildcard is enabled
-        if (
+        // Trim the origin to handle any whitespace
+        const trimmedOrigin = origin.trim();
+
+        // In development, allow all localhost origins
+        const isLocalhost =
+          trimmedOrigin.startsWith("http://localhost:") ||
+          trimmedOrigin.startsWith("https://localhost:") ||
+          trimmedOrigin.startsWith("http://127.0.0.1:") ||
+          trimmedOrigin.startsWith("https://127.0.0.1:");
+
+        // Check if origin is in allowed list or if wildcard is enabled or localhost
+        const isAllowed =
           corsOrigins.includes("*") ||
-          corsOrigins.includes(origin) ||
-          corsOrigins.some((allowed) => origin.startsWith(allowed))
-        ) {
-          console.log(`✅ CORS: Allowing origin: ${origin}`);
+          corsOrigins.includes(trimmedOrigin) ||
+          corsOrigins.some((allowed) =>
+            trimmedOrigin.startsWith(allowed.trim())
+          ) ||
+          (process.env.NODE_ENV !== "production" && isLocalhost);
+
+        if (isAllowed) {
+          console.log(`✅ CORS: Allowing origin: ${trimmedOrigin}`);
           callback(null, true);
         } else {
-          console.log(`❌ CORS: Blocking origin: ${origin}`);
+          console.log(`❌ CORS: Blocking origin: ${trimmedOrigin}`);
+          console.log(`   Allowed origins:`, corsOrigins);
           callback(new Error("Not allowed by CORS"));
         }
       },

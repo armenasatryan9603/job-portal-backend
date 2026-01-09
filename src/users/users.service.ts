@@ -186,21 +186,142 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Check if user has any orders or reviews
-    const [ordersCount, reviewsCount] = await Promise.all([
-      this.prisma.order.count({ where: { clientId: id } }),
-      this.prisma.review.count({ where: { reviewerId: id } }),
-    ]);
+    // Use a transaction to ensure all deletions happen atomically
+    // Increase timeout to 30 seconds for large deletions
+    return await this.prisma.$transaction(
+      async (tx) => {
+        // Delete lightweight items first (faster operations)
+        // 1. Delete notifications
+        await tx.notification.deleteMany({
+          where: { userId: id },
+        });
 
-    if (ordersCount > 0 || reviewsCount > 0) {
-      throw new BadRequestException(
-        "Cannot delete user with existing orders or reviews. Consider deactivating instead."
-      );
-    }
+        // 2. Delete saved orders
+        await tx.savedOrder.deleteMany({
+          where: { userId: id },
+        });
 
-    return this.prisma.user.delete({
-      where: { id },
-    });
+        // 3. Delete user services
+        await tx.userService.deleteMany({
+          where: { userId: id },
+        });
+
+        // 4. Delete cards
+        await tx.card.deleteMany({
+          where: { userId: id },
+        });
+
+        // 5. Delete portfolio items
+        await tx.portfolio.deleteMany({
+          where: { userId: id },
+        });
+
+        // 6. Delete credit transactions
+        await tx.creditTransaction.deleteMany({
+          where: { userId: id },
+        });
+
+        // 7. Delete order change history entries
+        await tx.orderChangeHistory.deleteMany({
+          where: { changedBy: id },
+        });
+
+        // 8. Delete proposal peers
+        await tx.proposalPeer.deleteMany({
+          where: { userId: id },
+        });
+
+        // 9. Delete peer relationships
+        await tx.peerRelationship.deleteMany({
+          where: { OR: [{ userId: id }, { peerId: id }] },
+        });
+
+        // 10. Delete team memberships
+        await tx.teamMember.deleteMany({
+          where: { userId: id },
+        });
+
+        // 11. Handle teams created by user - delete teams if user is the only member, otherwise transfer ownership
+        const teamsCreatedByUser = await tx.team.findMany({
+          where: { createdBy: id },
+          include: { Members: true },
+        });
+
+        for (const team of teamsCreatedByUser) {
+          const activeMembers = team.Members.filter(
+            (m) => m.isActive && m.userId !== id
+          );
+          if (activeMembers.length === 0) {
+            // No other active members, delete the team
+            await tx.team.delete({
+              where: { id: team.id },
+            });
+          } else {
+            // Transfer ownership to first active member
+            const newOwner = activeMembers[0];
+            await tx.team.update({
+              where: { id: team.id },
+              data: { createdBy: newOwner.userId },
+            });
+          }
+        }
+
+        // 12. Delete referral rewards (both as referrer and referred)
+        await tx.referralReward.deleteMany({
+          where: { OR: [{ referrerId: id }, { referredUserId: id }] },
+        });
+
+        // 13. Update referrals - set referredBy to null for users referred by this user
+        await tx.user.updateMany({
+          where: { referredBy: id },
+          data: { referredBy: null },
+        });
+
+        // 14. Delete conversations and related data (cascade will handle participants and messages)
+        const userConversations = await tx.conversationParticipant.findMany({
+          where: { userId: id },
+          select: { conversationId: true },
+        });
+        const conversationIds = userConversations.map(
+          (cp) => cp.conversationId
+        );
+        if (conversationIds.length > 0) {
+          await tx.conversation.deleteMany({
+            where: { id: { in: conversationIds } },
+          });
+        }
+
+        // 15. Delete order proposals made by the user (combine userId and leadUserId deletes)
+        await tx.orderProposal.deleteMany({
+          where: { OR: [{ userId: id }, { leadUserId: id }] },
+        });
+
+        // 16. Anonymize reviews where user is the specialist (set specialistId to null)
+        await tx.review.updateMany({
+          where: { specialistId: id },
+          data: { specialistId: null },
+        });
+
+        // 17. Delete reviews where user is the reviewer
+        await tx.review.deleteMany({
+          where: { reviewerId: id },
+        });
+
+        // 18. Delete user's orders (cascade will handle related data like OrderQuestions, OrderSkills, etc.)
+        // This is done last as it may cascade to many related records
+        await tx.order.deleteMany({
+          where: { clientId: id },
+        });
+
+        // 19. Finally, delete the user (cascade will handle remaining relationships)
+        return await tx.user.delete({
+          where: { id },
+        });
+      },
+      {
+        timeout: 30000, // 30 seconds timeout
+      }
+    );
   }
 
   async updatePassword(id: number, newPassword: string) {
@@ -671,20 +792,21 @@ export class UsersService {
     // Transform the data to match frontend expectations
     const roundedAverageRating = Math.round(averageRating * 10) / 10;
     const reviewCountValue = reviews.length;
-    
+
     // Get the first service from UserServices
     const primaryUserService = user.UserServices?.[0];
     const service = primaryUserService?.Service;
-    
+
     // Transform ServiceTechnologies to technologies array format expected by frontend
-    const technologies = service?.ServiceTechnologies?.map((st: any) => ({
-      id: st.Technology.id,
-      name: st.Technology.name,
-      nameEn: st.Technology.nameEn,
-      nameRu: st.Technology.nameRu,
-      nameHy: st.Technology.nameHy,
-    })) || [];
-    
+    const technologies =
+      service?.ServiceTechnologies?.map((st: any) => ({
+        id: st.Technology.id,
+        name: st.Technology.name,
+        nameEn: st.Technology.nameEn,
+        nameRu: st.Technology.nameRu,
+        nameHy: st.Technology.nameHy,
+      })) || [];
+
     return {
       id: user.id,
       userId: user.id,
@@ -713,19 +835,21 @@ export class UsersService {
         location: user.location,
         createdAt: user.createdAt,
       },
-      Service: service ? {
-        id: service.id,
-        name: service.name,
-        nameEn: service.nameEn,
-        nameRu: service.nameRu,
-        nameHy: service.nameHy,
-        description: service.description,
-        descriptionEn: service.descriptionEn,
-        descriptionRu: service.descriptionRu,
-        descriptionHy: service.descriptionHy,
-        completionRate: service.completionRate,
-        technologies: technologies,
-      } : null,
+      Service: service
+        ? {
+            id: service.id,
+            name: service.name,
+            nameEn: service.nameEn,
+            nameRu: service.nameRu,
+            nameHy: service.nameHy,
+            description: service.description,
+            descriptionEn: service.descriptionEn,
+            descriptionRu: service.descriptionRu,
+            descriptionHy: service.descriptionHy,
+            completionRate: service.completionRate,
+            technologies: technologies,
+          }
+        : null,
       _count: user._count,
     };
   }

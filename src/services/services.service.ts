@@ -79,6 +79,13 @@ export class ServicesService {
         }).filter((t: any) => t !== null)
       : [];
 
+    // Transform children recursively if they exist
+    const children = service.Children
+      ? service.Children.map((child: any) =>
+          this.transformServiceForLanguage(child, language)
+        )
+      : undefined;
+
     return {
       ...service,
       name: service[langFields.name] || service.name || "",
@@ -86,6 +93,7 @@ export class ServicesService {
         service[langFields.description] || service.description || null,
       features,
       technologies,
+      ...(children !== undefined && { Children: children }),
     };
   }
 
