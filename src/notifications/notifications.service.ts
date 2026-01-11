@@ -102,9 +102,18 @@ export class NotificationsService {
   }
 
   async clearAllNotifications(userId: number) {
-    return this.prisma.notification.deleteMany({
-      where: { userId },
-    });
+    try {
+      const result = await this.prisma.notification.deleteMany({
+        where: { userId },
+      });
+      return {
+        success: true,
+        deletedCount: result.count,
+      };
+    } catch (error) {
+      console.error("Error clearing all notifications:", error);
+      throw error;
+    }
   }
 
   /**
@@ -162,11 +171,16 @@ export class NotificationsService {
       titleKey,
       placeholders
     );
-    const message = await this.translationsService.translate(
+    let message = await this.translationsService.translate(
       language,
       messageKey,
       placeholders
     );
+
+    // If translation failed (returns key) and we have messageContent in data, use it
+    if (message === messageKey && data?.messageContent) {
+      message = data.messageContent;
+    }
 
     // Create database notification (store original keys for future reference)
     const notification = await this.prisma.notification.create({
@@ -190,20 +204,23 @@ export class NotificationsService {
 
     if (pushEnabled) {
       try {
+        // Prepare notification data with notificationId for deep linking
+        const pushData = {
+          type,
+          ...data,
+          notificationId: notification.id.toString(), // Include notification ID for deep linking
+        };
+
         await this.firebaseNotificationService.sendPushNotification(
           userId,
           title,
           message,
-          { type, ...data }
+          pushData
         );
       } catch (error) {
         console.error("Failed to send push notification:", error);
         // Don't fail the database operation if push fails
       }
-    } else {
-      console.log(
-        `Push notifications disabled for user ${userId}, skipping push notification`
-      );
     }
 
     // Send email notification only if user has email notifications enabled
@@ -226,10 +243,6 @@ export class NotificationsService {
         console.error("Failed to send email notification:", error);
         // Don't fail the database operation if email fails
       }
-    } else {
-      console.log(
-        `Email notifications disabled for user ${userId}, skipping email notification`
-      );
     }
 
     return notification;
@@ -287,7 +300,10 @@ export class NotificationsService {
     `.trim();
   }
 
-  async updateUserFCMToken(userId: number, fcmToken: string) {
+  async updateUserFCMToken(
+    userId: number,
+    fcmToken: string
+  ): Promise<{ success: boolean }> {
     return this.firebaseNotificationService.updateUserFCMToken(
       userId,
       fcmToken

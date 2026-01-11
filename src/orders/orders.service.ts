@@ -104,30 +104,41 @@ export class OrdersService {
 
     // Handle skills: support both skillIds (new) and skills (backward compatibility)
     // When both are present, combine them (skillIds for existing, skills for new ones to create)
-    this.logger.log(`[createOrder] Received skillIds: ${JSON.stringify(skillIds)}, skills: ${JSON.stringify(skills)}`);
+    this.logger.log(
+      `[createOrder] Received skillIds: ${JSON.stringify(skillIds)}, skills: ${JSON.stringify(skills)}`
+    );
     let finalSkillIds: number[] = [];
-    
+
     // First, add existing skill IDs
     if (skillIds && skillIds.length > 0) {
       finalSkillIds = skillIds.filter((id) => !isNaN(id) && id > 0);
-      this.logger.log(`[createOrder] Added existing skillIds: ${JSON.stringify(finalSkillIds)}`);
+      this.logger.log(
+        `[createOrder] Added existing skillIds: ${JSON.stringify(finalSkillIds)}`
+      );
     }
-    
+
     // Then, handle new skills (skill names without IDs)
     // This can happen when both skillIds and skills are sent (mixed scenario)
     if (skills && skills.length > 0) {
-      const skillNames = skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-      this.logger.log(`[createOrder] Processing new skill names: ${JSON.stringify(skillNames)}`);
-      
+      const skillNames = skills.filter(
+        (s): s is string => typeof s === "string" && s.trim().length > 0
+      );
+      this.logger.log(
+        `[createOrder] Processing new skill names: ${JSON.stringify(skillNames)}`
+      );
+
       if (skillNames.length > 0) {
-        const createdSkills = await this.skillsService.findOrCreateSkills(
-          skillNames
+        const createdSkills =
+          await this.skillsService.findOrCreateSkills(skillNames);
+        this.logger.log(
+          `[createOrder] Created/found ${createdSkills.length} skills`
         );
-        this.logger.log(`[createOrder] Created/found ${createdSkills.length} skills`);
         const newSkillIds = createdSkills.map((s) => s.id);
         // Combine existing skillIds with newly created skill IDs
         finalSkillIds = [...finalSkillIds, ...newSkillIds];
-        this.logger.log(`[createOrder] Final skillIds: ${JSON.stringify(finalSkillIds)}`);
+        this.logger.log(
+          `[createOrder] Final skillIds: ${JSON.stringify(finalSkillIds)}`
+        );
       }
     }
 
@@ -279,14 +290,8 @@ export class OrdersService {
       "Order created - pending admin review"
     );
 
-    // Send notifications to users who have notifications enabled for this service
-    if (serviceId) {
-      await this.sendNewOrderNotifications(
-        order.id,
-        serviceId,
-        order.title || ""
-      );
-    }
+    // ✅ Notifications will be sent when order is approved (status changes to "open")
+    // Do not send notifications here because order is still "pending_review"
 
     return order;
   }
@@ -335,10 +340,10 @@ export class OrdersService {
           orderId: true,
         },
       });
-      
+
       // Extract unique order IDs
       const appliedOrderIds = Array.from(
-        new Set(proposals.map(p => p.orderId))
+        new Set(proposals.map((p) => p.orderId))
       );
 
       this.logger.debug(
@@ -353,12 +358,12 @@ export class OrdersService {
           notIn: appliedOrderIds,
         };
       }
-      
+
       // Filter out orders the user created
       where.clientId = {
         not: userId,
       };
-      
+
       // "not_applied" should only show "open" orders
       where.status = "open";
     } else if (status) {
@@ -442,12 +447,14 @@ export class OrdersService {
         const creditCost = await this.orderPricingService.getCreditCost(
           order.budget || 0
         );
-        
+
         // Transform OrderSkills to skills array for backward compatibility
         const skills = (order as any).OrderSkills
           ? (order as any).OrderSkills.map((os: any) => {
               // Return skill name based on language preference (default to nameEn)
-              return os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || "";
+              return (
+                os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || ""
+              );
             }).filter((name: string) => name)
           : [];
 
@@ -848,24 +855,28 @@ export class OrdersService {
     // Handle skills: support both skillIds (new) and skills (backward compatibility)
     // When both are present, combine them (skillIds for existing, skills for new ones to create)
     finalSkillIds = [];
-    
+
     // First, add existing skill IDs
     if (updateOrderDto.skillIds !== undefined) {
       finalSkillIds = Array.isArray(updateOrderDto.skillIds)
         ? updateOrderDto.skillIds.filter((id) => !isNaN(id) && id > 0)
         : [];
     }
-    
+
     // Then, handle new skills (skill names without IDs)
     // This can happen when both skillIds and skills are sent (mixed scenario)
     if (updateOrderDto.skills !== undefined) {
-      if (Array.isArray(updateOrderDto.skills) && updateOrderDto.skills.length > 0) {
-        const skillNames = updateOrderDto.skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-        
+      if (
+        Array.isArray(updateOrderDto.skills) &&
+        updateOrderDto.skills.length > 0
+      ) {
+        const skillNames = updateOrderDto.skills.filter(
+          (s): s is string => typeof s === "string" && s.trim().length > 0
+        );
+
         if (skillNames.length > 0) {
-          const createdSkills = await this.skillsService.findOrCreateSkills(
-            skillNames
-          );
+          const createdSkills =
+            await this.skillsService.findOrCreateSkills(skillNames);
           const newSkillIds = createdSkills.map((s) => s.id);
           // Combine existing skillIds with newly created skill IDs
           finalSkillIds = [...finalSkillIds, ...newSkillIds];
@@ -1259,12 +1270,14 @@ export class OrdersService {
         const creditCost = await this.orderPricingService.getCreditCost(
           order.budget || 0
         );
-        
+
         // Transform OrderSkills to skills array for backward compatibility
         const skills = (order as any).OrderSkills
           ? (order as any).OrderSkills.map((os: any) => {
               // Return skill name based on language preference (default to nameEn)
-              return os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || "";
+              return (
+                os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || ""
+              );
             }).filter((name: string) => name)
           : [];
 
@@ -1525,21 +1538,22 @@ export class OrdersService {
     // Handle skills: support both skillIds (new) and skills (backward compatibility)
     // When both are present, combine them (skillIds for existing, skills for new ones to create)
     let finalSkillIds: number[] = [];
-    
+
     // First, add existing skill IDs
     if (skillIds && skillIds.length > 0) {
       finalSkillIds = skillIds.filter((id) => !isNaN(id) && id > 0);
     }
-    
+
     // Then, handle new skills (skill names without IDs)
     // This can happen when both skillIds and skills are sent (mixed scenario)
     if (skills && skills.length > 0) {
-      const skillNames = skills.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-      
+      const skillNames = skills.filter(
+        (s): s is string => typeof s === "string" && s.trim().length > 0
+      );
+
       if (skillNames.length > 0) {
-        const createdSkills = await this.skillsService.findOrCreateSkills(
-          skillNames
-        );
+        const createdSkills =
+          await this.skillsService.findOrCreateSkills(skillNames);
         const newSkillIds = createdSkills.map((s) => s.id);
         // Combine existing skillIds with newly created skill IDs
         finalSkillIds = [...finalSkillIds, ...newSkillIds];
@@ -1706,18 +1720,8 @@ export class OrdersService {
         MediaFiles: createdMediaFiles,
       };
 
-      // Send notifications to users who have notifications enabled for this service
-      // Do this after transaction completes to avoid blocking the transaction
-      if (serviceId) {
-        // Use setImmediate to send notifications asynchronously after transaction
-        setImmediate(async () => {
-          await this.sendNewOrderNotifications(
-            order.id,
-            serviceId,
-            order.title || ""
-          );
-        });
-      }
+      // ✅ Notifications will be sent when order is approved (status changes to "open")
+      // Do not send notifications here because order is still "pending_review"
 
       return result;
     });
@@ -1725,7 +1729,7 @@ export class OrdersService {
 
   /**
    * Send notifications to users who have notifications enabled for a service
-   * when a new order is created for that service
+   * when a new order becomes available (status is "open")
    */
   private async sendNewOrderNotifications(
     orderId: number,
@@ -1733,6 +1737,30 @@ export class OrdersService {
     orderTitle: string
   ): Promise<void> {
     try {
+      // ✅ CRITICAL: Check order status - only send notifications for "open" orders
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: {
+          clientId: true,
+          status: true,
+        },
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found, skipping notifications`);
+        return;
+      }
+
+      // ✅ Only send notifications if order is "open" (available for specialists)
+      if (order.status !== "open") {
+        this.logger.log(
+          `Order ${orderId} is not open (status: ${order.status}), skipping notifications. Notifications will be sent when order is approved.`
+        );
+        return;
+      }
+
+      const clientId = order.clientId;
+
       // Find all users who have notifications enabled for this service
       const userServices = await this.prisma.userService.findMany({
         where: {
@@ -1766,14 +1794,6 @@ export class OrdersService {
       // Get service name for notification
       const serviceName =
         userServices[0]?.Service?.name || `Service #${serviceId}`;
-
-      // Get the order to find the client ID (to exclude from notifications)
-      const order = await this.prisma.order.findUnique({
-        where: { id: orderId },
-        select: { clientId: true },
-      });
-
-      const clientId = order?.clientId;
 
       // Send notification to each user (excluding the order creator)
       const notifications = userServices

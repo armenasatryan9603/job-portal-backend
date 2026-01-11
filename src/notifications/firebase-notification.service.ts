@@ -117,16 +117,28 @@ export class FirebaseNotificationService {
         `✅ [FCM] Found FCM token for user ${userId}: ${user.fcmToken.substring(0, 30)}...`
       );
 
+      // Firebase data field only accepts string values
+      // Convert all data values to strings
+      const dataStringified: Record<string, string> = {
+        type: (data?.type || "general").toString(),
+      };
+
+      // Convert all other data fields to strings
+      if (data) {
+        Object.keys(data).forEach((key) => {
+          if (data[key] !== undefined && data[key] !== null) {
+            dataStringified[key] = String(data[key]);
+          }
+        });
+      }
+
       const message = {
         token: user.fcmToken,
         notification: {
           title,
           body,
         },
-        data: {
-          type: data?.type || "general",
-          ...data,
-        },
+        data: dataStringified,
         android: {
           notification: {
             icon: "ic_notification",
@@ -224,13 +236,17 @@ export class FirebaseNotificationService {
     return { success, failed };
   }
 
-  async updateUserFCMToken(userId: number, fcmToken: string): Promise<void> {
+  async updateUserFCMToken(
+    userId: number,
+    fcmToken: string
+  ): Promise<{ success: boolean }> {
     try {
       await this.prisma.user.update({
         where: { id: userId },
         data: { fcmToken },
       });
       this.logger.log(`✅ FCM token updated for user ${userId}`);
+      return { success: true };
     } catch (error) {
       this.logger.error(
         `❌ Failed to update FCM token for user ${userId}:`,

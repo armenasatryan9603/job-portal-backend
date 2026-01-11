@@ -3,8 +3,6 @@ import { PrismaService } from '../prisma.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
-import { FirebaseNotificationService } from '../notifications/firebase-notification.service';
-import { EmailNotificationService } from '../notifications/email-notification.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -16,8 +14,6 @@ export class AdminService {
     private usersService: UsersService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
-    private firebaseNotificationService: FirebaseNotificationService,
-    private emailNotificationService: EmailNotificationService,
   ) {}
 
   async getUsers(page: number = 1, limit: number = 10, search?: string, role?: string) {
@@ -133,75 +129,21 @@ export class AdminService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Create notification directly in database
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId,
-        type: dto.type || 'admin',
-        title: dto.title,
-        message: dto.message,
-        data: {
-          source: 'admin',
-        },
+    // Use createNotificationWithPush to ensure notificationId is included in push data
+    // This will create the notification in the database AND send push/email notifications
+    // with the correct notificationId for deep linking
+    const notification = await this.notificationsService.createNotificationWithPush(
+      userId,
+      dto.type || 'admin',
+      dto.title, // Use title as-is (not a translation key)
+      dto.message, // Use message as-is (not a translation key)
+      {
+        source: 'admin',
       },
-    });
-
-    // Send push notification if user has FCM token
-    if (user.fcmToken) {
-      try {
-        await this.firebaseNotificationService.sendPushNotification(
-          userId,
-          dto.title,
-          dto.message,
-          { type: dto.type || 'admin' },
-        );
-      } catch (error) {
-        console.error('Failed to send push notification:', error);
-        // Don't fail the request if push fails
-      }
-    }
-
-    // Send email notification
-    try {
-      await this.emailNotificationService.sendEmailNotification(
-        userId,
-        dto.title,
-        this.createEmailHtmlBody(dto.title, dto.message),
-        dto.message,
-      );
-    } catch (error) {
-      console.error('Failed to send email notification:', error);
-      // Don't fail the request if email fails
-    }
+      {}, // No placeholders needed since we're using raw title/message
+    );
 
     return notification;
-  }
-
-  private createEmailHtmlBody(title: string, message: string): string {
-    const appName = process.env.APP_NAME || 'Job Portal';
-    const appUrl = process.env.APP_URL || 'https://example.com';
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-    <h1 style="color: #231F7C; margin-top: 0; font-size: 24px; font-weight: 700;">${title}</h1>
-    <p style="font-size: 16px; color: #666666; margin: 20px 0;">${message}</p>
-    <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0;">
-    <p style="font-size: 14px; color: #999999; margin: 0;">
-      This is an automated notification from ${appName}. 
-      <a href="${appUrl}/settings" style="color: #231F7C;">Manage your notification preferences</a>.
-    </p>
-  </div>
-</body>
-</html>
-    `.trim();
   }
 
   async sendMessage(adminUserId: number, userId: number, dto: SendMessageDto) {

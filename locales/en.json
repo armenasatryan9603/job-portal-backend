@@ -926,6 +926,7 @@
   "notificationNewOrderTitle": "New Order Available!",
   "notificationNewOrderMessage": "A new order \"{orderTitle}\" has been posted in {serviceName}. Check it out!",
   "notificationChatMessageTitle": "New message from {senderName}",
+  "notificationChatMessageBody": "{messageContent}",
   "notificationProposalAcceptedTitle": "Congratulations! You've been selected!",
   "notificationProposalAcceptedMessage": "You have been selected for the job: \"{orderTitle}\". The client will contact you soon.",
   "notificationProposalRejectedTitle": "Application Update",

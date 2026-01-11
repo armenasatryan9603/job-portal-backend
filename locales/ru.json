@@ -933,6 +933,7 @@
   "notificationNewOrderTitle": "Доступен новый заказ!",
   "notificationNewOrderMessage": "Новый заказ \"{orderTitle}\" размещен в {serviceName}. Проверьте!",
   "notificationChatMessageTitle": "Новое сообщение от {senderName}",
+  "notificationChatMessageBody": "{messageContent}",
   "notificationProposalAcceptedTitle": "Поздравляем! Вас выбрали!",
   "notificationProposalAcceptedMessage": "Вас выбрали для работы: \"{orderTitle}\". Клиент скоро свяжется с вами.",
   "notificationProposalRejectedTitle": "Обновление заявки",

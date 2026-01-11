@@ -2,7 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
-import { FirebaseNotificationService } from "../notifications/firebase-notification.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { PusherService } from "./pusher.service";
@@ -20,7 +19,6 @@ export class ChatService {
 
   constructor(
     private prisma: PrismaService,
-    private firebaseNotificationService: FirebaseNotificationService,
     private notificationsService: NotificationsService,
     private orderPricingService: OrderPricingService,
     private pusherService: PusherService,
@@ -362,7 +360,7 @@ export class ChatService {
           },
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "asc" }, // Oldest messages first
       skip,
       take: limit,
     });
@@ -611,21 +609,26 @@ export class ChatService {
       // Send push notification to each participant
       for (const participant of participants) {
         if (participant.User.fcmToken) {
+          const messagePreview =
+            message.content.length > 100
+              ? `${message.content.substring(0, 100)}...`
+              : message.content;
+
           await this.notificationsService.createNotificationWithPush(
             participant.User.id,
             "chat_message",
             "notificationChatMessageTitle",
-            message.content.length > 100
-              ? `${message.content.substring(0, 100)}...`
-              : message.content,
+            "notificationChatMessageBody",
             {
               type: "chat_message",
               conversationId: conversationId.toString(),
               messageId: message.id.toString(),
               senderId: senderId.toString(),
+              messageContent: messagePreview,
             },
             {
               senderName: message.Sender.name,
+              messageContent: messagePreview,
             }
           );
         }
@@ -1405,19 +1408,22 @@ export class ChatService {
         // Refund credits to lead applicants only (for group applications)
         for (const proposal of pendingProposals) {
           // Check if this is a team application
-          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
-          
+          const isTeamApplication =
+            proposal.teamId !== null && proposal.teamId !== undefined;
+
           // Get pricing configuration based on whether it's a team application
           const orderBudget = order.budget || 0;
-          const pricingConfig =
-            await this.orderPricingService.getPricingConfig(orderBudget, isTeamApplication);
+          const pricingConfig = await this.orderPricingService.getPricingConfig(
+            orderBudget,
+            isTeamApplication
+          );
           const creditCost = pricingConfig.creditCost;
           const refundAmount = Math.round(
             creditCost * pricingConfig.refundPercentage
           );
 
           console.log(
-            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? 'team' : 'individual'})`
+            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? "team" : "individual"})`
           );
 
           // For group/team applications, refund only to lead applicant
@@ -1638,24 +1644,28 @@ export class ChatService {
 
         for (const proposal of otherProposals) {
           // Check if this is a team application
-          const isTeamApplication = proposal.teamId !== null && proposal.teamId !== undefined;
-          
+          const isTeamApplication =
+            proposal.teamId !== null && proposal.teamId !== undefined;
+
           // Get pricing configuration based on whether it's a team application
-          const pricingConfig =
-            await this.orderPricingService.getPricingConfig(orderBudget, isTeamApplication);
+          const pricingConfig = await this.orderPricingService.getPricingConfig(
+            orderBudget,
+            isTeamApplication
+          );
           const creditCost = pricingConfig.creditCost;
           const refundAmount = Math.round(
             creditCost * pricingConfig.refundPercentage
           );
 
           console.log(
-            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? 'team' : 'individual'})`
+            `Refunding ${refundAmount} credits (${pricingConfig.refundPercentage * 100}% of ${creditCost} credits) for proposal ${proposal.id} (${isTeamApplication ? "team" : "individual"})`
           );
 
           // Only refund to lead applicant for team applications
-          const refundUserId = isTeamApplication && proposal.leadUserId
-            ? proposal.leadUserId
-            : proposal.userId;
+          const refundUserId =
+            isTeamApplication && proposal.leadUserId
+              ? proposal.leadUserId
+              : proposal.userId;
 
           if (refundAmount > 0) {
             await tx.user.update({
