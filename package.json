@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:reasons": "ts-node prisma/seed-reasons.ts",
+    "seed:subscriptions": "ts-node prisma/seed-subscription-plans.ts",
     "create-admin": "ts-node scripts/create-admin.ts"
   },
   "dependencies": {

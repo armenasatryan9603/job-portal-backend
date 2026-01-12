@@ -58,6 +58,8 @@ model User {
   CreatedTeams             Team[]                    @relation("TeamCreator")
   ProposalPeers            ProposalPeer[]
   LeadProposals            OrderProposal[]           @relation("LeadProposals")
+  Subscriptions            UserSubscription[]
+  SubscriptionTransactions SubscriptionTransaction[]
 }
 
 model Service {
@@ -595,15 +597,15 @@ model SystemConfig {
 }
 
 model Skill {
-  id            Int         @id @default(autoincrement())
+  id            Int          @id @default(autoincrement())
   nameEn        String
   nameRu        String
   nameHy        String
   descriptionEn String?
   descriptionRu String?
   descriptionHy String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   OrderSkills   OrderSkill[]
 
   @@index([nameEn])
@@ -613,8 +615,8 @@ model Skill {
 
 model OrderSkill {
   id        Int      @id @default(autoincrement())
-  orderId  Int
-  skillId  Int
+  orderId   Int
+  skillId   Int
   createdAt DateTime @default(now())
   Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   Skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
@@ -622,4 +624,68 @@ model OrderSkill {
   @@unique([orderId, skillId])
   @@index([orderId])
   @@index([skillId])
+}
+
+model SubscriptionPlan {
+  id            Int                @id @default(autoincrement())
+  name          String
+  nameEn        String?
+  nameRu        String?
+  nameHy        String?
+  description   String?
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  price         Float
+  currency      String             @default("AMD")
+  durationDays  Int // Duration in days (30 for monthly, 365 for yearly)
+  isRecurring   Boolean            @default(false) // Whether this plan supports auto-renewal
+  features      Json? // Features included in this plan (e.g., unlimited applications, priority support)
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  Subscriptions UserSubscription[]
+
+  @@index([isActive])
+  @@index([price])
+}
+
+model UserSubscription {
+  id           Int                       @id @default(autoincrement())
+  userId       Int
+  planId       Int
+  status       String                    @default("active") // "active", "expired", "cancelled"
+  startDate    DateTime                  @default(now())
+  endDate      DateTime
+  autoRenew    Boolean                   @default(false)
+  paymentId    String? // Payment ID from payment gateway
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  User         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Plan         SubscriptionPlan          @relation(fields: [planId], references: [id])
+  Transactions SubscriptionTransaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+  @@index([userId, status])
+}
+
+model SubscriptionTransaction {
+  id             Int               @id @default(autoincrement())
+  userId         Int
+  subscriptionId Int? // Nullable until subscription is created
+  amount         Float
+  currency       String            @default("AMD")
+  paymentId      String? // Payment ID from payment gateway
+  status         String            @default("pending") // "pending", "completed", "failed"
+  type           String            @default("initial") // "initial", "renewal"
+  createdAt      DateTime          @default(now())
+  User           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Subscription   UserSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([paymentId])
 }

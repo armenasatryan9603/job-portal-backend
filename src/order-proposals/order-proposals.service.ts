@@ -8,6 +8,7 @@ import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
 import { ConfigService } from "../config/config.service";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 @Injectable()
 export class OrderProposalsService {
@@ -17,7 +18,8 @@ export class OrderProposalsService {
     private prisma: PrismaService,
     private orderPricingService: OrderPricingService,
     private creditTransactionsService: CreditTransactionsService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private subscriptionsService: SubscriptionsService
   ) {}
 
   /**
@@ -262,17 +264,31 @@ export class OrderProposalsService {
               }
               console.log("User found:", user.id, user.name);
 
-              // Check if user has sufficient credits
-              console.log(
-                "Credit check - Balance:",
-                user.creditBalance,
-                "Required:",
-                applicationCost
+              // Check if user has an active subscription
+              const activeSubscription = await this.subscriptionsService.getUserActiveSubscription(
+                createOrderProposalDto.userId
               );
-              if (user.creditBalance < applicationCost) {
-                throw new BadRequestException(
-                  `Insufficient credit balance. Required: ${applicationCost} credits, Available: ${user.creditBalance} credits`
+
+              let shouldDeductCredits = true;
+              if (activeSubscription) {
+                // User has active subscription - skip credit deduction
+                console.log(
+                  "User has active subscription, skipping credit deduction"
                 );
+                shouldDeductCredits = false;
+              } else {
+                // No active subscription - check if user has sufficient credits
+                console.log(
+                  "Credit check - Balance:",
+                  user.creditBalance,
+                  "Required:",
+                  applicationCost
+                );
+                if (user.creditBalance < applicationCost) {
+                  throw new BadRequestException(
+                    `Insufficient credit balance. Required: ${applicationCost} credits, Available: ${user.creditBalance} credits`
+                  );
+                }
               }
 
               // Check if user already has a proposal for this order
@@ -369,31 +385,40 @@ export class OrderProposalsService {
                 }
               }
 
-              // Deduct credits from user
-              console.log("Deducting credits from user...");
-              const updatedUser = await tx.user.update({
-                where: { id: createOrderProposalDto.userId },
-                data: { creditBalance: { decrement: applicationCost } },
-                select: { creditBalance: true },
-              });
-              console.log("Credits deducted successfully");
+              // Deduct credits from user (only if no active subscription)
+              let updatedUser;
+              if (shouldDeductCredits) {
+                console.log("Deducting credits from user...");
+                updatedUser = await tx.user.update({
+                  where: { id: createOrderProposalDto.userId },
+                  data: { creditBalance: { decrement: applicationCost } },
+                  select: { creditBalance: true },
+                });
+                console.log("Credits deducted successfully");
 
-              // Log credit transaction
-              await this.creditTransactionsService.logTransaction({
-                userId: createOrderProposalDto.userId,
-                amount: -applicationCost, // Negative for deduction
-                balanceAfter: updatedUser.creditBalance,
-                type: "order_application",
-                status: "completed",
-                description: `Applied to order #${createOrderProposalDto.orderId}`,
-                referenceId: createOrderProposalDto.orderId.toString(),
-                referenceType: "order",
-                metadata: {
-                  orderId: createOrderProposalDto.orderId,
-                  applicationCost,
-                },
-                tx,
-              });
+                // Log credit transaction
+                await this.creditTransactionsService.logTransaction({
+                  userId: createOrderProposalDto.userId,
+                  amount: -applicationCost, // Negative for deduction
+                  balanceAfter: updatedUser.creditBalance,
+                  type: "order_application",
+                  status: "completed",
+                  description: `Applied to order #${createOrderProposalDto.orderId}`,
+                  referenceId: createOrderProposalDto.orderId.toString(),
+                  referenceType: "order",
+                  metadata: {
+                    orderId: createOrderProposalDto.orderId,
+                    applicationCost,
+                  },
+                  tx,
+                });
+              } else {
+                // Get user balance for logging (even though we're not deducting)
+                updatedUser = await tx.user.findUnique({
+                  where: { id: createOrderProposalDto.userId },
+                  select: { creditBalance: true },
+                });
+              }
 
               // Format message with questions and answers
               let formattedMessage = createOrderProposalDto.message || "";

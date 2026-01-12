@@ -24,6 +24,7 @@ import { StatsModule } from "./stats/stats.module";
 import { ConstantsModule } from "./constants/constants.module";
 import { SkillsModule } from "./skills/skills.module";
 import { AdminModule } from "./admin/admin.module";
+import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AdminModule } from "./admin/admin.module";
     ConstantsModule,
     SkillsModule,
     AdminModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

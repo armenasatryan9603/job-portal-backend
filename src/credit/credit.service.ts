@@ -251,6 +251,124 @@ export class CreditService {
     return response.data;
   }
 
+  /**
+   * Initiate subscription payment
+   * Similar to initiatePayment but for subscriptions with different callback URL
+   */
+  async initiateSubscriptionPayment(
+    userId: number,
+    amount: number,
+    planId: number,
+  ) {
+    // Validate credentials and required environment variables
+    if (
+      !this.credentials.clientId ||
+      !this.credentials.username ||
+      !this.credentials.password
+    ) {
+      this.logger.error("AmeriaBank credentials not configured");
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
+      );
+    }
+
+    if (!this.vposUrl || !this.vposStatusUrl) {
+      this.logger.error("AmeriaBank vPOS URLs not configured");
+      throw new Error(
+        "Payment gateway URLs not configured. Please contact support."
+      );
+    }
+
+    // Check if in test mode and adjust amount if needed
+    const isTestMode = this.vposUrl.includes("servicestest");
+    let paymentAmount = amount;
+    if (isTestMode && amount !== 10) {
+      this.logger.warn(
+        `Test mode detected: Overriding amount from ${amount} to 10 AMD (test mode requirement)`
+      );
+      paymentAmount = 10;
+    }
+
+    // Generate unique OrderID (integer, max 15 digits to stay within JavaScript safe integer)
+    // Format: 6 (timestamp) + 5 (userId) + 3 (planId) + 1 (random) = 15 digits (safe)
+    const timestamp = Date.now();
+    const timestampSuffix = timestamp.toString().slice(-6); // Reduced to 6 to ensure safe integer range
+    const randomSuffix = Math.floor(Math.random() * 100);
+    const userIdStr = userId.toString().padStart(5, "0").slice(-5);
+    const planIdStr = planId.toString().padStart(3, "0").slice(-3);
+    const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
+    const orderIdInt = parseInt(
+      `${timestampSuffix}${userIdStr}${planIdStr}${randomStr}`,
+      10
+    );
+    // Format: userId-planId-timestamp-random (for callback parsing)
+    const orderId = `${userId}-${planId}-${timestamp}-${randomSuffix}`;
+
+    if (orderIdInt > Number.MAX_SAFE_INTEGER) {
+      throw new Error("OrderID generation failed: number too large");
+    }
+
+    // Build callback URL for subscriptions
+    const port = process.env.PORT || "8080";
+    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
+    const backUrl = `${backendUrl}/subscriptions/callback`;
+
+    // Build payment request payload
+    const payload = {
+      ClientID: this.credentials.clientId,
+      Username: this.credentials.username,
+      Password: this.credentials.password,
+      Amount: paymentAmount, // Use adjusted amount for test mode
+      OrderID: orderIdInt,
+      Description: `Subscription purchase - ${paymentAmount} ${process.env.CURRENCY || "AMD"}`,
+      BackURL: backUrl,
+    };
+
+    // Initiate payment
+    const response = await axios.post(this.vposUrl, payload, {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      timeout: 30000,
+    });
+
+    const responseData = response.data;
+
+    // Check for errors
+    if (responseData?.ResponseCode && responseData.ResponseCode !== 1) {
+      const errorMessage =
+        responseData.ResponseMessage ||
+        `Payment gateway error: ${responseData.ResponseCode}`;
+      this.logger.error(`Payment initiation failed: ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+
+    // Extract PaymentID and construct payment URL
+    if (responseData?.ResponseCode === 1 && responseData?.PaymentID) {
+      const baseDomain = this.vposUrl.includes("servicestest")
+        ? "https://servicestest.ameriabank.am"
+        : "https://services.ameriabank.am";
+      const paymentUrl = `${baseDomain}/VPOS/Payments/Pay?id=${responseData.PaymentID}&lang=en`;
+
+      return {
+        orderId,
+        paymentId: responseData.PaymentID,
+        paymentUrl,
+        paymentHtml: null,
+        paymentData: response.data,
+      };
+    }
+
+    // Fallback error
+    this.logger.error(
+      `Payment initiated but PaymentID not found. ResponseCode: ${responseData?.ResponseCode}`
+    );
+    throw new Error(
+      "Payment initiated but payment URL could not be generated. Please contact support."
+    );
+  }
+
   // Legacy webhook handler (kept for backward compatibility)
   async handleWebhook(orderId: string, paidAmount: number) {
     const userId = parseInt(orderId.split("-")[0]);

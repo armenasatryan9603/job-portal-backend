@@ -6,9 +6,10 @@ import { OrderPricingModule } from "../order-pricing/order-pricing.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { CreditModule } from "../credit/credit.module";
 import { ConfigService } from "../config/config.service";
+import { SubscriptionsModule } from "../subscriptions/subscriptions.module";
 
 @Module({
-  imports: [NotificationsModule, CreditModule, OrderPricingModule],
+  imports: [NotificationsModule, CreditModule, OrderPricingModule, SubscriptionsModule],
   controllers: [OrderProposalsController],
   providers: [OrderProposalsService, PrismaService, ConfigService],
   exports: [OrderProposalsService],
