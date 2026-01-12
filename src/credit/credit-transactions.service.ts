@@ -14,6 +14,12 @@ export interface LogCreditTransactionParams {
   referenceId?: string | null;
   referenceType?: string | null;
   metadata?: Prisma.InputJsonValue | null;
+  // Currency conversion fields
+  currency?: string | null;
+  baseCurrency?: string | null;
+  exchangeRate?: number | null;
+  originalAmount?: number | null;
+  convertedAmount?: number | null;
   tx?: Prisma.TransactionClient;
 }
 
@@ -35,6 +41,11 @@ export class CreditTransactionsService {
     referenceId,
     referenceType,
     metadata,
+    currency,
+    baseCurrency,
+    exchangeRate,
+    originalAmount,
+    convertedAmount,
     tx,
   }: LogCreditTransactionParams) {
     const client = this.getClient(tx) as any;
@@ -50,6 +61,11 @@ export class CreditTransactionsService {
         referenceId,
         referenceType,
         metadata,
+        currency,
+        baseCurrency,
+        exchangeRate,
+        originalAmount,
+        convertedAmount,
       },
     });
   }

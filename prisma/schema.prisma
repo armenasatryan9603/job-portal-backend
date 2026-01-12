@@ -48,7 +48,7 @@ model User {
   SpecialistReviews        Review[]                  @relation("Specialist")
   referrer                 User?                     @relation("UserReferrals", fields: [referredBy], references: [id])
   referrals                User[]                    @relation("UserReferrals")
-  UserCategories             UserCategory[]
+  UserCategories           UserCategory[]
   OrderChangeHistory       OrderChangeHistory[]      @relation("OrderChangedBy")
   SavedOrders              SavedOrder[]              @relation("SavedOrders")
   Portfolio                Portfolio[]               @relation("Portfolio")
@@ -63,80 +63,80 @@ model User {
 }
 
 model Category {
-  id                  Int                 @id @default(autoincrement())
-  name                String
-  description         String?
-  nameEn              String?
-  nameRu              String?
-  nameHy              String?
-  descriptionEn       String?
-  descriptionRu       String?
-  descriptionHy       String?
-  parentId            Int?
-  averagePrice        Float?
-  minPrice            Float?
-  maxPrice            Float?
-  currency            String?
-  rateUnit            String?
-  completionRate      Float?              @default(0)
-  isActive            Boolean             @default(true)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  imageUrl            String?
-  Orders              Order[]
-  Parent              Category?            @relation("CategoryChildren", fields: [parentId], references: [id])
-  Children            Category[]           @relation("CategoryChildren")
+  id                   Int                  @id @default(autoincrement())
+  name                 String
+  description          String?
+  nameEn               String?
+  nameRu               String?
+  nameHy               String?
+  descriptionEn        String?
+  descriptionRu        String?
+  descriptionHy        String?
+  parentId             Int?
+  averagePrice         Float?
+  minPrice             Float?
+  maxPrice             Float?
+  currency             String?
+  rateUnit             String?
+  completionRate       Float?               @default(0)
+  isActive             Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  imageUrl             String?
+  Orders               Order[]
+  Parent               Category?            @relation("CategoryChildren", fields: [parentId], references: [id])
+  Children             Category[]           @relation("CategoryChildren")
   CategoryFeatures     CategoryFeature[]
   CategoryTechnologies CategoryTechnology[]
-  UserCategories        UserCategory[]
+  UserCategories       UserCategory[]
 
   @@index([parentId])
   @@index([isActive])
 }
 
 model Feature {
-  id              Int              @id @default(autoincrement())
-  name            String           @unique
-  nameEn          String?
-  nameRu          String?
-  nameHy          String?
-  description     String?
-  descriptionEn   String?
-  descriptionRu   String?
-  descriptionHy   String?
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  nameEn           String?
+  nameRu           String?
+  nameHy           String?
+  description      String?
+  descriptionEn    String?
+  descriptionRu    String?
+  descriptionHy    String?
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   CategoryFeatures CategoryFeature[]
 
   @@index([isActive])
 }
 
 model Technology {
-  id                  Int                 @id @default(autoincrement())
-  name                String              @unique
-  nameEn              String?
-  nameRu              String?
-  nameHy              String?
-  description         String?
-  descriptionEn       String?
-  descriptionRu       String?
-  descriptionHy       String?
-  isActive            Boolean             @default(true)
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                   Int                  @id @default(autoincrement())
+  name                 String               @unique
+  nameEn               String?
+  nameRu               String?
+  nameHy               String?
+  description          String?
+  descriptionEn        String?
+  descriptionRu        String?
+  descriptionHy        String?
+  isActive             Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
   CategoryTechnologies CategoryTechnology[]
 
   @@index([isActive])
 }
 
 model CategoryFeature {
-  id        Int      @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   categoryId Int
-  featureId Int
-  createdAt DateTime @default(now())
-  Feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  Category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  featureId  Int
+  createdAt  DateTime @default(now())
+  Feature    Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  Category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([categoryId, featureId])
   @@index([categoryId])
@@ -145,10 +145,10 @@ model CategoryFeature {
 
 model CategoryTechnology {
   id           Int        @id @default(autoincrement())
-  categoryId    Int
+  categoryId   Int
   technologyId Int
   createdAt    DateTime   @default(now())
-  Category      Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  Category     Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   Technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
 
   @@unique([categoryId, technologyId])
@@ -159,11 +159,11 @@ model CategoryTechnology {
 model UserCategory {
   id                   Int      @id @default(autoincrement())
   userId               Int
-  categoryId            Int
+  categoryId           Int
   notificationsEnabled Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  Category              Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  Category             Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   User                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, categoryId])
@@ -174,7 +174,7 @@ model UserCategory {
 model Order {
   id              Int                  @id @default(autoincrement())
   clientId        Int
-  categoryId       Int?
+  categoryId      Int?
   title           String?
   description     String?
   budget          Float?
@@ -196,7 +196,7 @@ model Order {
   MediaFiles      MediaFile[]
   BannerImage     MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
   Client          User                 @relation("ClientOrders", fields: [clientId], references: [id])
-  Category         Category?             @relation(fields: [categoryId], references: [id])
+  Category        Category?            @relation(fields: [categoryId], references: [id])
   Proposals       OrderProposal[]
   questions       OrderQuestion[]
   Reviews         Review[]
@@ -469,18 +469,24 @@ model ReviewReason {
 }
 
 model CreditTransaction {
-  id            Int      @id @default(autoincrement())
-  userId        Int
-  amount        Float
-  balanceAfter  Float
-  type          String
-  status        String   @default("completed")
-  description   String?
-  referenceId   String?
-  referenceType String?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  User          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  amount          Float
+  balanceAfter    Float
+  type            String
+  status          String   @default("completed")
+  description     String?
+  referenceId     String?
+  referenceType   String?
+  metadata        Json?
+  // Currency conversion fields
+  currency        String? // User's currency (e.g., USD, EUR, RUB, AMD)
+  baseCurrency    String?  @default("USD") // Base currency for credits (always USD)
+  exchangeRate    Float? // Exchange rate used for conversion
+  originalAmount  Float? // Amount in user's currency
+  convertedAmount Float? // Amount in base currency (USD)
+  createdAt       DateTime @default(now())
+  User            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
 }

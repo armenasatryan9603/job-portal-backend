@@ -10,19 +10,35 @@ import {
 import { CreditService } from './credit.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreditTransactionsService } from './credit-transactions.service';
+import { PrismaService } from '../prisma.service';
 
 @Controller('credit')
 export class CreditController {
   constructor(
     private creditService: CreditService,
     private creditTransactionsService: CreditTransactionsService,
+    private prisma: PrismaService,
   ) {}
 
   // Step 1: Initiate payment
   @UseGuards(JwtAuthGuard)
   @Post('refill/initiate')
-  async initiate(@Request() req, @Body() body: { amount: number }) {
-    return this.creditService.initiatePayment(req.user.userId, body.amount);
+  async initiate(
+    @Request() req,
+    @Body() body: { amount: number; currency?: string },
+  ) {
+    // Get user's currency preference if not provided
+    const user = await this.prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { currency: true },
+    });
+    const currency = body.currency || user?.currency || 'USD';
+
+    return this.creditService.initiatePayment(
+      req.user.userId,
+      body.amount,
+      currency,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

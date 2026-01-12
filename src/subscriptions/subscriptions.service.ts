@@ -6,6 +6,8 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { CreditService } from "../credit/credit.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
+import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { CreateSubscriptionPlanDto } from "./dto/subscription-plan.dto";
 import { UpdateSubscriptionPlanDto } from "./dto/subscription-plan.dto";
 import { PurchaseSubscriptionDto } from "./dto/user-subscription.dto";
@@ -13,10 +15,13 @@ import { PurchaseSubscriptionDto } from "./dto/user-subscription.dto";
 @Injectable()
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
+  private readonly BASE_CURRENCY = "USD"; // Credits are always stored in USD
 
   constructor(
     private prisma: PrismaService,
-    private creditService: CreditService
+    private creditService: CreditService,
+    private creditTransactionsService: CreditTransactionsService,
+    private exchangeRateService: ExchangeRateService
   ) {}
 
   /**
@@ -264,48 +269,61 @@ export class SubscriptionsService {
         // If same plan and expiring soon, allow renewal (will create new subscription)
       }
 
-      // Note: autoRenew from purchaseDto is ignored - all subscriptions are manual renewal only
-
-      // Initiate payment via credit service (reuse payment logic)
-      this.logger.log(
-        `Initiating subscription payment for user ${userId}, plan ${plan.id}, amount ${plan.price}`
-      );
-      const paymentResult =
-        await this.creditService.initiateSubscriptionPayment(
-          userId,
-          plan.price,
-          plan.id
-        );
-
-      this.logger.log(
-        `Payment initiated successfully, creating transaction for user ${userId}`
-      );
-
-      // Create pending subscription transaction
-      // Note: The actual subscription will be created in the payment callback
-      // subscriptionId will be null until callback creates the subscription
-      const transaction = await this.prisma.subscriptionTransaction.create({
-        data: {
-          userId,
-          subscriptionId: null, // Will be set in callback
-          amount: plan.price,
-          currency: plan.currency,
-          paymentId: paymentResult.paymentId || null,
-          status: "pending",
-          type: "initial",
-        },
+      // Get user's credit balance
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { creditBalance: true, currency: true },
       });
 
-      this.logger.log(`Transaction created successfully: ${transaction.id}`);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
 
-      return {
-        ...paymentResult,
-        planId: plan.id,
-        planName: plan.nameEn || plan.nameRu || plan.nameHy || plan.name || "",
-        amount: plan.price,
-        currency: plan.currency,
-        transactionId: transaction.id,
-      };
+      // Convert subscription price to USD (base currency for credits)
+      const planCurrency = plan.currency || "USD";
+      let subscriptionPriceUSD = plan.price;
+      let exchangeRate = 1;
+      let originalAmount = plan.price;
+
+      if (planCurrency.toUpperCase() !== this.BASE_CURRENCY) {
+        try {
+          exchangeRate = await this.exchangeRateService.getExchangeRate(
+            planCurrency.toUpperCase(),
+            this.BASE_CURRENCY
+          );
+          subscriptionPriceUSD = plan.price * exchangeRate;
+          subscriptionPriceUSD = Math.round(subscriptionPriceUSD * 100) / 100; // Round to 2 decimals
+          this.logger.log(
+            `Currency conversion: ${plan.price} ${planCurrency} = ${subscriptionPriceUSD} ${this.BASE_CURRENCY} (rate: ${exchangeRate})`
+          );
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to convert subscription price: ${error.message}. Using price as-is.`
+          );
+          // If conversion fails, assume price is already in base currency
+          exchangeRate = 1;
+        }
+      }
+
+      // Check if user has enough credits
+      if (user.creditBalance < subscriptionPriceUSD) {
+        throw new BadRequestException({
+          code: "INSUFFICIENT_CREDITS",
+          message: "Insufficient credits to purchase this subscription",
+          required: subscriptionPriceUSD,
+          available: user.creditBalance,
+        });
+      }
+
+      // Purchase subscription with credits
+      return await this.purchaseWithCredits(
+        userId,
+        plan,
+        subscriptionPriceUSD,
+        originalAmount,
+        planCurrency,
+        exchangeRate
+      );
     } catch (error) {
       this.logger.error(
         `Error in purchaseSubscription: ${error.message}`,
@@ -316,7 +334,100 @@ export class SubscriptionsService {
   }
 
   /**
-   * Handle subscription payment callback
+   * Purchase subscription using credits
+   */
+  private async purchaseWithCredits(
+    userId: number,
+    plan: any,
+    priceUSD: number,
+    originalAmount: number,
+    originalCurrency: string,
+    exchangeRate: number
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Deduct credits
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { creditBalance: { decrement: priceUSD } },
+        select: { creditBalance: true },
+      });
+
+      // Log credit transaction
+      await this.creditTransactionsService.logTransaction({
+        userId,
+        amount: -priceUSD, // Negative amount for deduction
+        balanceAfter: updatedUser.creditBalance,
+        type: "subscription",
+        status: "completed",
+        description: `Subscription purchase: ${plan.nameEn || plan.nameRu || plan.nameHy || plan.name || "Plan"} - ${originalAmount} ${originalCurrency} = ${priceUSD} ${this.BASE_CURRENCY} credits`,
+        referenceId: plan.id.toString(),
+        referenceType: "subscription",
+        currency: originalCurrency,
+        baseCurrency: this.BASE_CURRENCY,
+        exchangeRate,
+        originalAmount,
+        convertedAmount: priceUSD,
+        metadata: {
+          planId: plan.id,
+          planName: plan.nameEn || plan.nameRu || plan.nameHy || plan.name,
+          durationDays: plan.durationDays,
+        },
+        tx,
+      });
+
+      // Create subscription
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + plan.durationDays);
+
+      const subscription = await tx.userSubscription.create({
+        data: {
+          userId,
+          planId: plan.id,
+          status: "active",
+          startDate,
+          endDate,
+          autoRenew: false, // Always false - manual renewal only
+          paymentId: null, // No payment gateway ID for credit purchases
+        },
+        include: {
+          Plan: true,
+        },
+      });
+
+      // Create subscription transaction
+      const transaction = await tx.subscriptionTransaction.create({
+        data: {
+          userId,
+          subscriptionId: subscription.id,
+          amount: originalAmount,
+          currency: originalCurrency,
+          paymentId: null, // No payment gateway ID for credit purchases
+          status: "completed",
+          type: "initial",
+        },
+      });
+
+      this.logger.log(
+        `Subscription purchased with credits: user ${userId}, plan ${plan.id}, subscription ${subscription.id}, credits deducted: ${priceUSD} ${this.BASE_CURRENCY}`
+      );
+
+      return {
+        success: true,
+        subscription,
+        planId: plan.id,
+        planName: plan.nameEn || plan.nameRu || plan.nameHy || plan.name || "",
+        amount: originalAmount,
+        currency: originalCurrency,
+        creditsDeducted: priceUSD,
+        creditsRemaining: updatedUser.creditBalance,
+        transactionId: transaction.id,
+      };
+    });
+  }
+
+  /**
+   * Handle subscription payment callback (kept for backward compatibility, but no longer used for new purchases)
    */
   async handleSubscriptionPaymentCallback(
     orderID: string,

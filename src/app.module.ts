@@ -25,6 +25,7 @@ import { ConstantsModule } from "./constants/constants.module";
 import { SkillsModule } from "./skills/skills.module";
 import { AdminModule } from "./admin/admin.module";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
+import { ExchangeRateModule } from "./exchange-rate/exchange-rate.module";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
     SkillsModule,
     AdminModule,
     SubscriptionsModule,
+    ExchangeRateModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

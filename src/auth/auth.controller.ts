@@ -96,6 +96,8 @@ export class AuthController {
       priceMin: user.priceMin,
       priceMax: user.priceMax,
       location: user.location,
+      currency: user.currency || "USD",
+      rateUnit: user.rateUnit,
     };
   }
 
