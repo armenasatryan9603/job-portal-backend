@@ -6,7 +6,7 @@ import { AuthModule } from "./auth/auth.module";
 import { OrdersModule } from "./orders/orders.module";
 import { CreditModule } from "./credit/credit.module";
 import { UsersModule } from "./users/users.module";
-import { ServicesModule } from "./services/services.module";
+import { CategoriesModule } from "./categories/categories.module";
 import { OrderProposalsModule } from "./order-proposals/order-proposals.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { MediaFilesModule } from "./media-files/media-files.module";
@@ -32,7 +32,7 @@ import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
     OrdersModule,
     CreditModule,
     UsersModule,
-    ServicesModule,
+    CategoriesModule,
     OrderProposalsModule,
     ReviewsModule,
     MediaFilesModule,

@@ -36,7 +36,7 @@ export class HiringService {
         where: { id: hireData.orderId },
         include: {
           Client: true,
-          Service: true,
+          Category: true,
         },
       });
 
@@ -572,7 +572,7 @@ export class HiringService {
         where: { id: hireData.orderId },
         include: {
           Client: true,
-          Service: true,
+          Category: true,
         },
       });
 

@@ -202,7 +202,7 @@ export class UsersService {
         });
 
         // 3. Delete user services
-        await tx.userService.deleteMany({
+        await tx.userCategory.deleteMany({
           where: { userId: id },
         });
 
@@ -421,7 +421,7 @@ export class UsersService {
   async createSpecialistProfile(
     userId: number,
     specialistData: {
-      serviceId?: number;
+      categoryId?: number;
       experienceYears?: number;
       priceMin?: number;
       priceMax?: number;
@@ -449,15 +449,15 @@ export class UsersService {
       throw new BadRequestException("User already has specialist profile data");
     }
 
-    // If serviceId is provided, check if service exists
-    if (specialistData.serviceId) {
-      const service = await this.prisma.service.findUnique({
-        where: { id: specialistData.serviceId },
+    // If categoryId is provided, check if category exists
+    if (specialistData.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { id: specialistData.categoryId },
       });
 
-      if (!service) {
+      if (!category) {
         throw new BadRequestException(
-          `Service with ID ${specialistData.serviceId} not found`
+          `Category with ID ${specialistData.categoryId} not found`
         );
       }
     }
@@ -487,7 +487,7 @@ export class UsersService {
   async getSpecialists(
     page: number = 1,
     limit: number = 10,
-    serviceId?: number,
+    categoryId?: number,
     location?: string,
     currentUserId?: number
   ) {
@@ -495,17 +495,17 @@ export class UsersService {
       console.log("getSpecialists called with:", {
         page,
         limit,
-        serviceId,
+        categoryId,
         location,
       });
 
       // Build where clause
       const whereClause: any = { role: "specialist" };
 
-      if (serviceId) {
-        whereClause.UserServices = {
+      if (categoryId) {
+        whereClause.UserCategories = {
           some: {
-            serviceId: serviceId,
+            categoryId: categoryId,
           },
         };
       }
@@ -542,9 +542,9 @@ export class UsersService {
           currency: true,
           rateUnit: true,
           createdAt: true,
-          UserServices: {
+          UserCategories: {
             select: {
-              Service: {
+              Category: {
                 select: {
                   id: true,
                   name: true,
@@ -633,7 +633,7 @@ export class UsersService {
       // Transform the data to match frontend expectations
       const transformedSpecialists = specialists.map((specialist) => {
         // Get the primary service (first one) for the specialist
-        const primaryService = specialist.UserServices?.[0]?.Service;
+        const primaryCategory = specialist.UserCategories?.[0]?.Category;
 
         // Get rating data from the map
         const ratingData = ratingMap.get(specialist.id) || {
@@ -644,7 +644,7 @@ export class UsersService {
         return {
           id: specialist.id,
           userId: specialist.id,
-          serviceId: primaryService?.id,
+          categoryId: primaryCategory?.id,
           experienceYears: specialist.experienceYears,
           priceMin: specialist.priceMin,
           priceMax: specialist.priceMax,
@@ -661,7 +661,7 @@ export class UsersService {
             verified: specialist.verified,
             createdAt: specialist.createdAt,
           },
-          Service: primaryService,
+          Category: primaryCategory,
           _count: {
             Proposals: 0, // This would need to be calculated separately if needed
           },
@@ -712,11 +712,11 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({
       where: { id, role: "specialist" },
       include: {
-        UserServices: {
-          include: {
-            Service: {
-              include: {
-                ServiceTechnologies: {
+          UserCategories: {
+            include: {
+              Category: {
+                include: {
+                  CategoryTechnologies: {
                   include: {
                     Technology: true,
                   },
@@ -793,13 +793,13 @@ export class UsersService {
     const roundedAverageRating = Math.round(averageRating * 10) / 10;
     const reviewCountValue = reviews.length;
 
-    // Get the first service from UserServices
-    const primaryUserService = user.UserServices?.[0];
-    const service = primaryUserService?.Service;
+    // Get the first category from UserCategories
+    const primaryUserCategory = user.UserCategories?.[0];
+    const category = primaryUserCategory?.Category;
 
-    // Transform ServiceTechnologies to technologies array format expected by frontend
+    // Transform CategoryTechnologies to technologies array format expected by frontend
     const technologies =
-      service?.ServiceTechnologies?.map((st: any) => ({
+      category?.CategoryTechnologies?.map((st: any) => ({
         id: st.Technology.id,
         name: st.Technology.name,
         nameEn: st.Technology.nameEn,
@@ -810,7 +810,7 @@ export class UsersService {
     return {
       id: user.id,
       userId: user.id,
-      serviceId: service?.id,
+      categoryId: category?.id,
       experienceYears: user.experienceYears,
       priceMin: user.priceMin,
       priceMax: user.priceMax,
@@ -835,18 +835,18 @@ export class UsersService {
         location: user.location,
         createdAt: user.createdAt,
       },
-      Service: service
+      Category: category
         ? {
-            id: service.id,
-            name: service.name,
-            nameEn: service.nameEn,
-            nameRu: service.nameRu,
-            nameHy: service.nameHy,
-            description: service.description,
-            descriptionEn: service.descriptionEn,
-            descriptionRu: service.descriptionRu,
-            descriptionHy: service.descriptionHy,
-            completionRate: service.completionRate,
+            id: category.id,
+            name: category.name,
+            nameEn: category.nameEn,
+            nameRu: category.nameRu,
+            nameHy: category.nameHy,
+            description: category.description,
+            descriptionEn: category.descriptionEn,
+            descriptionRu: category.descriptionRu,
+            descriptionHy: category.descriptionHy,
+            completionRate: category.completionRate,
             technologies: technologies,
           }
         : null,
@@ -857,7 +857,7 @@ export class UsersService {
   async updateSpecialistProfile(
     id: number,
     specialistData: {
-      serviceId?: number;
+      categoryId?: number;
       experienceYears?: number;
       priceMin?: number;
       priceMax?: number;
@@ -873,16 +873,16 @@ export class UsersService {
       throw new NotFoundException(`Specialist with ID ${id} not found`);
     }
 
-    // If serviceId is being updated, check if service exists
-    if (specialistData.serviceId !== undefined) {
-      if (specialistData.serviceId !== null) {
-        const service = await this.prisma.service.findUnique({
-          where: { id: specialistData.serviceId },
+    // If categoryId is being updated, check if category exists
+    if (specialistData.categoryId !== undefined) {
+      if (specialistData.categoryId !== null) {
+        const category = await this.prisma.category.findUnique({
+          where: { id: specialistData.categoryId },
         });
 
-        if (!service) {
+        if (!category) {
           throw new BadRequestException(
-            `Service with ID ${specialistData.serviceId} not found`
+            `Category with ID ${specialistData.categoryId} not found`
           );
         }
       }
@@ -982,12 +982,12 @@ export class UsersService {
     };
   }
 
-  async getSpecialistsByService(
-    serviceId: number,
+  async getSpecialistsByCategory(
+    categoryId: number,
     page: number = 1,
     limit: number = 10
   ) {
-    return this.getSpecialists(page, limit, serviceId);
+    return this.getSpecialists(page, limit, categoryId);
   }
 
   async getSpecialistsByLocation(
@@ -999,9 +999,9 @@ export class UsersService {
   }
 
   // User service management methods
-  async addUserService(
+  async addUserCategory(
     userId: number,
-    serviceId: number,
+    categoryId: number,
     notificationsEnabled: boolean = true
   ) {
     // Check if user exists
@@ -1012,110 +1012,110 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Check if service exists
-    const service = await this.prisma.service.findUnique({
-      where: { id: serviceId },
+    // Check if category exists
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
     });
-    if (!service) {
-      throw new NotFoundException(`Service with ID ${serviceId} not found`);
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`);
     }
 
-    // Check if user service already exists
-    const existingUserService = await this.prisma.userService.findUnique({
+    // Check if user category already exists
+    const existingUserCategory = await this.prisma.userCategory.findUnique({
       where: {
-        userId_serviceId: {
+        userId_categoryId: {
           userId,
-          serviceId,
+          categoryId,
         },
       },
     });
 
-    if (existingUserService) {
-      throw new BadRequestException("User service already exists");
+    if (existingUserCategory) {
+      throw new BadRequestException("User category already exists");
     }
 
-    // Create user service
-    const userService = await this.prisma.userService.create({
+    // Create user category
+    const userCategory = await this.prisma.userCategory.create({
       data: {
         userId,
-        serviceId,
+        categoryId,
         notificationsEnabled,
       },
       include: {
-        Service: true,
+        Category: true,
       },
     });
 
-    return userService;
+    return userCategory;
   }
 
-  async removeUserService(userId: number, serviceId: number) {
-    // Check if user service exists
-    const userService = await this.prisma.userService.findUnique({
+  async removeUserCategory(userId: number, categoryId: number) {
+    // Check if user category exists
+    const userCategory = await this.prisma.userCategory.findUnique({
       where: {
-        userId_serviceId: {
+        userId_categoryId: {
           userId,
-          serviceId,
+          categoryId,
         },
       },
     });
 
-    if (!userService) {
-      throw new NotFoundException("User service not found");
+    if (!userCategory) {
+      throw new NotFoundException("User category not found");
     }
 
-    // Delete user service
-    await this.prisma.userService.delete({
+    // Delete user category
+    await this.prisma.userCategory.delete({
       where: {
-        userId_serviceId: {
+        userId_categoryId: {
           userId,
-          serviceId,
+          categoryId,
         },
       },
     });
 
-    return { message: "User service removed successfully" };
+    return { message: "User category removed successfully" };
   }
 
-  async updateUserServiceNotifications(
+  async updateUserCategoryNotifications(
     userId: number,
-    serviceId: number,
+    categoryId: number,
     notificationsEnabled: boolean
   ) {
-    // Check if user service exists
-    const userService = await this.prisma.userService.findUnique({
+    // Check if user category exists
+    const userCategory = await this.prisma.userCategory.findUnique({
       where: {
-        userId_serviceId: {
+        userId_categoryId: {
           userId,
-          serviceId,
+          categoryId,
         },
       },
     });
 
-    if (!userService) {
-      throw new NotFoundException("User service not found");
+    if (!userCategory) {
+      throw new NotFoundException("User category not found");
     }
 
     // Update notifications setting
-    const updatedUserService = await this.prisma.userService.update({
+    const updatedUserCategory = await this.prisma.userCategory.update({
       where: {
-        userId_serviceId: {
+        userId_categoryId: {
           userId,
-          serviceId,
+          categoryId,
         },
       },
       data: {
         notificationsEnabled,
       },
       include: {
-        Service: true,
+        Category: true,
       },
     });
 
-    return updatedUserService;
+    return updatedUserCategory;
   }
 
-  async getUserServices(userId: number) {
+  async getUserCategories(userId: number) {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1124,11 +1124,11 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Get user services with service details
-    const userServices = await this.prisma.userService.findMany({
+    // Get user categories with category details
+    const userCategories = await this.prisma.userCategory.findMany({
       where: { userId },
       include: {
-        Service: {
+        Category: {
           select: {
             id: true,
             name: true,
@@ -1148,14 +1148,14 @@ export class UsersService {
     });
 
     return {
-      userServices: userServices.map((us) => ({
-        id: us.id,
-        userId: us.userId,
-        serviceId: us.serviceId,
-        notificationsEnabled: us.notificationsEnabled,
-        createdAt: us.createdAt,
-        updatedAt: us.updatedAt,
-        Service: us.Service,
+      userCategories: userCategories.map((uc) => ({
+        id: uc.id,
+        userId: uc.userId,
+        categoryId: uc.categoryId,
+        notificationsEnabled: uc.notificationsEnabled,
+        createdAt: uc.createdAt,
+        updatedAt: uc.updatedAt,
+        Category: uc.Category,
       })),
     };
   }

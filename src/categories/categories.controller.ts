@@ -9,18 +9,18 @@ import {
   Query,
   UseGuards,
 } from "@nestjs/common";
-import { ServicesService } from "./services.service";
+import { CategoriesService } from "./categories.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 
-@Controller("services")
-export class ServicesController {
-  constructor(private readonly servicesService: ServicesService) {}
+@Controller("categories")
+export class CategoriesController {
+  constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   async create(
     @Body()
-    createServiceDto: {
+    createCategoryDto: {
       name: string;
       description?: string;
       nameEn?: string;
@@ -46,7 +46,7 @@ export class ServicesController {
       isActive?: boolean;
     }
   ) {
-    return this.servicesService.create(createServiceDto);
+    return this.categoriesService.create(createCategoryDto);
   }
 
   @Get()
@@ -56,7 +56,7 @@ export class ServicesController {
     @Query("parentId") parentId?: string,
     @Query("language") language: string = "en"
   ) {
-    return this.servicesService.findAll(
+    return this.categoriesService.findAll(
       parseInt(page),
       parseInt(limit),
       parentId ? parseInt(parentId) : undefined,
@@ -65,20 +65,20 @@ export class ServicesController {
   }
 
   @Get("root")
-  async getRootServices(@Query("language") language: string = "en") {
-    return this.servicesService.getRootServices(language);
+  async getRootCategories(@Query("language") language: string = "en") {
+    return this.categoriesService.getRootCategories(language);
   }
 
   @Get("parent/:parentId")
-  async getChildServices(
+  async getChildCategories(
     @Param("parentId") parentId: string,
     @Query("language") language: string = "en"
   ) {
-    return this.servicesService.getChildServices(+parentId, language);
+    return this.categoriesService.getChildCategories(+parentId, language);
   }
 
   @Get("search")
-  async searchServices(
+  async searchCategories(
     @Query("q") query: string,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
@@ -86,7 +86,7 @@ export class ServicesController {
   ) {
     if (!query) {
       return {
-        services: [],
+        categories: [],
         pagination: {
           page: 1,
           limit: 10,
@@ -98,7 +98,7 @@ export class ServicesController {
       };
     }
 
-    return this.servicesService.searchServices(
+    return this.categoriesService.searchCategories(
       query,
       parseInt(page),
       parseInt(limit),
@@ -111,7 +111,7 @@ export class ServicesController {
     @Param("id") id: string,
     @Query("language") language: string = "en"
   ) {
-    return this.servicesService.findOne(+id, language);
+    return this.categoriesService.findOne(+id, language);
   }
 
   @Patch(":id")
@@ -119,7 +119,7 @@ export class ServicesController {
   async update(
     @Param("id") id: string,
     @Body()
-    updateServiceDto: {
+    updateCategoryDto: {
       name?: string;
       description?: string;
       nameEn?: string;
@@ -145,12 +145,12 @@ export class ServicesController {
       isActive?: boolean;
     }
   ) {
-    return this.servicesService.update(+id, updateServiceDto);
+    return this.categoriesService.update(+id, updateCategoryDto);
   }
 
   @Delete(":id")
   @UseGuards(JwtAuthGuard)
   async remove(@Param("id") id: string) {
-    return this.servicesService.remove(+id);
+    return this.categoriesService.remove(+id);
   }
 }

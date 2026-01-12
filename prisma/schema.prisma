@@ -48,7 +48,7 @@ model User {
   SpecialistReviews        Review[]                  @relation("Specialist")
   referrer                 User?                     @relation("UserReferrals", fields: [referredBy], references: [id])
   referrals                User[]                    @relation("UserReferrals")
-  UserServices             UserService[]
+  UserCategories             UserCategory[]
   OrderChangeHistory       OrderChangeHistory[]      @relation("OrderChangedBy")
   SavedOrders              SavedOrder[]              @relation("SavedOrders")
   Portfolio                Portfolio[]               @relation("Portfolio")
@@ -62,7 +62,7 @@ model User {
   SubscriptionTransactions SubscriptionTransaction[]
 }
 
-model Service {
+model Category {
   id                  Int                 @id @default(autoincrement())
   name                String
   description         String?
@@ -84,11 +84,11 @@ model Service {
   updatedAt           DateTime            @updatedAt
   imageUrl            String?
   Orders              Order[]
-  Parent              Service?            @relation("ServiceChildren", fields: [parentId], references: [id])
-  Children            Service[]           @relation("ServiceChildren")
-  ServiceFeatures     ServiceFeature[]
-  ServiceTechnologies ServiceTechnology[]
-  UserServices        UserService[]
+  Parent              Category?            @relation("CategoryChildren", fields: [parentId], references: [id])
+  Children            Category[]           @relation("CategoryChildren")
+  CategoryFeatures     CategoryFeature[]
+  CategoryTechnologies CategoryTechnology[]
+  UserCategories        UserCategory[]
 
   @@index([parentId])
   @@index([isActive])
@@ -107,7 +107,7 @@ model Feature {
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
-  ServiceFeatures ServiceFeature[]
+  CategoryFeatures CategoryFeature[]
 
   @@index([isActive])
 }
@@ -125,56 +125,56 @@ model Technology {
   isActive            Boolean             @default(true)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
-  ServiceTechnologies ServiceTechnology[]
+  CategoryTechnologies CategoryTechnology[]
 
   @@index([isActive])
 }
 
-model ServiceFeature {
+model CategoryFeature {
   id        Int      @id @default(autoincrement())
-  serviceId Int
+  categoryId Int
   featureId Int
   createdAt DateTime @default(now())
   Feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  Service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  Category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@unique([serviceId, featureId])
-  @@index([serviceId])
+  @@unique([categoryId, featureId])
+  @@index([categoryId])
   @@index([featureId])
 }
 
-model ServiceTechnology {
+model CategoryTechnology {
   id           Int        @id @default(autoincrement())
-  serviceId    Int
+  categoryId    Int
   technologyId Int
   createdAt    DateTime   @default(now())
-  Service      Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  Category      Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   Technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
 
-  @@unique([serviceId, technologyId])
-  @@index([serviceId])
+  @@unique([categoryId, technologyId])
+  @@index([categoryId])
   @@index([technologyId])
 }
 
-model UserService {
+model UserCategory {
   id                   Int      @id @default(autoincrement())
   userId               Int
-  serviceId            Int
+  categoryId            Int
   notificationsEnabled Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  Service              Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  Category              Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   User                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, serviceId])
+  @@unique([userId, categoryId])
   @@index([userId])
-  @@index([serviceId])
+  @@index([categoryId])
 }
 
 model Order {
   id              Int                  @id @default(autoincrement())
   clientId        Int
-  serviceId       Int?
+  categoryId       Int?
   title           String?
   description     String?
   budget          Float?
@@ -196,7 +196,7 @@ model Order {
   MediaFiles      MediaFile[]
   BannerImage     MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
   Client          User                 @relation("ClientOrders", fields: [clientId], references: [id])
-  Service         Service?             @relation(fields: [serviceId], references: [id])
+  Category         Category?             @relation(fields: [categoryId], references: [id])
   Proposals       OrderProposal[]
   questions       OrderQuestion[]
   Reviews         Review[]

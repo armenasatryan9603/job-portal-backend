@@ -7,13 +7,13 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 
 @Injectable()
-export class ServicesService {
+export class CategoriesService {
   constructor(private prisma: PrismaService) {}
 
-  // Helper method to transform service data based on language
-  private transformServiceForLanguage(service: any, language: string = "en") {
-    if (!service) {
-      return service;
+  // Helper method to transform category data based on language
+  private transformCategoryForLanguage(category: any, language: string = "en") {
+    if (!category) {
+      return category;
     }
 
     const languageMap = {
@@ -51,8 +51,8 @@ export class ServicesService {
     };
 
     // Transform features with language-specific names
-    const features = service.ServiceFeatures
-      ? service.ServiceFeatures.map((sf: any) => {
+    const features = category.CategoryFeatures
+      ? category.CategoryFeatures.map((sf: any) => {
           const feature = sf?.Feature;
           if (!feature) return null;
           return {
@@ -64,8 +64,8 @@ export class ServicesService {
       : [];
 
     // Transform technologies with language-specific names
-    const technologies = service.ServiceTechnologies
-      ? service.ServiceTechnologies.map((st: any) => {
+    const technologies = category.CategoryTechnologies
+      ? category.CategoryTechnologies.map((st: any) => {
           const technology = st?.Technology;
           if (!technology) return null;
           return {
@@ -80,24 +80,24 @@ export class ServicesService {
       : [];
 
     // Transform children recursively if they exist
-    const children = service.Children
-      ? service.Children.map((child: any) =>
-          this.transformServiceForLanguage(child, language)
+    const children = category.Children
+      ? category.Children.map((child: any) =>
+          this.transformCategoryForLanguage(child, language)
         )
       : undefined;
 
     return {
-      ...service,
-      name: service[langFields.name] || service.name || "",
+      ...category,
+      name: category[langFields.name] || category.name || "",
       description:
-        service[langFields.description] || service.description || null,
+        category[langFields.description] || category.description || null,
       features,
       technologies,
       ...(children !== undefined && { Children: children }),
     };
   }
 
-  async create(createServiceDto: {
+  async create(createCategoryDto: {
     name: string;
     description?: string;
     nameEn?: string;
@@ -125,20 +125,20 @@ export class ServicesService {
     isActive?: boolean;
   }) {
     // If parentId is provided, check if parent exists
-    if (createServiceDto.parentId) {
-      const parent = await this.prisma.service.findUnique({
-        where: { id: createServiceDto.parentId },
+    if (createCategoryDto.parentId) {
+      const parent = await this.prisma.category.findUnique({
+        where: { id: createCategoryDto.parentId },
       });
 
       if (!parent) {
         throw new BadRequestException(
-          `Parent service with ID ${createServiceDto.parentId} not found`
+          `Parent category with ID ${createCategoryDto.parentId} not found`
         );
       }
     }
 
-    return this.prisma.service.create({
-      data: createServiceDto,
+    return this.prisma.category.create({
+      data: createCategoryDto,
       include: {
         Parent: true,
         Children: true,
@@ -156,20 +156,20 @@ export class ServicesService {
       const skip = (page - 1) * limit;
       const where = parentId !== undefined ? { parentId } : {};
 
-      const [services, total] = await Promise.all([
-        this.prisma.service.findMany({
+      const [categories, total] = await Promise.all([
+        this.prisma.category.findMany({
           where,
           skip,
           take: limit,
           include: {
             Parent: true,
             Children: true,
-            ServiceFeatures: {
+            CategoryFeatures: {
               include: {
                 Feature: true,
               },
             },
-            ServiceTechnologies: {
+            CategoryTechnologies: {
               include: {
                 Technology: true,
               },
@@ -182,19 +182,19 @@ export class ServicesService {
           },
           orderBy: { name: "asc" },
         }),
-        this.prisma.service.count({ where }),
+        this.prisma.category.count({ where }),
       ]);
 
-      // Add computed fields to each service
-      const servicesWithStats = await Promise.all(
-        services.map(async (service) => {
+      // Add computed fields to each category
+      const categoriesWithStats = await Promise.all(
+        categories.map(async (category) => {
           const [specialistCount, recentOrders] = await Promise.all([
-            this.prisma.userService.count({
-              where: { serviceId: service.id },
+            this.prisma.userCategory.count({
+              where: { categoryId: category.id },
             }),
             this.prisma.order.count({
               where: {
-                serviceId: service.id,
+                categoryId: category.id,
                 createdAt: {
                   gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
                 },
@@ -203,20 +203,20 @@ export class ServicesService {
           ]);
 
           return {
-            ...service,
+            ...category,
             specialistCount,
             recentOrders,
           };
         })
       );
 
-      // Transform services for the specified language
-      const transformedServices = servicesWithStats.map((service) =>
-        this.transformServiceForLanguage(service, language)
+      // Transform categories for the specified language
+      const transformedCategories = categoriesWithStats.map((category) =>
+        this.transformCategoryForLanguage(category, language)
       );
 
       return {
-        services: transformedServices,
+        categories: transformedCategories,
         pagination: {
           page,
           limit,
@@ -228,23 +228,23 @@ export class ServicesService {
       };
     } catch (error) {
       throw new BadRequestException(
-        `Failed to fetch services: ${error.message}`
+        `Failed to fetch categories: ${error.message}`
       );
     }
   }
 
   async findOne(id: number, language: string = "en") {
-    const service = await this.prisma.service.findUnique({
+    const category = await this.prisma.category.findUnique({
       where: { id },
       include: {
         Parent: true,
         Children: true,
-        ServiceFeatures: {
+        CategoryFeatures: {
           include: {
             Feature: true,
           },
         },
-        ServiceTechnologies: {
+        CategoryTechnologies: {
           include: {
             Technology: true,
           },
@@ -265,35 +265,35 @@ export class ServicesService {
       },
     });
 
-    if (!service) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
     // Add computed fields
-    const specialistCount = await this.prisma.userService.count({
-      where: { serviceId: id },
+    const specialistCount = await this.prisma.userCategory.count({
+      where: { categoryId: id },
     });
     const recentOrders = await this.prisma.order.count({
       where: {
-        serviceId: id,
+        categoryId: id,
         createdAt: {
           gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
         },
       },
     });
 
-    const serviceWithStats = {
-      ...service,
+    const categoryWithStats = {
+      ...category,
       specialistCount,
       recentOrders,
     };
 
-    return this.transformServiceForLanguage(serviceWithStats, language);
+    return this.transformCategoryForLanguage(categoryWithStats, language);
   }
 
   async update(
     id: number,
-    updateServiceDto: {
+    updateCategoryDto: {
       name?: string;
       description?: string;
       nameEn?: string;
@@ -321,36 +321,36 @@ export class ServicesService {
       isActive?: boolean;
     }
   ) {
-    // Check if service exists
-    const existingService = await this.prisma.service.findUnique({
+    // Check if category exists
+    const existingCategory = await this.prisma.category.findUnique({
       where: { id },
     });
 
-    if (!existingService) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+    if (!existingCategory) {
+      throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
     // If parentId is being updated, check if parent exists and prevent circular reference
-    if (updateServiceDto.parentId !== undefined) {
-      if (updateServiceDto.parentId === id) {
-        throw new BadRequestException("Service cannot be its own parent");
+    if (updateCategoryDto.parentId !== undefined) {
+      if (updateCategoryDto.parentId === id) {
+        throw new BadRequestException("Category cannot be its own parent");
       }
 
-      if (updateServiceDto.parentId !== null) {
-        const parent = await this.prisma.service.findUnique({
-          where: { id: updateServiceDto.parentId },
+      if (updateCategoryDto.parentId !== null) {
+        const parent = await this.prisma.category.findUnique({
+          where: { id: updateCategoryDto.parentId },
         });
 
         if (!parent) {
           throw new BadRequestException(
-            `Parent service with ID ${updateServiceDto.parentId} not found`
+            `Parent category with ID ${updateCategoryDto.parentId} not found`
           );
         }
 
         // Check for circular reference
         const isCircular = await this.checkCircularReference(
           id,
-          updateServiceDto.parentId
+          updateCategoryDto.parentId
         );
         if (isCircular) {
           throw new BadRequestException(
@@ -360,9 +360,9 @@ export class ServicesService {
       }
     }
 
-    return this.prisma.service.update({
+    return this.prisma.category.update({
       where: { id },
-      data: updateServiceDto,
+      data: updateCategoryDto,
       include: {
         Parent: true,
         Children: true,
@@ -371,57 +371,57 @@ export class ServicesService {
   }
 
   async remove(id: number) {
-    // Check if service exists
-    const existingService = await this.prisma.service.findUnique({
+    // Check if category exists
+    const existingCategory = await this.prisma.category.findUnique({
       where: { id },
     });
 
-    if (!existingService) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+    if (!existingCategory) {
+      throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
-    // Check if service has children
-    const childrenCount = await this.prisma.service.count({
+    // Check if category has children
+    const childrenCount = await this.prisma.category.count({
       where: { parentId: id },
     });
 
     if (childrenCount > 0) {
       throw new BadRequestException(
-        "Cannot delete service with child services. Please delete or reassign child services first."
+        "Cannot delete category with child categories. Please delete or reassign child categories first."
       );
     }
 
-    // Check if service has specialist profiles or orders
+    // Check if category has specialist profiles or orders
     const [specialistCount, ordersCount] = await Promise.all([
-      this.prisma.userService.count({ where: { serviceId: id } }),
-      this.prisma.order.count({ where: { serviceId: id } }),
+      this.prisma.userCategory.count({ where: { categoryId: id } }),
+      this.prisma.order.count({ where: { categoryId: id } }),
     ]);
 
     if (specialistCount > 0 || ordersCount > 0) {
       throw new BadRequestException(
-        "Cannot delete service with associated specialist profiles or orders. Please reassign them first."
+        "Cannot delete category with associated specialist profiles or orders. Please reassign them first."
       );
     }
 
-    return this.prisma.service.delete({
+    return this.prisma.category.delete({
       where: { id },
     });
   }
 
-  async getRootServices(language: string = "en") {
+  async getRootCategories(language: string = "en") {
     try {
-      const services = await this.prisma.service.findMany({
+      const categories = await this.prisma.category.findMany({
         where: { parentId: null, isActive: true },
         include: {
           Children: {
             where: { isActive: true },
           },
-          ServiceFeatures: {
+          CategoryFeatures: {
             include: {
               Feature: true,
             },
           },
-          ServiceTechnologies: {
+          CategoryTechnologies: {
             include: {
               Technology: true,
             },
@@ -430,16 +430,16 @@ export class ServicesService {
         orderBy: { name: "asc" },
       });
 
-      // Add computed fields to each service
-      const servicesWithStats = await Promise.all(
-        services.map(async (service) => {
+      // Add computed fields to each category
+      const categoriesWithStats = await Promise.all(
+        categories.map(async (category) => {
           const [specialistCount, recentOrders] = await Promise.all([
-            this.prisma.userService.count({
-              where: { serviceId: service.id },
+            this.prisma.userCategory.count({
+              where: { categoryId: category.id },
             }),
             this.prisma.order.count({
               where: {
-                serviceId: service.id,
+                categoryId: category.id,
                 createdAt: {
                   gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
                 },
@@ -448,35 +448,35 @@ export class ServicesService {
           ]);
 
           return {
-            ...service,
+            ...category,
             specialistCount,
             recentOrders,
           };
         })
       );
 
-      // Transform services for the specified language
-      return servicesWithStats.map((service) =>
-        this.transformServiceForLanguage(service, language)
+      // Transform categories for the specified language
+      return categoriesWithStats.map((category) =>
+        this.transformCategoryForLanguage(category, language)
       );
     } catch (error) {
       throw new BadRequestException(
-        `Failed to fetch root services: ${error.message}`
+        `Failed to fetch root categories: ${error.message}`
       );
     }
   }
 
-  async getChildServices(parentId: number, language: string = "en") {
-    const services = await this.prisma.service.findMany({
+  async getChildCategories(parentId: number, language: string = "en") {
+    const categories = await this.prisma.category.findMany({
       where: { parentId },
       include: {
         Parent: true,
-        ServiceFeatures: {
+        CategoryFeatures: {
           include: {
             Feature: true,
           },
         },
-        ServiceTechnologies: {
+        CategoryTechnologies: {
           include: {
             Technology: true,
           },
@@ -485,13 +485,13 @@ export class ServicesService {
       orderBy: { name: "asc" },
     });
 
-    // Transform services for the specified language
-    return services.map((service) =>
-      this.transformServiceForLanguage(service, language)
+    // Transform categories for the specified language
+    return categories.map((category) =>
+      this.transformCategoryForLanguage(category, language)
     );
   }
 
-  async searchServices(
+  async searchCategories(
     query: string,
     page: number = 1,
     limit: number = 10,
@@ -500,7 +500,7 @@ export class ServicesService {
     const skip = (page - 1) * limit;
 
     // Search across all language fields to find matches regardless of search language
-    const searchConditions: Prisma.ServiceWhereInput = {
+    const searchConditions: Prisma.CategoryWhereInput = {
       OR: [
         { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
         {
@@ -530,8 +530,8 @@ export class ServicesService {
       ],
     };
 
-    const [services, total] = await Promise.all([
-      this.prisma.service.findMany({
+    const [categories, total] = await Promise.all([
+      this.prisma.category.findMany({
         where: searchConditions,
         skip,
         take: limit,
@@ -546,18 +546,18 @@ export class ServicesService {
         },
         orderBy: { name: "asc" },
       }),
-      this.prisma.service.count({
+      this.prisma.category.count({
         where: searchConditions,
       }),
     ]);
 
-    // Transform services for the specified language
-    const transformedServices = services.map((service) =>
-      this.transformServiceForLanguage(service, language)
+    // Transform categories for the specified language
+    const transformedCategories = categories.map((category) =>
+      this.transformCategoryForLanguage(category, language)
     );
 
     return {
-      services: transformedServices,
+      categories: transformedCategories,
       pagination: {
         page,
         limit,
@@ -570,17 +570,17 @@ export class ServicesService {
   }
 
   private async checkCircularReference(
-    serviceId: number,
+    categoryId: number,
     parentId: number
   ): Promise<boolean> {
     let currentParentId = parentId;
 
     while (currentParentId !== null) {
-      if (currentParentId === serviceId) {
+      if (currentParentId === categoryId) {
         return true;
       }
 
-      const parent = await this.prisma.service.findUnique({
+      const parent = await this.prisma.category.findUnique({
         where: { id: currentParentId },
         select: { parentId: true },
       });

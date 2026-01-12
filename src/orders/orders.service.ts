@@ -62,7 +62,7 @@ export class OrdersService {
 
   async createOrder(
     clientId: number,
-    serviceId: number | undefined,
+    categoryId: number | undefined,
     title: string,
     description: string,
     budget: number,
@@ -84,14 +84,14 @@ export class OrdersService {
       throw new BadRequestException(`Client with ID ${clientId} not found`);
     }
 
-    // If serviceId is provided, check if service exists
-    if (serviceId) {
-      const service = await this.prisma.service.findUnique({
-        where: { id: serviceId },
+    // If categoryId is provided, check if category exists
+    if (categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { id: categoryId },
       });
 
-      if (!service) {
-        throw new BadRequestException(`Service with ID ${serviceId} not found`);
+      if (!category) {
+        throw new BadRequestException(`Category with ID ${categoryId} not found`);
       }
     }
 
@@ -221,7 +221,7 @@ export class OrdersService {
     const order = await this.prisma.order.create({
       data: {
         clientId,
-        serviceId,
+        categoryId,
         title,
         description,
         titleEn,
@@ -300,8 +300,8 @@ export class OrdersService {
     page: number = 1,
     limit: number = 10,
     status?: string,
-    serviceId?: number,
-    serviceIds?: number[],
+    categoryId?: number,
+    categoryIds?: number[],
     clientId?: number,
     isAdmin: boolean = false,
     userId?: number
@@ -375,11 +375,11 @@ export class OrdersService {
       };
     }
 
-    // Support both single serviceId (backward compatibility) and multiple serviceIds
-    if (serviceIds && serviceIds.length > 0) {
-      where.serviceId = { in: serviceIds };
-    } else if (serviceId) {
-      where.serviceId = serviceId;
+    // Support both single categoryId (backward compatibility) and multiple categoryIds
+    if (categoryIds && categoryIds.length > 0) {
+      where.categoryId = { in: categoryIds };
+    } else if (categoryId) {
+      where.categoryId = categoryId;
     }
 
     if (clientId) {
@@ -408,7 +408,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
-          Service: true,
+          Category: true,
           BannerImage: {
             select: {
               id: true,
@@ -498,7 +498,7 @@ export class OrdersService {
             bio: true,
           },
         },
-        Service: {
+        Category: {
           select: {
             id: true,
             name: true,
@@ -578,30 +578,30 @@ export class OrdersService {
       order.budget || 0
     );
 
-    // Transform Service to match frontend expectations (add name and description fields)
-    const orderWithService = order as any;
-    let transformedService = orderWithService.Service;
-    if (orderWithService.Service) {
-      transformedService = {
-        ...orderWithService.Service,
+    // Transform Category to match frontend expectations (add name and description fields)
+    const orderWithCategory = order as any;
+    let transformedCategory = orderWithCategory.Category;
+    if (orderWithCategory.Category) {
+      transformedCategory = {
+        ...orderWithCategory.Category,
         name:
-          orderWithService.Service.nameEn ||
-          orderWithService.Service.nameRu ||
-          orderWithService.Service.nameHy ||
-          orderWithService.Service.name ||
+          orderWithCategory.Category.nameEn ||
+          orderWithCategory.Category.nameRu ||
+          orderWithCategory.Category.nameHy ||
+          orderWithCategory.Category.name ||
           "",
         description:
-          orderWithService.Service.descriptionEn ||
-          orderWithService.Service.descriptionRu ||
-          orderWithService.Service.descriptionHy ||
-          orderWithService.Service.description ||
+          orderWithCategory.Category.descriptionEn ||
+          orderWithCategory.Category.descriptionRu ||
+          orderWithCategory.Category.descriptionHy ||
+          orderWithCategory.Category.description ||
           null,
       };
     }
 
     return {
       ...order,
-      Service: transformedService,
+      Category: transformedCategory,
       creditCost,
     };
   }
@@ -650,7 +650,7 @@ export class OrdersService {
   async update(
     id: number,
     updateOrderDto: {
-      serviceId?: number;
+      categoryId?: number;
       title?: string;
       description?: string;
       budget?: number;
@@ -698,16 +698,16 @@ export class OrdersService {
       throw new BadRequestException(`Client with ID ${userId} not found`);
     }
 
-    // If serviceId is being updated, check if service exists
-    if (updateOrderDto.serviceId !== undefined) {
-      if (updateOrderDto.serviceId !== null) {
-        const service = await this.prisma.service.findUnique({
-          where: { id: updateOrderDto.serviceId },
+    // If categoryId is being updated, check if category exists
+    if (updateOrderDto.categoryId !== undefined) {
+      if (updateOrderDto.categoryId !== null) {
+        const category = await this.prisma.category.findUnique({
+          where: { id: updateOrderDto.categoryId },
         });
 
-        if (!service) {
+        if (!category) {
           throw new BadRequestException(
-            `Service with ID ${updateOrderDto.serviceId} not found`
+            `Category with ID ${updateOrderDto.categoryId} not found`
           );
         }
       }
@@ -1089,7 +1089,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
-          Service: true,
+          Category: true,
           Proposals: {
             where: {
               userId: specialistId,
@@ -1154,12 +1154,12 @@ export class OrdersService {
     };
   }
 
-  async getOrdersByService(
-    serviceId: number,
+  async getOrdersByCategory(
+    categoryId: number,
     page: number = 1,
     limit: number = 10
   ) {
-    return this.findAll(page, limit, undefined, serviceId, undefined);
+    return this.findAll(page, limit, undefined, categoryId, undefined);
   }
 
   async getOrdersByStatus(
@@ -1174,7 +1174,7 @@ export class OrdersService {
     query: string,
     page: number = 1,
     limit: number = 10,
-    serviceIds?: number[]
+    categoryIds?: number[]
   ) {
     const skip = (page - 1) * limit;
 
@@ -1188,7 +1188,7 @@ export class OrdersService {
           },
         },
         {
-          Service: {
+          Category: {
             name: { contains: query, mode: "insensitive" },
           },
         },
@@ -1212,9 +1212,9 @@ export class OrdersService {
       },
     };
 
-    // Add serviceIds filter if provided
-    if (serviceIds && serviceIds.length > 0) {
-      where.serviceId = { in: serviceIds };
+    // Add categoryIds filter if provided
+    if (categoryIds && categoryIds.length > 0) {
+      where.categoryId = { in: categoryIds };
     }
 
     const [orders, total] = await Promise.all([
@@ -1231,7 +1231,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
-          Service: true,
+          Category: true,
           BannerImage: {
             select: {
               id: true,
@@ -1389,7 +1389,7 @@ export class OrdersService {
   async getAvailableOrders(
     page: number = 1,
     limit: number = 10,
-    serviceId?: number,
+    categoryId?: number,
     location?: string,
     budgetMin?: number,
     budgetMax?: number
@@ -1400,8 +1400,8 @@ export class OrdersService {
       status: "open",
     };
 
-    if (serviceId) {
-      where.serviceId = serviceId;
+    if (categoryId) {
+      where.categoryId = categoryId;
     }
 
     const [orders, total] = await Promise.all([
@@ -1453,7 +1453,7 @@ export class OrdersService {
    */
   async createOrderWithMedia(
     clientId: number,
-    serviceId: number | undefined,
+    categoryId: number | undefined,
     title: string,
     description: string,
     budget: number,
@@ -1594,7 +1594,7 @@ export class OrdersService {
       const order = await tx.order.create({
         data: {
           clientId,
-          serviceId,
+          categoryId,
           title,
           description,
           titleEn,
@@ -1640,7 +1640,7 @@ export class OrdersService {
               avatarUrl: true,
             },
           },
-          Service: {
+          Category: {
             select: {
               id: true,
               name: true,
@@ -1733,7 +1733,7 @@ export class OrdersService {
    */
   private async sendNewOrderNotifications(
     orderId: number,
-    serviceId: number,
+    categoryId: number,
     orderTitle: string
   ): Promise<void> {
     try {
@@ -1762,9 +1762,9 @@ export class OrdersService {
       const clientId = order.clientId;
 
       // Find all users who have notifications enabled for this service
-      const userServices = await this.prisma.userService.findMany({
+      const userCategories = await this.prisma.userCategory.findMany({
         where: {
-          serviceId,
+          categoryId,
           notificationsEnabled: true,
         },
         include: {
@@ -1775,7 +1775,7 @@ export class OrdersService {
               fcmToken: true,
             },
           },
-          Service: {
+          Category: {
             select: {
               id: true,
               name: true,
@@ -1784,19 +1784,19 @@ export class OrdersService {
         },
       });
 
-      if (userServices.length === 0) {
+      if (userCategories.length === 0) {
         this.logger.log(
-          `No users with notifications enabled for service ${serviceId}`
+          `No users with notifications enabled for category ${categoryId}`
         );
         return;
       }
 
-      // Get service name for notification
-      const serviceName =
-        userServices[0]?.Service?.name || `Service #${serviceId}`;
+      // Get category name for notification
+      const categoryName =
+        userCategories[0]?.Category?.name || `Category #${categoryId}`;
 
       // Send notification to each user (excluding the order creator)
-      const notifications = userServices
+      const notifications = userCategories
         .filter(
           (us) =>
             us.User.fcmToken && // Only users with FCM tokens
@@ -1812,12 +1812,12 @@ export class OrdersService {
               {
                 type: "order",
                 orderId: orderId.toString(),
-                serviceId: serviceId.toString(),
-                serviceName: serviceName,
+                categoryId: categoryId.toString(),
+                categoryName: categoryName,
               },
               {
                 orderTitle: orderTitle,
-                serviceName: serviceName,
+                categoryName: categoryName,
               }
             )
             .catch((error) => {
@@ -1831,7 +1831,7 @@ export class OrdersService {
       await Promise.all(notifications);
 
       this.logger.log(
-        `Sent new order notifications to ${notifications.length} users for order ${orderId} in service ${serviceId}`
+        `Sent new order notifications to ${notifications.length} users for order ${orderId} in category ${categoryId}`
       );
     } catch (error) {
       this.logger.error(
@@ -1925,7 +1925,7 @@ export class OrdersService {
                   verified: true,
                 },
               },
-              Service: {
+              Category: {
                 select: {
                   id: true,
                   name: true,
@@ -2103,7 +2103,7 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
-        Service: {
+        Category: {
           select: {
             id: true,
             name: true,
@@ -2144,10 +2144,10 @@ export class OrdersService {
     );
 
     // Send notifications to users who have notifications enabled for this service
-    if (order.serviceId) {
+    if (order.categoryId) {
       await this.sendNewOrderNotifications(
         order.id,
-        order.serviceId,
+        order.categoryId,
         order.title || ""
       );
     }
@@ -2204,7 +2204,7 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
-        Service: {
+        Category: {
           select: {
             id: true,
             name: true,

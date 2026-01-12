@@ -30,7 +30,7 @@ export class OrdersController {
     @Request() req,
     @Body()
     body: {
-      serviceId?: number;
+      categoryId?: number;
       title: string;
       description: string;
       budget: number;
@@ -51,7 +51,7 @@ export class OrdersController {
 
     return this.ordersService.createOrder(
       req.user.userId,
-      body.serviceId,
+      body.categoryId,
       body.title,
       body.description,
       body.budget,
@@ -72,7 +72,7 @@ export class OrdersController {
     @Request() req,
     @Body()
     body: {
-      serviceId?: number;
+      categoryId?: number;
       title: string;
       description: string;
       budget: number;
@@ -95,7 +95,7 @@ export class OrdersController {
   ) {
     return this.ordersService.createOrderWithMedia(
       req.user.userId,
-      body.serviceId,
+      body.categoryId,
       body.title,
       body.description,
       body.budget,
@@ -117,15 +117,15 @@ export class OrdersController {
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
     @Query("status") status?: string,
-    @Query("serviceId") serviceId?: string,
-    @Query("serviceIds") serviceIds?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("categoryIds") categoryIds?: string,
     @Query("clientId") clientId?: string,
     @Request() req?: any
   ) {
-    // Parse serviceIds from comma-separated string or single serviceId
-    let parsedServiceIds: number[] | undefined;
-    if (serviceIds) {
-      parsedServiceIds = serviceIds
+    // Parse categoryIds from comma-separated string or single categoryId
+    let parsedCategoryIds: number[] | undefined;
+    if (categoryIds) {
+      parsedCategoryIds = categoryIds
         .split(",")
         .map((id) => parseInt(id.trim()))
         .filter((id) => !isNaN(id));
@@ -140,9 +140,9 @@ export class OrdersController {
       parseInt(page),
       parseInt(limit),
       status,
-      serviceId ? parseInt(serviceId) : undefined,
-      parsedServiceIds && parsedServiceIds.length > 0
-        ? parsedServiceIds
+      categoryId ? parseInt(categoryId) : undefined,
+      parsedCategoryIds && parsedCategoryIds.length > 0
+        ? parsedCategoryIds
         : undefined,
       clientId ? parseInt(clientId) : undefined,
       isAdmin,
@@ -155,7 +155,7 @@ export class OrdersController {
     @Query("q") query: string,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
-    @Query("serviceIds") serviceIds?: string
+    @Query("categoryIds") categoryIds?: string
   ) {
     if (!query) {
       return {
@@ -171,10 +171,10 @@ export class OrdersController {
       };
     }
 
-    // Parse serviceIds from comma-separated string
-    let parsedServiceIds: number[] | undefined;
-    if (serviceIds) {
-      parsedServiceIds = serviceIds
+    // Parse categoryIds from comma-separated string
+    let parsedCategoryIds: number[] | undefined;
+    if (categoryIds) {
+      parsedCategoryIds = categoryIds
         .split(",")
         .map((id) => parseInt(id.trim()))
         .filter((id) => !isNaN(id));
@@ -184,8 +184,8 @@ export class OrdersController {
       query,
       parseInt(page),
       parseInt(limit),
-      parsedServiceIds && parsedServiceIds.length > 0
-        ? parsedServiceIds
+      parsedCategoryIds && parsedCategoryIds.length > 0
+        ? parsedCategoryIds
         : undefined
     );
   }
@@ -203,14 +203,14 @@ export class OrdersController {
     );
   }
 
-  @Get("service/:serviceId")
-  async getOrdersByService(
-    @Param("serviceId") serviceId: string,
+  @Get("category/:categoryId")
+  async getOrdersByCategory(
+    @Param("categoryId") categoryId: string,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10"
   ) {
-    return this.ordersService.getOrdersByService(
-      +serviceId,
+    return this.ordersService.getOrdersByCategory(
+      +categoryId,
       parseInt(page),
       parseInt(limit)
     );
@@ -234,7 +234,7 @@ export class OrdersController {
   async getAvailableOrders(
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
-    @Query("serviceId") serviceId?: string,
+    @Query("categoryId") categoryId?: string,
     @Query("location") location?: string,
     @Query("budgetMin") budgetMin?: string,
     @Query("budgetMax") budgetMax?: string
@@ -242,7 +242,7 @@ export class OrdersController {
     return this.ordersService.getAvailableOrders(
       parseInt(page),
       parseInt(limit),
-      serviceId ? parseInt(serviceId) : undefined,
+      categoryId ? parseInt(categoryId) : undefined,
       location,
       budgetMin ? parseFloat(budgetMin) : undefined,
       budgetMax ? parseFloat(budgetMax) : undefined
@@ -336,7 +336,7 @@ export class OrdersController {
     @Param("id") id: string,
     @Body()
     body: {
-      serviceId?: number;
+      categoryId?: number;
       title?: string;
       description?: string;
       budget?: number;

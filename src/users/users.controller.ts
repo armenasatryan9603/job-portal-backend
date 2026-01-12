@@ -142,7 +142,7 @@ export class UsersController {
     @Param("id") id: string,
     @Body()
     specialistData: {
-      serviceId?: number;
+      categoryId?: number;
       experienceYears?: number;
       priceMin?: number;
       priceMax?: number;
@@ -159,7 +159,7 @@ export class UsersController {
     @Req() req,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
-    @Query("serviceId") serviceId?: string,
+    @Query("categoryId") categoryId?: string,
     @Query("location") location?: string
   ) {
     try {
@@ -187,7 +187,7 @@ export class UsersController {
       console.log("Getting specialists with params:", {
         page,
         limit,
-        serviceId,
+        categoryId,
         location,
         userId,
       });
@@ -195,7 +195,7 @@ export class UsersController {
       const result = await this.usersService.getSpecialists(
         parseInt(page),
         parseInt(limit),
-        serviceId ? parseInt(serviceId) : undefined,
+        categoryId ? parseInt(categoryId) : undefined,
         location,
         userId
       );
@@ -235,14 +235,14 @@ export class UsersController {
     );
   }
 
-  @Get("specialists/service/:serviceId")
-  async getSpecialistsByService(
-    @Param("serviceId") serviceId: string,
+  @Get("specialists/category/:categoryId")
+  async getSpecialistsByCategory(
+    @Param("categoryId") categoryId: string,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10"
   ) {
-    return this.usersService.getSpecialistsByService(
-      parseInt(serviceId),
+    return this.usersService.getSpecialistsByCategory(
+      parseInt(categoryId),
       parseInt(page),
       parseInt(limit)
     );
@@ -272,7 +272,7 @@ export class UsersController {
     @Param("id") id: string,
     @Body()
     specialistData: {
-      serviceId?: number;
+      categoryId?: number;
       experienceYears?: number;
       priceMin?: number;
       priceMax?: number;
@@ -285,68 +285,68 @@ export class UsersController {
   // User service management endpoints
   @Post(":id/services")
   @UseGuards(JwtAuthGuard)
-  async addUserService(
+  async addUserCategory(
     @Param("id") id: string,
-    @Body() body: { serviceId: number; notificationsEnabled?: boolean }
+    @Body() body: { categoryId: number; notificationsEnabled?: boolean }
   ) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) {
       throw new BadRequestException(`Invalid user ID: ${id}`);
     }
-    return this.usersService.addUserService(
+    return this.usersService.addUserCategory(
       userId,
-      body.serviceId,
+      body.categoryId,
       body.notificationsEnabled ?? true
     );
   }
 
-  @Delete(":id/services/:serviceId")
+  @Delete(":id/categories/:categoryId")
   @UseGuards(JwtAuthGuard)
-  async removeUserService(
+  async removeUserCategory(
     @Param("id") id: string,
-    @Param("serviceId") serviceId: string
+    @Param("categoryId") categoryId: string
   ) {
     const userId = parseInt(id, 10);
-    const serviceIdNum = parseInt(serviceId, 10);
+    const categoryIdNum = parseInt(categoryId, 10);
     if (isNaN(userId)) {
       throw new BadRequestException(`Invalid user ID: ${id}`);
     }
-    if (isNaN(serviceIdNum)) {
-      throw new BadRequestException(`Invalid service ID: ${serviceId}`);
+    if (isNaN(categoryIdNum)) {
+      throw new BadRequestException(`Invalid category ID: ${categoryId}`);
     }
-    return this.usersService.removeUserService(userId, serviceIdNum);
+    return this.usersService.removeUserCategory(userId, categoryIdNum);
   }
 
-  @Patch(":id/services/:serviceId/notifications")
+  @Patch(":id/categories/:categoryId/notifications")
   @UseGuards(JwtAuthGuard)
-  async updateUserServiceNotifications(
+  async updateUserCategoryNotifications(
     @Param("id") id: string,
-    @Param("serviceId") serviceId: string,
+    @Param("categoryId") categoryId: string,
     @Body() body: { notificationsEnabled: boolean }
   ) {
     const userId = parseInt(id, 10);
-    const serviceIdNum = parseInt(serviceId, 10);
+    const categoryIdNum = parseInt(categoryId, 10);
     if (isNaN(userId)) {
       throw new BadRequestException(`Invalid user ID: ${id}`);
     }
-    if (isNaN(serviceIdNum)) {
-      throw new BadRequestException(`Invalid service ID: ${serviceId}`);
+    if (isNaN(categoryIdNum)) {
+      throw new BadRequestException(`Invalid category ID: ${categoryId}`);
     }
-    return this.usersService.updateUserServiceNotifications(
+    return this.usersService.updateUserCategoryNotifications(
       userId,
-      serviceIdNum,
+      categoryIdNum,
       body.notificationsEnabled
     );
   }
 
-  @Get(":id/services")
+  @Get(":id/categories")
   @UseGuards(JwtAuthGuard)
-  async getUserServices(@Param("id") id: string) {
+  async getUserCategories(@Param("id") id: string) {
     const userId = parseInt(id, 10);
     if (isNaN(userId)) {
       throw new BadRequestException(`Invalid user ID: ${id}`);
     }
-    return this.usersService.getUserServices(userId);
+    return this.usersService.getUserCategories(userId);
   }
 
   @Get(":id")
