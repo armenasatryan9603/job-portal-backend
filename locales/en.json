@@ -1228,6 +1228,7 @@
   "browseOtherPlans": "Browse",
   "expiresOn": "Expires on",
   "manage": "Manage",
+  "individuals": "Individuals",
   "unlimitedApplicationsWithSubscription": "Unlimited applications with your active subscription",
   "failedToLoadSubscription": "Failed to load subscription"
 }

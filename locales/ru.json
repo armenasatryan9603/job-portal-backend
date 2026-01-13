@@ -1215,5 +1215,20 @@
   "expiresOn": "Истекает",
   "manage": "Управлять",
   "unlimitedApplicationsWithSubscription": "Неограниченные заявки с вашей активной подпиской",
-  "failedToLoadSubscription": "Не удалось загрузить подписку"
+  "failedToLoadSubscription": "Не удалось загрузить подписку",
+  "addCustom": "Добавить свой",
+  "failedToLoadCategories": "Не удалось загрузить категории. Пожалуйста, попробуйте снова.",
+  "gallery": "Галерея",
+  "lead": "Руководитель",
+  "loadingCategories": "Загрузка категорий...",
+  "loadingMoreCategories": "Загрузка дополнительных категорий...",
+  "loadingTeams": "Загрузка команд...",
+  "manageAllTeams": "Управление всеми командами",
+  "managePeers": "Управлять",
+  "noReasonsAvailable": "Причины недоступны",
+  "peersAndTeams": "Коллеги и команды",
+  "selectCurrency": "Выбрать валюту",
+  "selectRateUnit": "Выбрать единицу тарифа",
+  "skillDetails": "Детали навыка",
+  "individuals": "Индивидуалы"
 }
