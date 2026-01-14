@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma.service";
 import { FirebaseNotificationService } from "./firebase-notification.service";
 import { EmailNotificationService } from "./email-notification.service";
 import { TranslationsService } from "../translations/translations.service";
+import { PusherService } from "../pusher/pusher.service";
 import {
   UserPreferences,
   DEFAULT_PREFERENCES,
@@ -14,7 +15,8 @@ export class NotificationsService {
     private prisma: PrismaService,
     private firebaseNotificationService: FirebaseNotificationService,
     private emailNotificationService: EmailNotificationService,
-    private translationsService: TranslationsService
+    private translationsService: TranslationsService,
+    private pusherService: PusherService
   ) {}
 
   async getUserNotifications(
@@ -158,7 +160,8 @@ export class NotificationsService {
     titleKey: string,
     messageKey: string,
     data?: any,
-    placeholders?: Record<string, string | number>
+    placeholders?: Record<string, string | number>,
+    skipPusherEvent: boolean = false // Skip Pusher for chat messages (they have their own flow)
   ) {
     // Get user's preferences
     const preferences = await this.getUserPreferences(userId);
@@ -182,7 +185,41 @@ export class NotificationsService {
       message = data.messageContent;
     }
 
-    // Create database notification (store original keys for future reference)
+    // Chat messages: Only send FCM push, don't store in database
+    if (type === "chat_message") {
+      console.log(
+        "💬 Chat message notification - FCM only, no database storage"
+      );
+
+      const pushEnabled = preferences.pushNotificationsEnabled !== false;
+
+      if (pushEnabled) {
+        try {
+          // Prepare notification data (no notificationId for chat messages)
+          const pushData = {
+            type,
+            ...data,
+          };
+
+          await this.firebaseNotificationService.sendPushNotification(
+            userId,
+            title,
+            message,
+            pushData
+          );
+        } catch (error) {
+          console.error(
+            "Failed to send chat message push notification:",
+            error
+          );
+        }
+      }
+
+      // Return null for chat messages (no database record created)
+      return null;
+    }
+
+    // For all other notifications: Create database record
     const notification = await this.prisma.notification.create({
       data: {
         userId,
@@ -198,51 +235,65 @@ export class NotificationsService {
       },
     });
 
-    // Send push notification only if user has push notifications enabled
-    // Default to true if preference is not set (backward compatibility)
-    const pushEnabled = preferences.pushNotificationsEnabled !== false;
+    // Send notifications in parallel (Pusher, FCM, Email) - non-blocking
+    const notificationPromises: Promise<any>[] = [];
 
-    if (pushEnabled) {
-      try {
-        // Prepare notification data with notificationId for deep linking
-        const pushData = {
-          type,
-          ...data,
-          notificationId: notification.id.toString(), // Include notification ID for deep linking
-        };
-
-        await this.firebaseNotificationService.sendPushNotification(
-          userId,
-          title,
-          message,
-          pushData
-        );
-      } catch (error) {
-        console.error("Failed to send push notification:", error);
-        // Don't fail the database operation if push fails
-      }
+    // Emit real-time event via Pusher (skip for chat messages - they use conversation-updated)
+    if (!skipPusherEvent) {
+      notificationPromises.push(
+        this.pusherService
+          .trigger(`user-${userId}`, "notification-created", {
+            notificationId: notification.id,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            data: notification.data,
+            createdAt: notification.createdAt,
+          })
+          .catch((error) =>
+            console.error("Error emitting Pusher notification event:", error)
+          )
+      );
     }
 
-    // Send email notification only if user has email notifications enabled
-    // Default to true if preference is not set (backward compatibility)
+    // Send push notification if enabled
+    const pushEnabled = preferences.pushNotificationsEnabled !== false;
+    if (pushEnabled) {
+      const pushData = {
+        type,
+        ...data,
+        notificationId: notification.id.toString(),
+      };
+
+      notificationPromises.push(
+        this.firebaseNotificationService
+          .sendPushNotification(userId, title, message, pushData)
+          .catch((error) =>
+            console.error("Failed to send push notification:", error)
+          )
+      );
+    }
+
+    // Send email notification if enabled
     const emailEnabled = preferences.emailNotificationsEnabled !== false;
-
     if (emailEnabled) {
-      try {
-        // Create HTML email body
-        const htmlBody = this.createEmailHtmlBody(title, message, type, data);
-        const textBody = message; // Plain text version
+      const htmlBody = this.createEmailHtmlBody(title, message, type, data);
+      const textBody = message;
 
-        await this.emailNotificationService.sendEmailNotification(
-          userId,
-          title, // Use translated title as email subject
-          htmlBody,
-          textBody
-        );
-      } catch (error) {
-        console.error("Failed to send email notification:", error);
-        // Don't fail the database operation if email fails
-      }
+      notificationPromises.push(
+        this.emailNotificationService
+          .sendEmailNotification(userId, title, htmlBody, textBody)
+          .catch((error) =>
+            console.error("Failed to send email notification:", error)
+          )
+      );
+    }
+
+    // Execute all notifications in parallel (non-blocking)
+    if (notificationPromises.length > 0) {
+      Promise.allSettled(notificationPromises).catch(() => {
+        // Errors already logged individually
+      });
     }
 
     return notification;

@@ -4,7 +4,7 @@ import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
-import { PusherService } from "./pusher.service";
+import { PusherService } from "../pusher/pusher.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
 
 export interface GetMessagesDto {

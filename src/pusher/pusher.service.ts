@@ -1,5 +1,5 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import Pusher from 'pusher';
+import { Injectable, OnModuleInit } from "@nestjs/common";
+import Pusher from "pusher";
 
 @Injectable()
 export class PusherService implements OnModuleInit {
@@ -9,7 +9,7 @@ export class PusherService implements OnModuleInit {
     const appId = process.env.PUSHER_APP_ID;
     const key = process.env.PUSHER_KEY;
     const secret = process.env.PUSHER_SECRET;
-    const cluster = process.env.PUSHER_CLUSTER || 'us2';
+    const cluster = process.env.PUSHER_CLUSTER || "us2";
 
     if (appId && key && secret) {
       this.pusher = new Pusher({
@@ -25,10 +25,10 @@ export class PusherService implements OnModuleInit {
   onModuleInit() {
     if (!this.pusher) {
       console.warn(
-        '⚠️  Pusher not configured. Real-time features will be disabled.'
+        "⚠️  Pusher not configured. Real-time features will be disabled."
       );
     } else {
-      console.log('✅ Pusher initialized successfully');
+      console.log("✅ Pusher initialized successfully");
     }
   }
 
@@ -37,12 +37,12 @@ export class PusherService implements OnModuleInit {
    */
   trigger(channel: string, event: string, data: any) {
     if (!this.pusher) {
-      console.warn('Pusher not initialized, skipping trigger');
+      console.warn("Pusher not initialized, skipping trigger");
       return Promise.resolve();
     }
 
     return this.pusher.trigger(channel, event, data).catch((error) => {
-      console.error('Error triggering Pusher event:', error);
+      console.error("Error triggering Pusher event:", error);
     });
   }
 
@@ -58,7 +58,7 @@ export class PusherService implements OnModuleInit {
    */
   authenticate(socketId: string, channel: string, userId: number) {
     if (!this.pusher) {
-      throw new Error('Pusher not initialized');
+      throw new Error("Pusher not initialized");
     }
 
     // For private channels, you can add user info
@@ -72,4 +72,3 @@ export class PusherService implements OnModuleInit {
     return this.pusher.authorizeChannel(socketId, channel, presenceData);
   }
 }
-

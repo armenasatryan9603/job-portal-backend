@@ -14,7 +14,7 @@ import { ChatService } from "./chat.service";
 import { CreateConversationDto } from "./dto/create-conversation.dto";
 import { SendMessageDto } from "./dto/send-message.dto";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { PusherService } from "./pusher.service";
+import { PusherService } from "../pusher/pusher.service";
 
 @Controller("chat")
 export class ChatController {
