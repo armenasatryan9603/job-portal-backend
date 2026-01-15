@@ -441,10 +441,10 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
-    // Calculate credit cost for each order and transform OrderSkills to skills array
+    // Calculate credit cost and refund percentage for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
-        const creditCost = await this.orderPricingService.getCreditCost(
+        const pricingConfig = await this.orderPricingService.getPricingConfig(
           order.budget || 0
         );
 
@@ -460,7 +460,8 @@ export class OrdersService {
 
         return {
           ...order,
-          creditCost,
+          creditCost: pricingConfig.creditCost,
+          refundPercentage: pricingConfig.refundPercentage,
           skills,
         };
       })
@@ -573,8 +574,8 @@ export class OrdersService {
         })
       : [];
 
-    // Calculate credit cost for the order
-    const creditCost = await this.orderPricingService.getCreditCost(
+    // Calculate credit cost and refund percentage for the order
+    const pricingConfig = await this.orderPricingService.getPricingConfig(
       order.budget || 0
     );
 
@@ -602,7 +603,8 @@ export class OrdersService {
     return {
       ...order,
       Category: transformedCategory,
-      creditCost,
+      creditCost: pricingConfig.creditCost,
+      refundPercentage: pricingConfig.refundPercentage,
     };
   }
 
@@ -1128,15 +1130,16 @@ export class OrdersService {
       }),
     ]);
 
-    // Calculate credit cost for each order
+    // Calculate credit cost and refund percentage for each order
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
-        const creditCost = await this.orderPricingService.getCreditCost(
+        const pricingConfig = await this.orderPricingService.getPricingConfig(
           order.budget || 0
         );
         return {
           ...order,
-          creditCost,
+          creditCost: pricingConfig.creditCost,
+          refundPercentage: pricingConfig.refundPercentage,
         };
       })
     );
@@ -1264,10 +1267,10 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
-    // Calculate credit cost for each order and transform OrderSkills to skills array
+    // Calculate credit cost and refund percentage for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
-        const creditCost = await this.orderPricingService.getCreditCost(
+        const pricingConfig = await this.orderPricingService.getPricingConfig(
           order.budget || 0
         );
 
@@ -1283,7 +1286,8 @@ export class OrdersService {
 
         return {
           ...order,
-          creditCost,
+          creditCost: pricingConfig.creditCost,
+          refundPercentage: pricingConfig.refundPercentage,
           skills,
         };
       })
@@ -1974,12 +1978,26 @@ export class OrdersService {
     ]);
 
     // Filter out any null orders (in case an order was deleted but savedOrder record still exists)
-    const orders = savedOrders
+    const ordersFiltered = savedOrders
       .map((so) => so.Order)
       .filter((order) => order != null);
 
+    // Calculate credit cost and refund percentage for each order
+    const ordersWithPricing = await Promise.all(
+      ordersFiltered.map(async (order) => {
+        const pricingConfig = await this.orderPricingService.getPricingConfig(
+          order.budget || 0
+        );
+        return {
+          ...order,
+          creditCost: pricingConfig.creditCost,
+          refundPercentage: pricingConfig.refundPercentage,
+        };
+      })
+    );
+
     return {
-      orders,
+      orders: ordersWithPricing,
       pagination: {
         page,
         limit,

@@ -390,6 +390,7 @@
   "mediumPriceRange": "$80-120/ժ",
   "highPriceRange": "> $120/ժ",
   "specialist": "Մասնագետ",
+  "client": "Հաճախորդ",
   "becomeASpecialist": "Դառնալ Մասնագետ",
   "becomeSpecialist": "Դառնալ Մասնագետ",
   "becomeSpecialistDescription": "Մասնագետների ցուցակում տեսանելի և որոնելի լինելու համար անհրաժեշտ է ձեր դերը սահմանել որպես 'Մասնագետ': Դուք կարող եք փոխել սա ցանկացած ժամանակ ձեր պրոֆիլի կարգավորումներում:",
@@ -523,6 +524,7 @@
   "addTimes": "Ավելացնել ժամեր",
   "allDay": "Ամբողջ օր",
   "applicationCost": "Դիմելու արժեք",
+  "refundIfNotSelected": "Վերադարձ, եթե չեք ընտրվել",
   "applicationSubmittedSuccessfully": "Դիմումը հաջողությամբ ուղարկվեց:",
   "applied": "Կիրառված",
   "applyToOrder": "Դիմել պատվերի համար",
@@ -1236,5 +1238,11 @@
   "selectCurrency": "Ընտրել արժույթ",
   "selectRateUnit": "Ընտրել դրույքաչափի միավոր",
   "skillDetails": "Հմտության մանրամասներ",
-  "individuals": "Անձնականներ"
+  "individuals": "Անձնականներ",
+  "viewSubscriptions": "Դիտել բաժանորդագրությունները",
+  "subscriptionsDescription": "Դիտեք ձեր բաժանորդագրությունները և կառավարեք դրանք",
+  "in_progress": "Ընթացքի մեջ",
+  "pending_review": "Վերանայում է",
+  "closed": "Ավարտված",
+  "not_applied": "Չդիմած"
 }

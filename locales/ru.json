@@ -414,6 +414,7 @@
   "mediumPriceRange": "$80-120/час",
   "highPriceRange": "> $120/час",
   "specialist": "Специалист",
+  "client": "Клиент",
   "becomeASpecialist": "Стать Специалистом",
   "becomeSpecialist": "Стать Специалистом",
   "becomeSpecialistDescription": "Чтобы быть видимым и находимым в списке специалистов, вам нужно установить свою роль как 'Специалист'. Вы можете изменить это в любое время в настройках профиля.",
@@ -548,6 +549,7 @@
   "enterQuestion": "Введите вопрос...",
   "noSpecialistsAvailable": "Нет доступных специалистов на данный момент",
   "applicationCost": "Стоимость заявки",
+  "refundIfNotSelected": "Возврат, если не выбран",
   "applicationSubmittedSuccessfully": "Заявка успешно отправлена!",
   "applied": "Применено",
   "willBeDisplayedAs": "будет отображаться как",
@@ -1230,5 +1232,11 @@
   "selectCurrency": "Выбрать валюту",
   "selectRateUnit": "Выбрать единицу тарифа",
   "skillDetails": "Детали навыка",
-  "individuals": "Индивидуалы"
+  "individuals": "Индивидуалы",
+  "viewSubscriptions": "Просмотреть подписки",
+  "subscriptionsDescription": "Просмотрите ваши подписки и управляйте ими",
+  "in_progress": "В процессе",
+  "pending_review": "На рассмотрении",
+  "closed": "Закрыто",
+  "not_applied": "Не подано"
 }

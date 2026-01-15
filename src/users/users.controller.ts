@@ -127,9 +127,7 @@ export class UsersController {
 
     // Users can only delete their own account (unless they're admin)
     if (currentUserId !== targetUserId && req?.user?.role !== "admin") {
-      throw new ForbiddenException(
-        "You can only delete your own account"
-      );
+      throw new ForbiddenException("You can only delete your own account");
     }
 
     return this.usersService.remove(targetUserId);
@@ -282,10 +280,9 @@ export class UsersController {
     return this.usersService.updateSpecialistProfile(+id, specialistData);
   }
 
-  // User service management endpoints
-  @Post(":id/services")
+  @Post(":id/categories")
   @UseGuards(JwtAuthGuard)
-  async addUserCategory(
+  async addUserCategoryAlt(
     @Param("id") id: string,
     @Body() body: { categoryId: number; notificationsEnabled?: boolean }
   ) {
