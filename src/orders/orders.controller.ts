@@ -66,7 +66,7 @@ export class OrdersController {
       body.skillIds,
       body.useAIEnhancement ?? false,
       body.questions,
-      body.orderType || 'one_time',
+      body.orderType || "one_time",
       body.workDurationPerClient,
       body.weeklySchedule
     );
@@ -117,7 +117,7 @@ export class OrdersController {
       body.mediaFiles || [],
       body.useAIEnhancement ?? false,
       body.questions,
-      body.orderType || 'one_time',
+      body.orderType || "one_time",
       body.workDurationPerClient,
       body.weeklySchedule
     );
@@ -132,6 +132,7 @@ export class OrdersController {
     @Query("categoryId") categoryId?: string,
     @Query("categoryIds") categoryIds?: string,
     @Query("clientId") clientId?: string,
+    @Query("orderType") orderType?: string,
     @Request() req?: any
   ) {
     // Parse categoryIds from comma-separated string or single categoryId
@@ -158,7 +159,8 @@ export class OrdersController {
         : undefined,
       clientId ? parseInt(clientId) : undefined,
       isAdmin,
-      userId
+      userId,
+      orderType
     );
   }
 
@@ -167,7 +169,8 @@ export class OrdersController {
     @Query("q") query: string,
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
-    @Query("categoryIds") categoryIds?: string
+    @Query("categoryIds") categoryIds?: string,
+    @Query("orderType") orderType?: string
   ) {
     if (!query) {
       return {
@@ -198,7 +201,8 @@ export class OrdersController {
       parseInt(limit),
       parsedCategoryIds && parsedCategoryIds.length > 0
         ? parsedCategoryIds
-        : undefined
+        : undefined,
+      orderType
     );
   }
 
@@ -368,6 +372,7 @@ export class OrdersController {
       orderType?: string;
       workDurationPerClient?: number;
       weeklySchedule?: any;
+      availableDates?: string[];
     },
     @Request() req
   ) {
@@ -517,16 +522,16 @@ export class OrdersController {
   async getAvailableSlots(
     @Param("id") id: string,
     @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query("endDate") endDate?: string
   ) {
     const orderId = parseInt(id, 10);
     if (isNaN(orderId)) {
       throw new BadRequestException(`Invalid order ID: ${id}`);
     }
-    
+
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
-    
+
     return this.ordersService.getAvailableSlots(orderId, start, end);
   }
 

@@ -29,6 +29,157 @@ export class OrdersService {
   ) {}
 
   /**
+   * Helper method to check if a booking would be affected by schedule changes
+   */
+  private isBookingAffectedByScheduleChange(
+    booking: { scheduledDate: string; startTime: string; endTime: string },
+    oldSchedule: any,
+    newSchedule: any,
+    oldAvailableDates?: string[],
+    newAvailableDates?: string[]
+  ): boolean {
+    // Check if schedule is actually changing
+    const scheduleChanged =
+      newSchedule !== undefined &&
+      JSON.stringify(oldSchedule) !== JSON.stringify(newSchedule);
+    const datesChanged =
+      newAvailableDates !== undefined &&
+      JSON.stringify(oldAvailableDates) !== JSON.stringify(newAvailableDates);
+
+    if (!scheduleChanged && !datesChanged) {
+      return false; // No change, booking not affected
+    }
+
+    // For permanent orders with weeklySchedule
+    if (scheduleChanged && (newSchedule || oldSchedule)) {
+      // If schedule is being removed entirely
+      if (newSchedule === null || newSchedule === undefined) {
+        return true; // All bookings are affected
+      }
+
+      const bookingDate = new Date(booking.scheduledDate);
+      const dayOfWeek = bookingDate.getDay();
+      const dayNames = [
+        "sunday",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+      ];
+      const dayName = dayNames[dayOfWeek];
+      const newDaySchedule = newSchedule[dayName];
+      const oldDaySchedule = oldSchedule?.[dayName];
+
+      // Check if day was enabled in old schedule
+      const wasEnabled = oldDaySchedule?.enabled === true;
+
+      // Check if day is enabled in new schedule
+      const isEnabled = newDaySchedule?.enabled === true;
+
+      // If day was enabled but is now disabled, booking is affected
+      if (wasEnabled && !isEnabled) {
+        return true;
+      }
+
+      // If day is enabled in new schedule, check work hours
+      if (isEnabled && newDaySchedule?.workHours) {
+        const { start, end } = newDaySchedule.workHours;
+        // Check if booking time is within new work hours
+        if (booking.startTime < start || booking.endTime > end) {
+          return true; // Booking time is outside new work hours
+        }
+      }
+
+      return false; // Booking is still valid
+    }
+
+    // For legacy availableDates
+    if (datesChanged) {
+      const datesToCheck = newAvailableDates || [];
+
+      // Check if booking date is in the new available dates
+      const bookingDateStr = booking.scheduledDate;
+      const dateFound = datesToCheck.some((dateStr: string) => {
+        try {
+          const parsed = JSON.parse(dateStr);
+          if (parsed.date === bookingDateStr) {
+            // Check if the time slot is still available
+            const times = parsed.times || [];
+            const bookingTimeSlot = `${booking.startTime}-${booking.endTime}`;
+            return times.includes(bookingTimeSlot);
+          }
+        } catch (e) {
+          // If parsing fails, try direct comparison
+          return dateStr === bookingDateStr;
+        }
+        return false;
+      });
+
+      return !dateFound; // If date not found, booking is affected
+    }
+
+    return false; // No schedule change, booking not affected
+  }
+
+  /**
+   * Helper method to cancel affected bookings and send notifications
+   */
+  private async cancelAffectedBookings(
+    bookings: Array<{
+      id: number;
+      scheduledDate: string;
+      startTime: string;
+      endTime: string;
+      clientId: number;
+      Client?: { name: string };
+    }>,
+    orderId: number
+  ): Promise<void> {
+    if (bookings.length === 0) return;
+
+    // Cancel all affected bookings
+    await this.prisma.booking.updateMany({
+      where: {
+        id: { in: bookings.map((b) => b.id) },
+      },
+      data: {
+        status: "cancelled",
+      },
+    });
+
+    // Send notifications to clients
+    for (const booking of bookings) {
+      try {
+        await this.notificationsService.createNotificationWithPush(
+          booking.clientId,
+          "booking_cancelled",
+          "Booking Cancelled",
+          `Your booking on ${booking.scheduledDate} from ${booking.startTime} to ${booking.endTime} has been cancelled because the specialist removed that availability.`,
+          {
+            bookingId: booking.id,
+            orderId: orderId,
+            scheduledDate: booking.scheduledDate,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            reason: "schedule_removed",
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send notification for cancelled booking ${booking.id}:`,
+          error
+        );
+      }
+    }
+
+    this.logger.log(
+      `Cancelled ${bookings.length} booking(s) for order ${orderId} due to schedule change`
+    );
+  }
+
+  /**
    * Helper method to log order changes
    */
   private async logOrderChange(
@@ -75,7 +226,7 @@ export class OrdersService {
     skillIds?: number[],
     useAIEnhancement: boolean = false,
     questions?: string[],
-    orderType: string = 'one_time',
+    orderType: string = "one_time",
     workDurationPerClient?: number,
     weeklySchedule?: any
   ) {
@@ -86,7 +237,7 @@ export class OrdersService {
         UserCategories: true,
         Subscriptions: {
           where: {
-            status: 'active',
+            status: "active",
             endDate: {
               gte: new Date(),
             },
@@ -101,10 +252,10 @@ export class OrdersService {
 
     // For permanent orders, only check if user is a specialist (not subscription)
     // Subscription will be checked when publishing
-    if (orderType === 'permanent') {
+    if (orderType === "permanent") {
       if (!client.UserCategories || client.UserCategories.length === 0) {
         throw new BadRequestException(
-          'Only specialists can create permanent orders. Please add your expertise first.',
+          "Only specialists can create permanent orders. Please add your expertise first."
         );
       }
     }
@@ -116,7 +267,9 @@ export class OrdersService {
       });
 
       if (!category) {
-        throw new BadRequestException(`Category with ID ${categoryId} not found`);
+        throw new BadRequestException(
+          `Category with ID ${categoryId} not found`
+        );
       }
     }
 
@@ -260,14 +413,15 @@ export class OrdersService {
         rateUnit: rateUnit || undefined,
         availableDates: formattedAvailableDates,
         location,
-        status: orderType === 'permanent' ? 'draft' : 'pending_review',
-        orderType: orderType || 'one_time',
+        status: orderType === "permanent" ? "draft" : "pending_review",
+        orderType: orderType || "one_time",
         workDurationPerClient: workDurationPerClient || undefined,
-        weeklySchedule: orderType === 'permanent' && weeklySchedule 
-          ? weeklySchedule 
-          : (orderType === 'permanent' && workDurationPerClient 
-            ? this.generateWeeklySchedule(workDurationPerClient) 
-            : undefined),
+        weeklySchedule:
+          orderType === "permanent" && weeklySchedule
+            ? weeklySchedule
+            : orderType === "permanent" && workDurationPerClient
+              ? this.generateWeeklySchedule(workDurationPerClient)
+              : undefined,
         ...(finalSkillIds.length > 0
           ? {
               OrderSkills: {
@@ -336,7 +490,8 @@ export class OrdersService {
     categoryIds?: number[],
     clientId?: number,
     isAdmin: boolean = false,
-    userId?: number
+    userId?: number,
+    orderType?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -398,14 +553,17 @@ export class OrdersService {
 
       // "not_applied" should only show "open" orders
       where.status = "open";
-    } else if (status) {
+    } else if (status && status !== "all") {
+      // Apply specific status filter (skip if status is "all")
       where.status = status;
-    } else if (!isAdmin && !clientId) {
+    } else if (!isAdmin && !clientId && status !== "all") {
       // For public queries (non-admin, not viewing own orders), exclude draft, pending_review and rejected
+      // But only if status is not explicitly "all"
       where.status = {
         notIn: ["draft", "pending_review", "rejected"],
       };
     }
+    // If status is "all", don't filter by status (show all statuses)
 
     // Support both single categoryId (backward compatibility) and multiple categoryIds
     if (categoryIds && categoryIds.length > 0) {
@@ -425,6 +583,15 @@ export class OrdersService {
         }
       }
     }
+
+    // Filter by orderType if provided
+    if (orderType && (orderType === "one_time" || orderType === "permanent")) {
+      where.orderType = orderType;
+    }
+
+    this.logger.debug(
+      `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, where: ${JSON.stringify(where)}`
+    );
 
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -497,6 +664,10 @@ export class OrdersService {
           skills,
         };
       })
+    );
+
+    this.logger.debug(
+      `📦 findAll result - orderType: ${orderType}, found: ${orders.length}, total: ${total}`
     );
 
     return {
@@ -703,6 +874,7 @@ export class OrdersService {
       orderType?: string;
       workDurationPerClient?: number;
       weeklySchedule?: any;
+      availableDates?: string[];
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -1041,6 +1213,100 @@ export class OrdersService {
       }
     }
 
+    // Validate schedule changes for permanent orders with existing bookings
+    if (
+      (updateOrderDto.weeklySchedule !== undefined ||
+        updateOrderDto.availableDates !== undefined) &&
+      existingOrder.orderType === "permanent"
+    ) {
+      // Get all active bookings for this order
+      const existingBookings = await this.prisma.booking.findMany({
+        where: {
+          orderId: id,
+          status: { in: ["confirmed", "pending"] },
+        },
+        include: {
+          Client: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (existingBookings.length > 0) {
+        // Get old schedule/dates
+        const oldWeeklySchedule = existingOrder.weeklySchedule as any;
+        const oldAvailableDates = existingOrder.availableDates as string[];
+
+        // Get new schedule/dates
+        const newWeeklySchedule =
+          updateOrderDto.weeklySchedule !== undefined
+            ? updateOrderDto.weeklySchedule
+            : oldWeeklySchedule;
+        const newAvailableDates =
+          updateOrderDto.availableDates !== undefined
+            ? updateOrderDto.availableDates
+            : oldAvailableDates;
+
+        // Check which bookings would be affected
+        const affectedBookings = existingBookings.filter((booking) =>
+          this.isBookingAffectedByScheduleChange(
+            booking,
+            oldWeeklySchedule,
+            newWeeklySchedule,
+            oldAvailableDates,
+            newAvailableDates
+          )
+        );
+
+        if (affectedBookings.length > 0) {
+          // Separate past/current bookings from future bookings
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+
+          const pastBookings = affectedBookings.filter((booking) => {
+            const bookingDate = new Date(booking.scheduledDate);
+            bookingDate.setHours(0, 0, 0, 0);
+            return bookingDate <= now;
+          });
+
+          const futureBookings = affectedBookings.filter((booking) => {
+            const bookingDate = new Date(booking.scheduledDate);
+            bookingDate.setHours(0, 0, 0, 0);
+            return bookingDate > now;
+          });
+
+          // Prevent removal of dates with past/current bookings
+          if (pastBookings.length > 0) {
+            throw new BadRequestException(
+              `Cannot remove dates with past or current bookings. ${pastBookings.length} booking(s) would be affected. Please contact support if you need to modify past bookings.`
+            );
+          }
+
+          // Auto-cancel future bookings with notification
+          if (futureBookings.length > 0) {
+            await this.cancelAffectedBookings(
+              futureBookings.map((b) => ({
+                id: b.id,
+                scheduledDate: b.scheduledDate,
+                startTime: b.startTime,
+                endTime: b.endTime,
+                clientId: b.clientId,
+                Client: b.Client,
+              })),
+              id
+            );
+
+            this.logger.log(
+              `Auto-cancelled ${futureBookings.length} future booking(s) for order ${id} due to schedule change`
+            );
+          }
+        }
+      }
+    }
+
     return this.prisma.order.update({
       where: { id: Number(id) },
       data: updateData,
@@ -1222,7 +1488,8 @@ export class OrdersService {
     query: string,
     page: number = 1,
     limit: number = 10,
-    categoryIds?: number[]
+    categoryIds?: number[],
+    orderType?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -1263,6 +1530,11 @@ export class OrdersService {
     // Add categoryIds filter if provided
     if (categoryIds && categoryIds.length > 0) {
       where.categoryId = { in: categoryIds };
+    }
+
+    // Filter by orderType if provided
+    if (orderType && (orderType === "one_time" || orderType === "permanent")) {
+      where.orderType = orderType;
     }
 
     const [orders, total] = await Promise.all([
@@ -1521,7 +1793,7 @@ export class OrdersService {
     }> = [],
     useAIEnhancement: boolean = false,
     questions?: string[],
-    orderType: string = 'one_time',
+    orderType: string = "one_time",
     workDurationPerClient?: number,
     weeklySchedule?: any
   ) {
@@ -1537,7 +1809,7 @@ export class OrdersService {
         UserCategories: true,
         Subscriptions: {
           where: {
-            status: 'active',
+            status: "active",
             endDate: {
               gte: new Date(),
             },
@@ -1552,10 +1824,10 @@ export class OrdersService {
 
     // For permanent orders, only check if user is a specialist (not subscription)
     // Subscription will be checked when publishing
-    if (orderType === 'permanent') {
+    if (orderType === "permanent") {
       if (!client.UserCategories || client.UserCategories.length === 0) {
         throw new BadRequestException(
-          'Only specialists can create permanent orders. Please add your expertise first.',
+          "Only specialists can create permanent orders. Please add your expertise first."
         );
       }
     }
@@ -1681,14 +1953,15 @@ export class OrdersService {
           rateUnit: rateUnit || undefined,
           availableDates: availableDates || [],
           location,
-          status: orderType === 'permanent' ? 'draft' : 'open',
-          orderType: orderType || 'one_time',
+          status: orderType === "permanent" ? "draft" : "open",
+          orderType: orderType || "one_time",
           workDurationPerClient: workDurationPerClient || undefined,
-          weeklySchedule: orderType === 'permanent' && weeklySchedule 
-            ? weeklySchedule 
-            : (orderType === 'permanent' && workDurationPerClient 
-              ? this.generateWeeklySchedule(workDurationPerClient) 
-              : undefined),
+          weeklySchedule:
+            orderType === "permanent" && weeklySchedule
+              ? weeklySchedule
+              : orderType === "permanent" && workDurationPerClient
+                ? this.generateWeeklySchedule(workDurationPerClient)
+                : undefined,
           ...(finalSkillIds.length > 0
             ? {
                 OrderSkills: {
@@ -2361,16 +2634,16 @@ export class OrdersService {
    */
   generateWeeklySchedule(
     workDurationPerClient: number,
-    customSchedule?: any,
+    customSchedule?: any
   ): any {
     const days = [
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
-      'sunday',
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
     ];
 
     const schedule: any = {};
@@ -2382,13 +2655,13 @@ export class OrdersService {
         schedule[day] = daySchedule;
       } else {
         // Default: weekdays enabled (9-17), weekends disabled
-        const isWeekend = day === 'saturday' || day === 'sunday';
+        const isWeekend = day === "saturday" || day === "sunday";
         if (isWeekend) {
           schedule[day] = { enabled: false };
         } else {
           schedule[day] = {
             enabled: true,
-            workHours: { start: '09:00', end: '17:00' },
+            workHours: { start: "09:00", end: "17:00" },
             // No slots - clients book custom time ranges
           };
         }
@@ -2405,7 +2678,7 @@ export class OrdersService {
   async getAvailableSlotsForDateRange(
     orderId: number,
     startDate: Date,
-    endDate: Date,
+    endDate: Date
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -2413,7 +2686,7 @@ export class OrdersService {
         Bookings: {
           where: {
             status: {
-              in: ['confirmed', 'completed'],
+              in: ["confirmed", "completed"],
             },
           },
         },
@@ -2425,27 +2698,27 @@ export class OrdersService {
     }
 
     if (!order.weeklySchedule) {
-      return { 
-        availableDays: [], 
-        workDurationPerClient: order.workDurationPerClient 
+      return {
+        availableDays: [],
+        workDurationPerClient: order.workDurationPerClient,
       };
     }
 
     const weeklySchedule = order.weeklySchedule as any;
-    const availableDays: Array<{ 
-      date: string; 
+    const availableDays: Array<{
+      date: string;
       workHours: { start: string; end: string };
       bookings: Array<{ startTime: string; endTime: string; clientId: number }>;
     }> = [];
-    
+
     const dayNames = [
-      'sunday',
-      'monday',
-      'tuesday',
-      'wednesday',
-      'thursday',
-      'friday',
-      'saturday',
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
     ];
 
     // Iterate through each date in the range
@@ -2466,11 +2739,12 @@ export class OrdersService {
 
       // Check if day is enabled and has work hours
       if (daySchedule && daySchedule.enabled && daySchedule.workHours) {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = currentDate.toISOString().split("T")[0];
 
         // Get all bookings for this date
-        const dayBookings = order.Bookings
-          .filter((booking) => booking.scheduledDate === dateStr)
+        const dayBookings = order.Bookings.filter(
+          (booking) => booking.scheduledDate === dateStr
+        )
           .map((booking) => ({
             startTime: booking.startTime,
             endTime: booking.endTime,
@@ -2505,7 +2779,7 @@ export class OrdersService {
           include: {
             Subscriptions: {
               where: {
-                status: 'active',
+                status: "active",
                 endDate: {
                   gte: new Date(),
                 },
@@ -2522,30 +2796,35 @@ export class OrdersService {
 
     // Check ownership
     if (order.clientId !== userId) {
-      throw new ForbiddenException('You can only publish your own orders');
+      throw new ForbiddenException("You can only publish your own orders");
     }
 
     // Check if it's a permanent order
-    if (order.orderType !== 'permanent') {
-      throw new BadRequestException('Only permanent orders need to be published');
+    if (order.orderType !== "permanent") {
+      throw new BadRequestException(
+        "Only permanent orders need to be published"
+      );
     }
 
     // Check if already published
-    if (order.status !== 'draft') {
-      throw new BadRequestException('Order is already published');
+    if (order.status !== "draft") {
+      throw new BadRequestException("Order is already published");
     }
 
     // Check if user has active subscription
-    if (!order.Client.Subscriptions || order.Client.Subscriptions.length === 0) {
+    if (
+      !order.Client.Subscriptions ||
+      order.Client.Subscriptions.length === 0
+    ) {
       throw new BadRequestException(
-        'An active subscription is required to publish permanent orders.',
+        "An active subscription is required to publish permanent orders."
       );
     }
 
     // Update status to pending_review (admin will approve)
     const updatedOrder = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: 'pending_review' },
+      data: { status: "pending_review" },
       include: {
         Client: {
           select: {
@@ -2557,7 +2836,7 @@ export class OrdersService {
         },
         Category: true,
         questions: {
-          orderBy: { order: 'asc' },
+          orderBy: { order: "asc" },
         },
         _count: {
           select: {
@@ -2571,11 +2850,11 @@ export class OrdersService {
     // Log status change
     await this.logOrderChange(
       orderId,
-      'status',
-      'draft',
-      'pending_review',
+      "status",
+      "draft",
+      "pending_review",
       userId,
-      'Permanent order published - pending admin review',
+      "Permanent order published - pending admin review"
     );
 
     return updatedOrder;
@@ -2592,7 +2871,7 @@ export class OrdersService {
         Bookings: {
           where: {
             status: {
-              in: ['confirmed', 'completed'],
+              in: ["confirmed", "completed"],
             },
           },
         },
@@ -2603,9 +2882,9 @@ export class OrdersService {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
 
-    if (order.orderType !== 'permanent') {
+    if (order.orderType !== "permanent") {
       throw new BadRequestException(
-        'Available slots can only be retrieved for permanent orders',
+        "Available slots can only be retrieved for permanent orders"
       );
     }
 
@@ -2628,11 +2907,11 @@ export class OrdersService {
           // Filter out times that are already booked
           // Convert new booking format (startTime-endTime) to old slot format for comparison
           const bookedTimes = order.Bookings.filter(
-            (booking) => booking.scheduledDate === date,
+            (booking) => booking.scheduledDate === date
           ).map((booking) => `${booking.startTime}-${booking.endTime}`);
 
           const availableTimes = times.filter(
-            (time: string) => !bookedTimes.includes(time),
+            (time: string) => !bookedTimes.includes(time)
           );
 
           if (availableTimes.length > 0) {
