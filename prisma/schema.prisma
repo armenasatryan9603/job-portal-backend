@@ -60,6 +60,7 @@ model User {
   LeadProposals            OrderProposal[]           @relation("LeadProposals")
   Subscriptions            UserSubscription[]
   SubscriptionTransactions SubscriptionTransaction[]
+  Bookings                 Booking[]                 @relation("ClientBookings")
 }
 
 model Category {
@@ -172,39 +173,44 @@ model UserCategory {
 }
 
 model Order {
-  id              Int                  @id @default(autoincrement())
-  clientId        Int
-  categoryId      Int?
-  title           String?
-  description     String?
-  budget          Float?
-  currency        String               @default("AMD")
-  rateUnit        String               @default("per_project")
-  availableDates  String[]             @default([])
-  location        String?
-  status          String               @default("open")
-  createdAt       DateTime             @default(now())
-  bannerImageId   Int?
-  titleEn         String?
-  titleRu         String?
-  titleHy         String?
-  descriptionEn   String?
-  descriptionRu   String?
-  descriptionHy   String?
-  rejectionReason String?
-  Conversations   Conversation[]
-  MediaFiles      MediaFile[]
-  BannerImage     MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
-  Client          User                 @relation("ClientOrders", fields: [clientId], references: [id])
-  Category        Category?            @relation(fields: [categoryId], references: [id])
-  Proposals       OrderProposal[]
-  questions       OrderQuestion[]
-  Reviews         Review[]
-  ChangeHistory   OrderChangeHistory[]
-  SavedBy         SavedOrder[]
-  OrderSkills     OrderSkill[]
+  id                    Int                  @id @default(autoincrement())
+  clientId              Int
+  categoryId            Int?
+  title                 String?
+  description           String?
+  budget                Float?
+  currency              String               @default("AMD")
+  rateUnit              String               @default("per_project")
+  availableDates        String[]             @default([])
+  location              String?
+  status                String               @default("open")
+  createdAt             DateTime             @default(now())
+  bannerImageId         Int?
+  titleEn               String?
+  titleRu               String?
+  titleHy               String?
+  descriptionEn         String?
+  descriptionRu         String?
+  descriptionHy         String?
+  rejectionReason       String?
+  orderType             String               @default("one_time") // "one_time" or "permanent"
+  workDurationPerClient Int? // Duration in minutes for each appointment
+  weeklySchedule        Json? // Recurring weekly schedule for permanent orders
+  Conversations         Conversation[]
+  MediaFiles            MediaFile[]
+  BannerImage           MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
+  Client                User                 @relation("ClientOrders", fields: [clientId], references: [id])
+  Category              Category?            @relation(fields: [categoryId], references: [id])
+  Proposals             OrderProposal[]
+  questions             OrderQuestion[]
+  Reviews               Review[]
+  ChangeHistory         OrderChangeHistory[]
+  SavedBy               SavedOrder[]
+  OrderSkills           OrderSkill[]
+  Bookings              Booking[]
 
   @@index([status])
+  @@index([orderType])
 }
 
 model OrderProposal {
@@ -694,4 +700,23 @@ model SubscriptionTransaction {
   @@index([subscriptionId])
   @@index([status])
   @@index([paymentId])
+}
+
+model Booking {
+  id            Int      @id @default(autoincrement())
+  orderId       Int
+  clientId      Int
+  scheduledDate String // Date string in ISO format
+  startTime     String // Start time (HH:MM format)
+  endTime       String // End time (HH:MM format)
+  status        String   @default("confirmed") // confirmed, completed, cancelled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Client        User     @relation("ClientBookings", fields: [clientId], references: [id])
+
+  @@index([orderId])
+  @@index([clientId])
+  @@index([scheduledDate])
+  @@index([status])
 }

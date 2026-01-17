@@ -42,6 +42,9 @@ export class OrdersController {
       skillIds?: number[];
       useAIEnhancement?: boolean;
       questions?: string[];
+      orderType?: string;
+      workDurationPerClient?: number;
+      weeklySchedule?: any;
     }
   ) {
     // Validate user is authenticated
@@ -62,7 +65,10 @@ export class OrdersController {
       body.skills,
       body.skillIds,
       body.useAIEnhancement ?? false,
-      body.questions
+      body.questions,
+      body.orderType || 'one_time',
+      body.workDurationPerClient,
+      body.weeklySchedule
     );
   }
 
@@ -91,6 +97,9 @@ export class OrdersController {
       }>;
       useAIEnhancement?: boolean;
       questions?: string[];
+      orderType?: string;
+      workDurationPerClient?: number;
+      weeklySchedule?: any;
     }
   ) {
     return this.ordersService.createOrderWithMedia(
@@ -107,7 +116,10 @@ export class OrdersController {
       body.skillIds,
       body.mediaFiles || [],
       body.useAIEnhancement ?? false,
-      body.questions
+      body.questions,
+      body.orderType || 'one_time',
+      body.workDurationPerClient,
+      body.weeklySchedule
     );
   }
 
@@ -353,6 +365,9 @@ export class OrdersController {
       questions?: string[];
       skills?: string[];
       skillIds?: number[];
+      orderType?: string;
+      workDurationPerClient?: number;
+      weeklySchedule?: any;
     },
     @Request() req
   ) {
@@ -496,5 +511,32 @@ export class OrdersController {
       req.user.userId,
       body.reason
     );
+  }
+
+  @Get(":id/available-slots")
+  async getAvailableSlots(
+    @Param("id") id: string,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+  ) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    
+    return this.ordersService.getAvailableSlots(orderId, start, end);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(":id/publish")
+  async publishPermanentOrder(@Param("id") id: string, @Request() req) {
+    const orderId = parseInt(id, 10);
+    if (isNaN(orderId)) {
+      throw new BadRequestException(`Invalid order ID: ${id}`);
+    }
+    return this.ordersService.publishPermanentOrder(orderId, req.user.userId);
   }
 }

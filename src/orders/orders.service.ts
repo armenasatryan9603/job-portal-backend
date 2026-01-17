@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
@@ -73,15 +74,39 @@ export class OrdersService {
     skills?: string[],
     skillIds?: number[],
     useAIEnhancement: boolean = false,
-    questions?: string[]
+    questions?: string[],
+    orderType: string = 'one_time',
+    workDurationPerClient?: number,
+    weeklySchedule?: any
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
       where: { id: clientId },
+      include: {
+        UserCategories: true,
+        Subscriptions: {
+          where: {
+            status: 'active',
+            endDate: {
+              gte: new Date(),
+            },
+          },
+        },
+      },
     });
 
     if (!client) {
       throw new BadRequestException(`Client with ID ${clientId} not found`);
+    }
+
+    // For permanent orders, only check if user is a specialist (not subscription)
+    // Subscription will be checked when publishing
+    if (orderType === 'permanent') {
+      if (!client.UserCategories || client.UserCategories.length === 0) {
+        throw new BadRequestException(
+          'Only specialists can create permanent orders. Please add your expertise first.',
+        );
+      }
     }
 
     // If categoryId is provided, check if category exists
@@ -235,7 +260,14 @@ export class OrdersService {
         rateUnit: rateUnit || undefined,
         availableDates: formattedAvailableDates,
         location,
-        status: "pending_review",
+        status: orderType === 'permanent' ? 'draft' : 'pending_review',
+        orderType: orderType || 'one_time',
+        workDurationPerClient: workDurationPerClient || undefined,
+        weeklySchedule: orderType === 'permanent' && weeklySchedule 
+          ? weeklySchedule 
+          : (orderType === 'permanent' && workDurationPerClient 
+            ? this.generateWeeklySchedule(workDurationPerClient) 
+            : undefined),
         ...(finalSkillIds.length > 0
           ? {
               OrderSkills: {
@@ -369,9 +401,9 @@ export class OrdersService {
     } else if (status) {
       where.status = status;
     } else if (!isAdmin && !clientId) {
-      // For public queries (non-admin, not viewing own orders), exclude pending_review and rejected
+      // For public queries (non-admin, not viewing own orders), exclude draft, pending_review and rejected
       where.status = {
-        notIn: ["pending_review", "rejected"],
+        notIn: ["draft", "pending_review", "rejected"],
       };
     }
 
@@ -668,6 +700,9 @@ export class OrdersService {
       questions?: string[];
       skills?: string[];
       skillIds?: number[];
+      orderType?: string;
+      workDurationPerClient?: number;
+      weeklySchedule?: any;
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -886,12 +921,13 @@ export class OrdersService {
       }
     }
 
-    // Prepare update data (exclude useAIEnhancement, questions, skills, and skillIds as they're handled separately)
+    // Prepare update data (exclude useAIEnhancement, questions, skills, skillIds, and categoryId as they're handled separately)
     const {
       useAIEnhancement: _,
       questions,
       skills: __,
       skillIds: ___,
+      categoryId,
       ...updateData
     } = updateOrderDto as any;
 
@@ -993,6 +1029,15 @@ export class OrdersService {
             skillId,
           })),
         });
+      }
+    }
+
+    // Handle categoryId update using relation syntax
+    if (categoryId !== undefined) {
+      if (categoryId === null) {
+        updateData.Category = { disconnect: true };
+      } else {
+        updateData.Category = { connect: { id: categoryId } };
       }
     }
 
@@ -1209,9 +1254,9 @@ export class OrdersService {
           },
         },
       ],
-      // Exclude pending_review and rejected orders from search results
+      // Exclude draft, pending_review and rejected orders from search results
       status: {
-        notIn: ["pending_review", "rejected"],
+        notIn: ["draft", "pending_review", "rejected"],
       },
     };
 
@@ -1475,7 +1520,10 @@ export class OrdersService {
       fileSize: number;
     }> = [],
     useAIEnhancement: boolean = false,
-    questions?: string[]
+    questions?: string[],
+    orderType: string = 'one_time',
+    workDurationPerClient?: number,
+    weeklySchedule?: any
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
@@ -1485,10 +1533,31 @@ export class OrdersService {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
       where: { id: clientId },
+      include: {
+        UserCategories: true,
+        Subscriptions: {
+          where: {
+            status: 'active',
+            endDate: {
+              gte: new Date(),
+            },
+          },
+        },
+      },
     });
 
     if (!client) {
       throw new BadRequestException(`Client with ID ${clientId} not found`);
+    }
+
+    // For permanent orders, only check if user is a specialist (not subscription)
+    // Subscription will be checked when publishing
+    if (orderType === 'permanent') {
+      if (!client.UserCategories || client.UserCategories.length === 0) {
+        throw new BadRequestException(
+          'Only specialists can create permanent orders. Please add your expertise first.',
+        );
+      }
     }
 
     // Handle AI enhancement if requested (before transaction)
@@ -1612,7 +1681,14 @@ export class OrdersService {
           rateUnit: rateUnit || undefined,
           availableDates: availableDates || [],
           location,
-          status: "open",
+          status: orderType === 'permanent' ? 'draft' : 'open',
+          orderType: orderType || 'one_time',
+          workDurationPerClient: workDurationPerClient || undefined,
+          weeklySchedule: orderType === 'permanent' && weeklySchedule 
+            ? weeklySchedule 
+            : (orderType === 'permanent' && workDurationPerClient 
+              ? this.generateWeeklySchedule(workDurationPerClient) 
+              : undefined),
           ...(finalSkillIds.length > 0
             ? {
                 OrderSkills: {
@@ -2273,5 +2349,308 @@ export class OrdersService {
     );
 
     return updatedOrder;
+  }
+
+  /**
+   * Note: Slot generation removed - clients now book custom time ranges within work hours
+   */
+
+  /**
+   * Generate initial weekly schedule (only work hours, no slots)
+   * workDurationPerClient is now just a suggestion for clients
+   */
+  generateWeeklySchedule(
+    workDurationPerClient: number,
+    customSchedule?: any,
+  ): any {
+    const days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+
+    const schedule: any = {};
+
+    days.forEach((day) => {
+      if (customSchedule && customSchedule[day]) {
+        // Use custom schedule for this day (ensure no slots property)
+        const { slots, ...daySchedule } = customSchedule[day];
+        schedule[day] = daySchedule;
+      } else {
+        // Default: weekdays enabled (9-17), weekends disabled
+        const isWeekend = day === 'saturday' || day === 'sunday';
+        if (isWeekend) {
+          schedule[day] = { enabled: false };
+        } else {
+          schedule[day] = {
+            enabled: true,
+            workHours: { start: '09:00', end: '17:00' },
+            // No slots - clients book custom time ranges
+          };
+        }
+      }
+    });
+
+    return schedule;
+  }
+
+  /**
+   * Get available days with work hours and existing bookings
+   * Clients use this to visualize timeline and select custom time ranges
+   */
+  async getAvailableSlotsForDateRange(
+    orderId: number,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        Bookings: {
+          where: {
+            status: {
+              in: ['confirmed', 'completed'],
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    if (!order.weeklySchedule) {
+      return { 
+        availableDays: [], 
+        workDurationPerClient: order.workDurationPerClient 
+      };
+    }
+
+    const weeklySchedule = order.weeklySchedule as any;
+    const availableDays: Array<{ 
+      date: string; 
+      workHours: { start: string; end: string };
+      bookings: Array<{ startTime: string; endTime: string; clientId: number }>;
+    }> = [];
+    
+    const dayNames = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+
+    // Iterate through each date in the range
+    const currentDate = new Date(startDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    while (currentDate <= endDate) {
+      // Skip past dates
+      if (currentDate < today) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
+
+      const dayOfWeek = currentDate.getDay();
+      const dayName = dayNames[dayOfWeek];
+      const daySchedule = weeklySchedule[dayName];
+
+      // Check if day is enabled and has work hours
+      if (daySchedule && daySchedule.enabled && daySchedule.workHours) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+
+        // Get all bookings for this date
+        const dayBookings = order.Bookings
+          .filter((booking) => booking.scheduledDate === dateStr)
+          .map((booking) => ({
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            clientId: booking.clientId,
+          }))
+          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+        availableDays.push({
+          date: dateStr,
+          workHours: daySchedule.workHours,
+          bookings: dayBookings,
+        });
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return {
+      availableDays,
+      workDurationPerClient: order.workDurationPerClient, // Suggestion only
+    };
+  }
+
+  /**
+   * Publish a permanent order (requires subscription)
+   */
+  async publishPermanentOrder(orderId: number, userId: number) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        Client: {
+          include: {
+            Subscriptions: {
+              where: {
+                status: 'active',
+                endDate: {
+                  gte: new Date(),
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Check ownership
+    if (order.clientId !== userId) {
+      throw new ForbiddenException('You can only publish your own orders');
+    }
+
+    // Check if it's a permanent order
+    if (order.orderType !== 'permanent') {
+      throw new BadRequestException('Only permanent orders need to be published');
+    }
+
+    // Check if already published
+    if (order.status !== 'draft') {
+      throw new BadRequestException('Order is already published');
+    }
+
+    // Check if user has active subscription
+    if (!order.Client.Subscriptions || order.Client.Subscriptions.length === 0) {
+      throw new BadRequestException(
+        'An active subscription is required to publish permanent orders.',
+      );
+    }
+
+    // Update status to pending_review (admin will approve)
+    const updatedOrder = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { status: 'pending_review' },
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        Category: true,
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+        _count: {
+          select: {
+            Proposals: true,
+            Reviews: true,
+          },
+        },
+      },
+    });
+
+    // Log status change
+    await this.logOrderChange(
+      orderId,
+      'status',
+      'draft',
+      'pending_review',
+      userId,
+      'Permanent order published - pending admin review',
+    );
+
+    return updatedOrder;
+  }
+
+  /**
+   * Get available slots for a permanent order
+   * Supports both weekly schedule (new) and availableDates (legacy)
+   */
+  async getAvailableSlots(orderId: number, startDate?: Date, endDate?: Date) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        Bookings: {
+          where: {
+            status: {
+              in: ['confirmed', 'completed'],
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    if (order.orderType !== 'permanent') {
+      throw new BadRequestException(
+        'Available slots can only be retrieved for permanent orders',
+      );
+    }
+
+    // If order uses new weekly schedule format
+    if (order.weeklySchedule) {
+      const start = startDate || new Date();
+      const end = endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 3 months default
+      return this.getAvailableSlotsForDateRange(orderId, start, end);
+    }
+
+    // Legacy: Parse available dates from the order (for backward compatibility)
+    const availableSlots: Array<{ date: string; times: string[] }> = [];
+
+    if (order.availableDates && order.availableDates.length > 0) {
+      order.availableDates.forEach((dateStr: string) => {
+        try {
+          const { date, times = [] } = JSON.parse(dateStr);
+          if (!date) return;
+
+          // Filter out times that are already booked
+          // Convert new booking format (startTime-endTime) to old slot format for comparison
+          const bookedTimes = order.Bookings.filter(
+            (booking) => booking.scheduledDate === date,
+          ).map((booking) => `${booking.startTime}-${booking.endTime}`);
+
+          const availableTimes = times.filter(
+            (time: string) => !bookedTimes.includes(time),
+          );
+
+          if (availableTimes.length > 0) {
+            availableSlots.push({
+              date,
+              times: availableTimes,
+            });
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to parse date: ${dateStr}`, error);
+        }
+      });
+    }
+
+    return {
+      orderId: order.id,
+      workDurationPerClient: order.workDurationPerClient,
+      availableSlots,
+    };
   }
 }

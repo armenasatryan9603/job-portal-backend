@@ -27,6 +27,7 @@ import { SkillsModule } from "./skills/skills.module";
 import { AdminModule } from "./admin/admin.module";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
 import { ExchangeRateModule } from "./exchange-rate/exchange-rate.module";
+import { BookingsModule } from "./bookings/bookings.module";
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ExchangeRateModule } from "./exchange-rate/exchange-rate.module";
     AdminModule,
     SubscriptionsModule,
     ExchangeRateModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
