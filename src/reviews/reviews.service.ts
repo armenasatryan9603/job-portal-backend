@@ -27,8 +27,9 @@ export class ReviewsService {
       );
     }
 
-    // Check if order is completed
-    if (order.status !== 'completed') {
+    // Check if order is completed (or if it's a permanent order, allow reviews)
+    // Permanent orders can't be completed, so we allow reviews for them regardless of status
+    if (order.orderType !== 'permanent' && order.status !== 'completed') {
       throw new BadRequestException('Can only review completed orders');
     }
 
@@ -43,23 +44,31 @@ export class ReviewsService {
       );
     }
 
-    // Check if reviewer is either the client or the hired specialist
+    // For permanent orders, allow any logged-in user to review
+    // For one-time orders, only client or hired specialist can review
     const isClient = order.clientId === createReviewDto.reviewerId;
     const isHiredSpecialist = await this.isHiredSpecialist(
       order.id,
       createReviewDto.reviewerId,
     );
 
-    if (!isClient && !isHiredSpecialist) {
-      throw new BadRequestException(
-        'Only the client or hired specialist can review this order',
-      );
+    if (order.orderType !== 'permanent') {
+      // For one-time orders, restrict to client or hired specialist
+      if (!isClient && !isHiredSpecialist) {
+        throw new BadRequestException(
+          'Only the client or hired specialist can review this order',
+        );
+      }
     }
+    // For permanent orders, any logged-in user can review (no restriction)
 
     // Determine the specialist ID based on who is reviewing
     let specialistId = createReviewDto.specialistId;
-    if (isClient && !specialistId) {
-      // If client is reviewing, get the hired specialist
+    if (order.orderType === 'permanent') {
+      // For permanent orders, specialistId is optional (can be undefined)
+      // The review is about the order/service itself, not a specific specialist
+    } else if (isClient && !specialistId) {
+      // If client is reviewing a one-time order, get the hired specialist
       const acceptedProposal = await this.getAcceptedProposal(order.id);
       specialistId = acceptedProposal?.userId;
     } else if (isHiredSpecialist) {

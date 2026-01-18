@@ -119,9 +119,17 @@ export class MediaFilesService {
 
     // Check if user is the owner of the order or the uploader
     if (
+      mediaFile.Order &&
       mediaFile.Order.clientId !== userId &&
       mediaFile.uploadedBy !== userId
     ) {
+      throw new BadRequestException(
+        "You are not authorized to delete this media file"
+      );
+    }
+
+    // If no order, check if user is the uploader
+    if (!mediaFile.Order && mediaFile.uploadedBy !== userId) {
       throw new BadRequestException(
         "You are not authorized to delete this media file"
       );
@@ -145,6 +153,171 @@ export class MediaFilesService {
           error
         );
         // Don't throw error - file is already deleted from DB
+      }
+    }
+
+    return deletedMediaFile;
+  }
+
+  /**
+   * Create media file for market
+   */
+  async createMarketMediaFile(
+    marketId: number,
+    fileName: string,
+    fileUrl: string,
+    fileType: string,
+    mimeType: string,
+    fileSize: number,
+    uploadedBy: number
+  ) {
+    // Check if market exists
+    const market = await this.prisma.market.findUnique({
+      where: { id: marketId },
+    });
+
+    if (!market) {
+      throw new NotFoundException(`Market with ID ${marketId} not found`);
+    }
+
+    // Check if user exists
+    if (uploadedBy !== 1) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: uploadedBy },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`User with ID ${uploadedBy} not found`);
+      }
+    }
+
+    return this.prisma.marketMediaFile.create({
+      data: {
+        marketId,
+        fileName,
+        fileUrl,
+        fileType,
+        mimeType,
+        fileSize,
+        uploadedBy,
+      },
+      include: {
+        Market: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Get media files for a market
+   */
+  async getMarketMediaFiles(marketId: number) {
+    return this.prisma.marketMediaFile.findMany({
+      where: { marketId },
+      include: {
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }
+
+  /**
+   * Get market media file by ID
+   */
+  async getMarketMediaFileById(id: number) {
+    return this.prisma.marketMediaFile.findUnique({
+      where: { id },
+      include: {
+        Market: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Delete market media file
+   */
+  async deleteMarketMediaFile(mediaFileId: number, userId: number) {
+    const mediaFile = await this.prisma.marketMediaFile.findUnique({
+      where: { id: mediaFileId },
+      include: {
+        Market: true,
+      },
+    });
+
+    if (!mediaFile) {
+      throw new NotFoundException(
+        `Market media file with ID ${mediaFileId} not found`
+      );
+    }
+
+    // Check if user has permission (market owner, admin, or uploader)
+    const member = await this.prisma.marketMember.findFirst({
+      where: {
+        marketId: mediaFile.marketId,
+        userId: userId,
+        isActive: true,
+        status: "accepted",
+        role: {
+          in: ["owner", "admin"],
+        },
+      },
+    });
+
+    if (
+      !member &&
+      mediaFile.Market.createdBy !== userId &&
+      mediaFile.uploadedBy !== userId
+    ) {
+      throw new BadRequestException(
+        "You are not authorized to delete this media file"
+      );
+    }
+
+    // Delete from database first
+    const deletedMediaFile = await this.prisma.marketMediaFile.delete({
+      where: { id: mediaFileId },
+    });
+
+    // Delete from Vercel Blob
+    if (deletedMediaFile.fileUrl) {
+      try {
+        await this.vercelBlobService.deleteFile(deletedMediaFile.fileUrl);
+      } catch (error) {
+        console.error(
+          `Failed to delete file from Vercel Blob: ${deletedMediaFile.fileUrl}`,
+          error
+        );
       }
     }
 

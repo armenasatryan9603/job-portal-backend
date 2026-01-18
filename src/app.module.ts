@@ -28,6 +28,9 @@ import { AdminModule } from "./admin/admin.module";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
 import { ExchangeRateModule } from "./exchange-rate/exchange-rate.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { MarketsModule } from "./markets/markets.module";
+import { MarketReviewsModule } from "./market-reviews/market-reviews.module";
+import { MarketRolesModule } from "./market-roles/market-roles.module";
 
 @Module({
   imports: [
@@ -57,6 +60,9 @@ import { BookingsModule } from "./bookings/bookings.module";
     SubscriptionsModule,
     ExchangeRateModule,
     BookingsModule,
+    MarketsModule,
+    MarketReviewsModule,
+    MarketRolesModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

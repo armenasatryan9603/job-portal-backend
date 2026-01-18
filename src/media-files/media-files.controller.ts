@@ -187,4 +187,159 @@ export class MediaFilesController {
   async deleteMediaFile(@Param("id", ParseIntPipe) id: number, @Request() req) {
     return this.mediaFilesService.deleteMediaFile(id, req.user.userId);
   }
+
+  /**
+   * Market media file endpoints
+   */
+
+  @Post("markets/presigned-url")
+  async generateMarketPresignedUrl(
+    @Request() req,
+    @Body()
+    body: {
+      fileName: string;
+      mimeType: string;
+      marketId: number;
+    }
+  ) {
+    try {
+      const { uploadUrl, fileUrl, fileName } =
+        await this.vercelBlobService.generateSignedUploadUrl(
+          body.fileName,
+          body.mimeType,
+          body.marketId
+        );
+
+      return {
+        uploadUrl,
+        fileUrl,
+        fileName,
+        marketId: body.marketId,
+      };
+    } catch (error) {
+      console.error("Error generating presigned URL:", error);
+      throw new BadRequestException("Failed to generate upload URL");
+    }
+  }
+
+  @Post("markets/upload")
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      fileFilter: (req, file, callback) => {
+        const allowedMimes = [
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+          "video/mp4",
+          "video/mov",
+          "video/avi",
+          "video/quicktime",
+        ];
+
+        if (allowedMimes.includes(file.mimetype)) {
+          callback(null, true);
+        } else {
+          callback(new BadRequestException("File type not supported"), false);
+        }
+      },
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB limit
+      },
+    })
+  )
+  async uploadMarketMediaFile(@Request() req, @UploadedFile() file: any) {
+    if (!file) {
+      throw new BadRequestException("No file uploaded");
+    }
+
+    const marketId = req.body?.marketId
+      ? parseInt(req.body.marketId.toString())
+      : null;
+    const fileType = req.body?.fileType
+      ? req.body.fileType.toString()
+      : file.mimetype.startsWith("image/")
+        ? "image"
+        : "video";
+
+    const pathPrefix = marketId ? `markets/${marketId}` : "temp";
+    const uniqueName = `${pathPrefix}/${uuidv4()}${extname(file.originalname)}`;
+
+    const fileUrl = await this.vercelBlobService.uploadFile(
+      file.buffer,
+      uniqueName,
+      file.mimetype,
+      marketId || 0
+    );
+
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    if (marketId) {
+      return this.mediaFilesService.createMarketMediaFile(
+        marketId,
+        file.originalname,
+        fileUrl,
+        fileType,
+        file.mimetype,
+        file.size,
+        userId
+      );
+    }
+
+    return {
+      fileUrl,
+      fileName: file.originalname,
+      fileType,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+    };
+  }
+
+  @Post("markets")
+  async createMarketMediaFile(
+    @Request() req,
+    @Body()
+    body: {
+      marketId: number;
+      fileName: string;
+      fileUrl: string;
+      fileType: string;
+      mimeType: string;
+      fileSize: number;
+    }
+  ) {
+    return this.mediaFilesService.createMarketMediaFile(
+      body.marketId,
+      body.fileName,
+      body.fileUrl,
+      body.fileType,
+      body.mimeType,
+      body.fileSize,
+      req.user?.userId || 1
+    );
+  }
+
+  @Get("markets/:marketId")
+  async getMarketMediaFiles(@Param("marketId", ParseIntPipe) marketId: number) {
+    return this.mediaFilesService.getMarketMediaFiles(marketId);
+  }
+
+  @Get("markets/file/:id")
+  async getMarketMediaFileById(@Param("id", ParseIntPipe) id: number) {
+    return this.mediaFilesService.getMarketMediaFileById(id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete("markets/:id")
+  async deleteMarketMediaFile(
+    @Param("id", ParseIntPipe) id: number,
+    @Request() req
+  ) {
+    return this.mediaFilesService.deleteMarketMediaFile(id, req.user.userId);
+  }
 }

@@ -652,4 +652,280 @@ export class SubscriptionsService {
       totalPages: Math.ceil(total / limit),
     };
   }
+
+  /**
+   * Purchase subscription for a market
+   */
+  async purchaseMarketSubscription(
+    userId: number,
+    marketId: number,
+    purchaseDto: PurchaseSubscriptionDto
+  ) {
+    try {
+      // Verify market exists and user has permission
+      const market = await this.prisma.market.findUnique({
+        where: { id: marketId },
+        include: {
+          Creator: true,
+        },
+      });
+
+      if (!market) {
+        throw new NotFoundException(`Market with ID ${marketId} not found`);
+      }
+
+      // Check if user is market owner or admin
+      const member = await this.prisma.marketMember.findFirst({
+        where: {
+          marketId: marketId,
+          userId: userId,
+          isActive: true,
+          status: "accepted",
+          role: {
+            in: ["owner", "admin"],
+          },
+        },
+      });
+
+      if (!member && market.createdBy !== userId) {
+        throw new BadRequestException(
+          "Only market owners and admins can purchase subscriptions for markets"
+        );
+      }
+
+      // Get the plan
+      const plan = await this.prisma.subscriptionPlan.findUnique({
+        where: { id: purchaseDto.planId },
+      });
+
+      if (!plan) {
+        throw new NotFoundException(
+          `Subscription plan with ID ${purchaseDto.planId} not found`
+        );
+      }
+
+      if (!plan.isActive) {
+        throw new BadRequestException(
+          "This subscription plan is not available"
+        );
+      }
+
+      // Check if market already has an active subscription
+      const activeSubscription = await this.getMarketActiveSubscription(
+        marketId
+      );
+      if (activeSubscription) {
+        const daysRemaining = Math.ceil(
+          (new Date(activeSubscription.endDate).getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24)
+        );
+
+        if (
+          daysRemaining > 7 &&
+          activeSubscription.subscriptionPlanId !== purchaseDto.planId
+        ) {
+          throw new BadRequestException(
+            "This market already has an active subscription. Please cancel it first or wait for it to expire."
+          );
+        }
+      }
+
+      // Get user's credit balance
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { creditBalance: true, currency: true },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Convert subscription price to USD
+      const planCurrency = plan.currency || "USD";
+      let subscriptionPriceUSD = plan.price;
+      let exchangeRate = 1;
+      let originalAmount = plan.price;
+
+      if (planCurrency.toUpperCase() !== this.BASE_CURRENCY) {
+        try {
+          exchangeRate = await this.exchangeRateService.getExchangeRate(
+            planCurrency.toUpperCase(),
+            this.BASE_CURRENCY
+          );
+          subscriptionPriceUSD = plan.price * exchangeRate;
+          subscriptionPriceUSD = Math.round(subscriptionPriceUSD * 100) / 100;
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to convert subscription price: ${error.message}`
+          );
+          exchangeRate = 1;
+        }
+      }
+
+      // Check if user has enough credits
+      if (user.creditBalance < subscriptionPriceUSD) {
+        throw new BadRequestException({
+          code: "INSUFFICIENT_CREDITS",
+          message: "Insufficient credits to purchase this subscription",
+          required: subscriptionPriceUSD,
+          available: user.creditBalance,
+        });
+      }
+
+      // Purchase subscription with credits
+      return await this.purchaseMarketSubscriptionWithCredits(
+        userId,
+        marketId,
+        plan,
+        subscriptionPriceUSD,
+        originalAmount,
+        planCurrency,
+        exchangeRate
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error in purchaseMarketSubscription: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Purchase market subscription using credits
+   */
+  private async purchaseMarketSubscriptionWithCredits(
+    userId: number,
+    marketId: number,
+    plan: any,
+    priceUSD: number,
+    originalAmount: number,
+    originalCurrency: string,
+    exchangeRate: number
+  ) {
+    return await this.prisma.$transaction(async (tx) => {
+      // Deduct credits
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          creditBalance: { decrement: priceUSD },
+        },
+        select: { creditBalance: true },
+      });
+
+      // Calculate end date
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + plan.durationDays);
+
+      // Create market subscription
+      const subscription = await tx.marketSubscription.create({
+        data: {
+          marketId: marketId,
+          subscriptionPlanId: plan.id,
+          userId: userId,
+          status: "active",
+          startDate: startDate,
+          endDate: endDate,
+        },
+        include: {
+          SubscriptionPlan: true,
+          Market: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      // Log credit transaction
+      await this.creditTransactionsService.logTransaction({
+        userId: userId,
+        amount: -priceUSD,
+        balanceAfter: updatedUser.creditBalance,
+        type: "market_subscription",
+        status: "completed",
+        description: `Market subscription purchase: ${plan.name}`,
+        referenceId: subscription.id.toString(),
+        referenceType: "market_subscription",
+        metadata: {
+          marketId: marketId,
+          planId: plan.id,
+          planName: plan.name,
+          durationDays: plan.durationDays,
+          originalAmount: originalAmount,
+          originalCurrency: originalCurrency,
+          convertedAmount: priceUSD,
+          exchangeRate: exchangeRate,
+        },
+        tx,
+      });
+
+      this.logger.log(
+        `Market subscription purchased: Market ${marketId}, Plan ${plan.id}, User ${userId}, Price ${priceUSD} USD`
+      );
+
+      return {
+        ...subscription,
+        Plan: this.transformPlanForLanguage(subscription.SubscriptionPlan, "en"),
+      };
+    });
+  }
+
+  /**
+   * Get market's active subscription
+   */
+  async getMarketActiveSubscription(marketId: number) {
+    const now = new Date();
+    const subscription = await this.prisma.marketSubscription.findFirst({
+      where: {
+        marketId: marketId,
+        status: "active",
+        endDate: { gt: now },
+      },
+      include: {
+        SubscriptionPlan: true,
+      },
+      orderBy: {
+        endDate: "desc",
+      },
+    });
+
+    if (!subscription) {
+      return null;
+    }
+
+    return subscription;
+  }
+
+  /**
+   * Check if market has an active subscription
+   */
+  async isMarketSubscriptionActive(marketId: number): Promise<boolean> {
+    const subscription = await this.getMarketActiveSubscription(marketId);
+    return subscription !== null;
+  }
+
+  /**
+   * Get market's subscription history
+   */
+  async getMarketSubscriptions(marketId: number) {
+    return this.prisma.marketSubscription.findMany({
+      where: { marketId },
+      include: {
+        SubscriptionPlan: true,
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }
 }

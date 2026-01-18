@@ -221,4 +221,49 @@ export class SubscriptionsController {
       limitNumber,
     );
   }
+
+  /**
+   * Market subscription endpoints
+   */
+
+  /**
+   * Purchase subscription for a market
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post("markets/:marketId/purchase")
+  async purchaseMarketSubscription(
+    @Param("marketId", ParseIntPipe) marketId: number,
+    @Request() req,
+    @Body() purchaseDto: PurchaseSubscriptionDto,
+  ) {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException("User ID not found in token");
+    }
+    return this.subscriptionsService.purchaseMarketSubscription(
+      userId,
+      marketId,
+      purchaseDto,
+    );
+  }
+
+  /**
+   * Get market's active subscription
+   */
+  @Get("markets/:marketId/active")
+  async getMarketActiveSubscription(
+    @Param("marketId", ParseIntPipe) marketId: number,
+  ) {
+    return this.subscriptionsService.getMarketActiveSubscription(marketId);
+  }
+
+  /**
+   * Get market's subscription history
+   */
+  @Get("markets/:marketId/subscriptions")
+  async getMarketSubscriptions(
+    @Param("marketId", ParseIntPipe) marketId: number,
+  ) {
+    return this.subscriptionsService.getMarketSubscriptions(marketId);
+  }
 }

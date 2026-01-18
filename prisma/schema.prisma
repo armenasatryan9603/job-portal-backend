@@ -61,6 +61,11 @@ model User {
   Subscriptions            UserSubscription[]
   SubscriptionTransactions SubscriptionTransaction[]
   Bookings                 Booking[]                 @relation("ClientBookings")
+  MarketMembers            MarketMember[]
+  CreatedMarkets           Market[]                  @relation("MarketCreator")
+  MarketReviews            MarketReview[]
+  MarketMediaFiles         MarketMediaFile[]         @relation("MarketMediaUploader")
+  MarketSubscriptions      MarketSubscription[]
 }
 
 model Category {
@@ -208,6 +213,7 @@ model Order {
   SavedBy               SavedOrder[]
   OrderSkills           OrderSkill[]
   Bookings              Booking[]
+  Markets               MarketOrder[]
 
   @@index([status])
   @@index([orderType])
@@ -262,7 +268,7 @@ model Review {
 
 model MediaFile {
   id         Int      @id @default(autoincrement())
-  orderId    Int
+  orderId    Int?
   fileName   String
   fileUrl    String
   fileType   String
@@ -270,7 +276,7 @@ model MediaFile {
   fileSize   Int
   uploadedBy Int
   createdAt  DateTime @default(now())
-  Order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order      Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   User       User     @relation("MediaUploader", fields: [uploadedBy], references: [id])
   BannerFor  Order[]  @relation("BannerImage")
 }
@@ -657,6 +663,7 @@ model SubscriptionPlan {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   Subscriptions UserSubscription[]
+  MarketSubscriptions MarketSubscription[]
 
   @@index([isActive])
   @@index([price])
@@ -719,4 +726,144 @@ model Booking {
   @@index([clientId])
   @@index([scheduledDate])
   @@index([status])
+}
+
+model Market {
+  id            Int                  @id @default(autoincrement())
+  name          String
+  nameEn        String?
+  nameRu        String?
+  nameHy        String?
+  description   String?
+  descriptionEn String?
+  descriptionRu String?
+  descriptionHy String?
+  location      String?
+  status        String               @default("draft") // draft, pending_review, active, closed, rejected
+  verified      Boolean               @default(false)
+  bannerImageId Int? // References MarketMediaFile.id
+  weeklySchedule        Json? // Recurring weekly schedule for business hours (when service is open/closed)
+  createdBy     Int
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  joinDate      DateTime             @default(now())
+  rejectionReason String?
+  Creator       User                 @relation("MarketCreator", fields: [createdBy], references: [id])
+  BannerImage   MarketMediaFile?      @relation("MarketBannerImage", fields: [bannerImageId], references: [id])
+  Members       MarketMember[]
+  Orders        MarketOrder[]
+  Reviews       MarketReview[]
+  MediaFiles    MarketMediaFile[]
+  Roles         MarketRole[]
+  Subscriptions MarketSubscription[]
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([verified])
+  @@index([location])
+}
+
+model MarketMember {
+  id        Int      @id @default(autoincrement())
+  marketId  Int
+  userId    Int
+  role      String   @default("member") // References MarketRole or custom role name
+  status    String   @default("pending") // pending, accepted, rejected
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  Market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, userId])
+  @@index([marketId])
+  @@index([userId])
+  @@index([status])
+  @@index([isActive])
+}
+
+model MarketRole {
+  id          Int      @id @default(autoincrement())
+  marketId   Int?
+  name        String
+  nameEn      String?
+  nameRu      String?
+  nameHy      String?
+  permissions Json?   // Role permissions stored as JSON
+  isDefault   Boolean  @default(false) // true for global default roles
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Market      Market?  @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId])
+  @@index([isDefault])
+}
+
+model MarketReview {
+  id         Int      @id @default(autoincrement())
+  marketId   Int
+  reviewerId Int
+  rating     Int      // 1-5
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt DateTime  @updatedAt
+  Market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  Reviewer   User     @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([marketId])
+  @@index([reviewerId])
+  @@index([rating])
+}
+
+model MarketOrder {
+  id        Int      @id @default(autoincrement())
+  marketId  Int
+  orderId   Int
+  addedAt   DateTime @default(now())
+  Market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, orderId])
+  @@index([marketId])
+  @@index([orderId])
+}
+
+model MarketMediaFile {
+  id         Int      @id @default(autoincrement())
+  marketId   Int
+  fileName   String
+  fileUrl    String
+  fileType   String
+  mimeType   String
+  fileSize   Int
+  uploadedBy Int
+  createdAt  DateTime @default(now())
+  Market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  User       User     @relation("MarketMediaUploader", fields: [uploadedBy], references: [id])
+  BannerFor  Market[]  @relation("MarketBannerImage")
+
+  @@index([marketId])
+  @@index([uploadedBy])
+  @@index([createdAt])
+}
+
+model MarketSubscription {
+  id               Int               @id @default(autoincrement())
+  marketId         Int
+  subscriptionPlanId Int
+  userId           Int
+  status           String            @default("active") // active, expired, cancelled
+  startDate        DateTime          @default(now())
+  endDate          DateTime
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  Market           Market             @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  SubscriptionPlan SubscriptionPlan  @relation(fields: [subscriptionPlanId], references: [id])
+  User             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([marketId])
+  @@index([userId])
+  @@index([status])
+  @@index([endDate])
+  @@index([marketId, status])
 }
