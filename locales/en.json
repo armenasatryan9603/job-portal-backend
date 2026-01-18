@@ -1382,6 +1382,7 @@
   "detachOrder": "Detach Order",
   "attachedOrders": "Attached Orders",
   "noOrdersAttached": "No orders attached",
+  "findServices": "Find Services",
   "attachPermanentOrdersToService": "Attach your permanent orders to this service",
   "searchOrders": "Search orders...",
   "alreadyAttached": "Already attached",

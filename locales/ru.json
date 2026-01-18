@@ -1382,6 +1382,7 @@
   "attach": "Прикрепить",
   "detachOrder": "Открепить заказ",
   "attachedOrders": "Прикрепленные заказы",
+  "findServices": "Найти сервисы",
   "noOrdersAttached": "Нет прикрепленных заказов",
   "attachPermanentOrdersToService": "Прикрепите свои постоянные заказы к этому сервису",
   "searchOrders": "Поиск заказов...",
