@@ -178,42 +178,43 @@ model UserCategory {
 }
 
 model Order {
-  id                    Int                  @id @default(autoincrement())
-  clientId              Int
-  categoryId            Int?
-  title                 String?
-  description           String?
-  budget                Float?
-  currency              String               @default("AMD")
-  rateUnit              String               @default("per_project")
-  availableDates        String[]             @default([])
-  location              String?
-  status                String               @default("open")
-  createdAt             DateTime             @default(now())
-  bannerImageId         Int?
-  titleEn               String?
-  titleRu               String?
-  titleHy               String?
-  descriptionEn         String?
-  descriptionRu         String?
-  descriptionHy         String?
-  rejectionReason       String?
-  orderType             String               @default("one_time") // "one_time" or "permanent"
-  workDurationPerClient Int? // Duration in minutes for each appointment
-  weeklySchedule        Json? // Recurring weekly schedule for permanent orders
-  Conversations         Conversation[]
-  MediaFiles            MediaFile[]
-  BannerImage           MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
-  Client                User                 @relation("ClientOrders", fields: [clientId], references: [id])
-  Category              Category?            @relation(fields: [categoryId], references: [id])
-  Proposals             OrderProposal[]
-  questions             OrderQuestion[]
-  Reviews               Review[]
-  ChangeHistory         OrderChangeHistory[]
-  SavedBy               SavedOrder[]
-  OrderSkills           OrderSkill[]
-  Bookings              Booking[]
-  Markets               MarketOrder[]
+  id                      Int                  @id @default(autoincrement())
+  clientId                Int
+  categoryId              Int?
+  title                   String?
+  description             String?
+  budget                  Float?
+  currency                String               @default("AMD")
+  rateUnit                String               @default("per_project")
+  availableDates          String[]             @default([])
+  location                String?
+  status                  String               @default("open")
+  createdAt               DateTime             @default(now())
+  bannerImageId           Int?
+  titleEn                 String?
+  titleRu                 String?
+  titleHy                 String?
+  descriptionEn           String?
+  descriptionRu           String?
+  descriptionHy           String?
+  rejectionReason         String?
+  orderType               String               @default("one_time") // "one_time" or "permanent"
+  workDurationPerClient   Int? // Duration in minutes for each appointment
+  weeklySchedule          Json? // Recurring weekly schedule for permanent orders
+  checkinRequiresApproval Boolean              @default(false) // If true, bookings require owner approval
+  Conversations           Conversation[]
+  MediaFiles              MediaFile[]
+  BannerImage             MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
+  Client                  User                 @relation("ClientOrders", fields: [clientId], references: [id])
+  Category                Category?            @relation(fields: [categoryId], references: [id])
+  Proposals               OrderProposal[]
+  questions               OrderQuestion[]
+  Reviews                 Review[]
+  ChangeHistory           OrderChangeHistory[]
+  SavedBy                 SavedOrder[]
+  OrderSkills             OrderSkill[]
+  Bookings                Booking[]
+  Markets                 MarketOrder[]
 
   @@index([status])
   @@index([orderType])
@@ -645,24 +646,24 @@ model OrderSkill {
 }
 
 model SubscriptionPlan {
-  id            Int                @id @default(autoincrement())
-  name          String
-  nameEn        String?
-  nameRu        String?
-  nameHy        String?
-  description   String?
-  descriptionEn String?
-  descriptionRu String?
-  descriptionHy String?
-  price         Float
-  currency      String             @default("AMD")
-  durationDays  Int // Duration in days (30 for monthly, 365 for yearly)
-  isRecurring   Boolean            @default(false) // Whether this plan supports auto-renewal
-  features      Json? // Features included in this plan (e.g., unlimited applications, priority support)
-  isActive      Boolean            @default(true)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  Subscriptions UserSubscription[]
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  nameEn              String?
+  nameRu              String?
+  nameHy              String?
+  description         String?
+  descriptionEn       String?
+  descriptionRu       String?
+  descriptionHy       String?
+  price               Float
+  currency            String               @default("AMD")
+  durationDays        Int // Duration in days (30 for monthly, 365 for yearly)
+  isRecurring         Boolean              @default(false) // Whether this plan supports auto-renewal
+  features            Json? // Features included in this plan (e.g., unlimited applications, priority support)
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  Subscriptions       UserSubscription[]
   MarketSubscriptions MarketSubscription[]
 
   @@index([isActive])
@@ -716,7 +717,7 @@ model Booking {
   scheduledDate String // Date string in ISO format
   startTime     String // Start time (HH:MM format)
   endTime       String // End time (HH:MM format)
-  status        String   @default("confirmed") // confirmed, completed, cancelled
+  status        String   @default("confirmed") // pending, confirmed, completed, cancelled
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   Order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -729,33 +730,33 @@ model Booking {
 }
 
 model Market {
-  id            Int                  @id @default(autoincrement())
-  name          String
-  nameEn        String?
-  nameRu        String?
-  nameHy        String?
-  description   String?
-  descriptionEn String?
-  descriptionRu String?
-  descriptionHy String?
-  location      String?
-  status        String               @default("draft") // draft, pending_review, active, closed, rejected
-  verified      Boolean               @default(false)
-  bannerImageId Int? // References MarketMediaFile.id
-  weeklySchedule        Json? // Recurring weekly schedule for business hours (when service is open/closed)
-  createdBy     Int
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  joinDate      DateTime             @default(now())
+  id              Int                  @id @default(autoincrement())
+  name            String
+  nameEn          String?
+  nameRu          String?
+  nameHy          String?
+  description     String?
+  descriptionEn   String?
+  descriptionRu   String?
+  descriptionHy   String?
+  location        String?
+  status          String               @default("draft") // draft, pending_review, active, closed, rejected
+  verified        Boolean              @default(false)
+  bannerImageId   Int? // References MarketMediaFile.id
+  weeklySchedule  Json? // Recurring weekly schedule for business hours (when service is open/closed)
+  createdBy       Int
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  joinDate        DateTime             @default(now())
   rejectionReason String?
-  Creator       User                 @relation("MarketCreator", fields: [createdBy], references: [id])
-  BannerImage   MarketMediaFile?      @relation("MarketBannerImage", fields: [bannerImageId], references: [id])
-  Members       MarketMember[]
-  Orders        MarketOrder[]
-  Reviews       MarketReview[]
-  MediaFiles    MarketMediaFile[]
-  Roles         MarketRole[]
-  Subscriptions MarketSubscription[]
+  Creator         User                 @relation("MarketCreator", fields: [createdBy], references: [id])
+  BannerImage     MarketMediaFile?     @relation("MarketBannerImage", fields: [bannerImageId], references: [id])
+  Members         MarketMember[]
+  Orders          MarketOrder[]
+  Reviews         MarketReview[]
+  MediaFiles      MarketMediaFile[]
+  Roles           MarketRole[]
+  Subscriptions   MarketSubscription[]
 
   @@index([status])
   @@index([createdBy])
@@ -784,12 +785,12 @@ model MarketMember {
 
 model MarketRole {
   id          Int      @id @default(autoincrement())
-  marketId   Int?
+  marketId    Int?
   name        String
   nameEn      String?
   nameRu      String?
   nameHy      String?
-  permissions Json?   // Role permissions stored as JSON
+  permissions Json? // Role permissions stored as JSON
   isDefault   Boolean  @default(false) // true for global default roles
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -803,10 +804,10 @@ model MarketReview {
   id         Int      @id @default(autoincrement())
   marketId   Int
   reviewerId Int
-  rating     Int      // 1-5
+  rating     Int // 1-5
   comment    String?
   createdAt  DateTime @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt  DateTime @updatedAt
   Market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
   Reviewer   User     @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
 
@@ -816,12 +817,12 @@ model MarketReview {
 }
 
 model MarketOrder {
-  id        Int      @id @default(autoincrement())
-  marketId  Int
-  orderId   Int
-  addedAt   DateTime @default(now())
-  Market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
-  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id       Int      @id @default(autoincrement())
+  marketId Int
+  orderId  Int
+  addedAt  DateTime @default(now())
+  Market   Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  Order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([marketId, orderId])
   @@index([marketId])
@@ -840,7 +841,7 @@ model MarketMediaFile {
   createdAt  DateTime @default(now())
   Market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
   User       User     @relation("MarketMediaUploader", fields: [uploadedBy], references: [id])
-  BannerFor  Market[]  @relation("MarketBannerImage")
+  BannerFor  Market[] @relation("MarketBannerImage")
 
   @@index([marketId])
   @@index([uploadedBy])
@@ -848,18 +849,18 @@ model MarketMediaFile {
 }
 
 model MarketSubscription {
-  id               Int               @id @default(autoincrement())
-  marketId         Int
+  id                 Int              @id @default(autoincrement())
+  marketId           Int
   subscriptionPlanId Int
-  userId           Int
-  status           String            @default("active") // active, expired, cancelled
-  startDate        DateTime          @default(now())
-  endDate          DateTime
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  Market           Market             @relation(fields: [marketId], references: [id], onDelete: Cascade)
-  SubscriptionPlan SubscriptionPlan  @relation(fields: [subscriptionPlanId], references: [id])
-  User             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             Int
+  status             String           @default("active") // active, expired, cancelled
+  startDate          DateTime         @default(now())
+  endDate            DateTime
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  Market             Market           @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  SubscriptionPlan   SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [id])
+  User               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([marketId])
   @@index([userId])

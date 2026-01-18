@@ -45,6 +45,7 @@ export class OrdersController {
       orderType?: string;
       workDurationPerClient?: number;
       weeklySchedule?: any;
+      checkinRequiresApproval?: boolean;
     }
   ) {
     // Validate user is authenticated
@@ -68,7 +69,8 @@ export class OrdersController {
       body.questions,
       body.orderType || "one_time",
       body.workDurationPerClient,
-      body.weeklySchedule
+      body.weeklySchedule,
+      body.checkinRequiresApproval ?? false
     );
   }
 
@@ -100,6 +102,7 @@ export class OrdersController {
       orderType?: string;
       workDurationPerClient?: number;
       weeklySchedule?: any;
+      checkinRequiresApproval?: boolean;
     }
   ) {
     return this.ordersService.createOrderWithMedia(
@@ -119,7 +122,8 @@ export class OrdersController {
       body.questions,
       body.orderType || "one_time",
       body.workDurationPerClient,
-      body.weeklySchedule
+      body.weeklySchedule,
+      body.checkinRequiresApproval ?? false
     );
   }
 

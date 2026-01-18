@@ -129,10 +129,14 @@ export class BookingsService {
         },
       },
     });
-
+    
     if (!order) {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
+
+    // Determine booking status based on approval requirement
+    const requiresApproval = order.checkinRequiresApproval ?? false;
+    const bookingStatus = requiresApproval ? "pending" : "confirmed";
 
     if (order.orderType !== "permanent") {
       throw new BadRequestException(
@@ -175,7 +179,7 @@ export class BookingsService {
         scheduledDate,
         startTime,
         endTime,
-        status: "confirmed",
+        status: bookingStatus,
       },
       include: {
         Order: {
@@ -189,11 +193,16 @@ export class BookingsService {
 
     // Send notification to the specialist (order creator)
     try {
+      const notificationTitle = requiresApproval ? "New Booking Request" : "New Booking";
+      const notificationMessage = requiresApproval
+        ? `${booking.Client.name} has requested a booking for ${scheduledDate} from ${startTime} to ${endTime}. Approval required.`
+        : `${booking.Client.name} has checked in for ${scheduledDate} from ${startTime} to ${endTime}`;
+      
       await this.notificationsService.createNotificationWithPush(
         order.clientId,
         "new_booking",
-        "New Booking",
-        `${booking.Client.name} has checked in for ${scheduledDate} from ${startTime} to ${endTime}`,
+        notificationTitle,
+        notificationMessage,
         {
           bookingId: booking.id,
           orderId: order.id,
@@ -201,6 +210,7 @@ export class BookingsService {
           scheduledDate,
           startTime,
           endTime,
+          status: bookingStatus,
         }
       );
 
@@ -516,11 +526,29 @@ export class BookingsService {
       );
     }
 
-    const validStatuses = ["confirmed", "completed", "cancelled"];
+    const validStatuses = ["pending", "confirmed", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
       throw new BadRequestException(
         `Invalid status. Must be one of: ${validStatuses.join(", ")}`
       );
+    }
+    
+    // Validate status transitions
+    const currentStatus = booking.status;
+    if (currentStatus === "pending") {
+      // From pending, can only go to confirmed (approve) or cancelled (reject)
+      if (status !== "confirmed" && status !== "cancelled") {
+        throw new BadRequestException(
+          "Pending bookings can only be approved (confirmed) or rejected (cancelled)"
+        );
+      }
+    } else if (currentStatus === "confirmed") {
+      // From confirmed, cannot go back to pending
+      if (status === "pending") {
+        throw new BadRequestException(
+          "Cannot change confirmed booking back to pending"
+        );
+      }
     }
 
     return this.prisma.booking.update({

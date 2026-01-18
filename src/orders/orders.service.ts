@@ -228,7 +228,8 @@ export class OrdersService {
     questions?: string[],
     orderType: string = "one_time",
     workDurationPerClient?: number,
-    weeklySchedule?: any
+    weeklySchedule?: any,
+    checkinRequiresApproval: boolean = false
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
@@ -422,6 +423,7 @@ export class OrdersService {
             : orderType === "permanent" && workDurationPerClient
               ? this.generateWeeklySchedule(workDurationPerClient)
               : undefined,
+        checkinRequiresApproval: orderType === "permanent" ? checkinRequiresApproval : false,
         ...(finalSkillIds.length > 0
           ? {
               OrderSkills: {
@@ -875,6 +877,7 @@ export class OrdersService {
       workDurationPerClient?: number;
       weeklySchedule?: any;
       availableDates?: string[];
+      checkinRequiresApproval?: boolean;
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -1795,7 +1798,8 @@ export class OrdersService {
     questions?: string[],
     orderType: string = "one_time",
     workDurationPerClient?: number,
-    weeklySchedule?: any
+    weeklySchedule?: any,
+    checkinRequiresApproval: boolean = false
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
@@ -1962,6 +1966,7 @@ export class OrdersService {
               : orderType === "permanent" && workDurationPerClient
                 ? this.generateWeeklySchedule(workDurationPerClient)
                 : undefined,
+          checkinRequiresApproval: orderType === "permanent" ? checkinRequiresApproval : false,
           ...(finalSkillIds.length > 0
             ? {
                 OrderSkills: {
