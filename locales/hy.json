@@ -1260,7 +1260,7 @@
   "subscriptionRequiredForPermanentDesc": "Մշտական պատվերներ հրապարակելու համար անհրաժեշտ է ակտիվ բաժանորդագրություն:",
   "workDurationPerClient": "Աշխատանքի Տևողությունը Հաճախորդի Համար",
   "workDurationPerClientHint": "Որքան ժամանակ է տևում յուրաքանչյուր նստաշրջանը/հանդիպումը: (րոպեներով)",
-  "minutesPerSession": "րոպե յուրաքանչյուր նստաշրջանի համար",
+  "minutesPerSession": "րոպե սեանսի համար",
   "hoursPerSession": "ժամ յուրաքանչյուր նստաշրջանի համար",
   "checkIn": "Գրանցվել",
   "checkInSuccess": "Հաջողությամբ գրանցվեց:",
