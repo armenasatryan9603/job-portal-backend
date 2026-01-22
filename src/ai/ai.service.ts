@@ -53,86 +53,59 @@ export class AIService {
     }
 
     try {
-      const systemPrompt = `You are an expert multilingual text enhancement assistant specializing in Armenian, Russian, and English. You must accurately convert Armenian transliteration to proper Armenian script and translate to all three languages.
+      const systemPrompt = `You are an expert multilingual text enhancement assistant specializing in Armenian, Russian, and English. Your task is to detect the source language, convert any transliteration to proper native scripts, and provide accurate translations to all three languages.
 
-STEP-BY-STEP PROCESS:
+CRITICAL: LANGUAGE DETECTION IS THE FIRST AND MOST IMPORTANT STEP!
 
-1. IDENTIFY TRANSLITERATION PATTERNS:
-   - Recognize Armenian words written in Latin characters
-   - Common patterns: "patuhanneri" = պատուհանների (windows), "ruchkan" = ռուչկան (handle/knob), "chaynik" = չայնիկ (kettle)
-   - Pay attention to word roots and context to avoid confusion
+PROCESS:
 
-2. ANALYZE CONTEXT CAREFULLY:
-   - "patuhanneri/patuhannery" = պատուհաններ (WINDOWS) - NOT door handles
-   - "ruchkan/ruchka" = ռուչկա (HANDLE/KNOB) - can be door handle, window handle, or any handle
-   - "maqrum" = մաքրում (cleaning)
-   - "pakvum/bacvum" = բացվում (opening) or փակվում (closing) depending on context
-   - Use surrounding words to determine correct meaning
+STEP 1: LANGUAGE DETECTION
+   Analyze the input text to determine the source language:
+   - Examine vocabulary, grammar patterns, and linguistic structures
+   - Consider whether text is in native script or transliteration
+   - Identify characteristic linguistic markers for each language:
+     * English: Standard English vocabulary, grammar, and sentence structure
+     * Russian: Russian vocabulary patterns, grammar (cases, verb conjugations), Cyrillic script or Latin transliteration
+     * Armenian: Armenian vocabulary patterns, grammar, Armenian script or Latin transliteration
+   - Pay attention to context clues and surrounding words
+   - Be careful not to confuse transliterated words from different languages
 
-3. CONVERT TO ARMENIAN SCRIPT:
-   - "patuhanneri" → "պատուհանների" (windows - genitive)
-   - "patuhannery" → "պատուհանները" (the windows)
-   - "ruchkan" → "ռուչկան" (handle/knob)
-   - "maqrum" → "մաքրում" (cleaning)
-   - "pakvum" → "փակվում" (closing) or "բացվում" (opening)
-   - "chen" → "չեն" (don't/aren't)
+STEP 2: SCRIPT CONVERSION (if needed)
+   - If Armenian transliteration detected: Convert to proper Armenian script (պատուհաններ, not patuhanneri)
+   - If Russian transliteration detected: Convert to proper Cyrillic script (плёнка, not plyonka)
+   - If already in native script: Keep as is
+   - If English: Keep standard English spelling
 
-4. ENHANCE AND TRANSLATE:
-   - Fix grammar and spelling
-   - Make text professional and clear
-   - Translate accurately to English and Russian
-   - Preserve exact meaning - do not change the subject matter
+STEP 3: CONTEXTUAL UNDERSTANDING
+   - Understand the full context and meaning of the text
+   - Identify the subject matter and intent
+   - Resolve any ambiguities based on context
+   - Preserve the exact meaning and intent
+
+STEP 4: ENHANCEMENT
+   - Fix grammar, spelling, and punctuation errors
+   - Improve clarity and professionalism while maintaining original meaning
+   - Ensure proper formatting and structure
+   - Do not add, remove, or change information
+
+STEP 5: TRANSLATION
+   - Translate accurately to all three languages (English, Russian, Armenian)
+   - Use proper native scripts for each language:
+     * English: Standard Latin alphabet
+     * Russian: Cyrillic script (кириллица)
+     * Armenian: Armenian script (հայերեն)
+   - Maintain natural, idiomatic expressions in each language
+   - Preserve technical terms and domain-specific vocabulary appropriately
+   - Ensure translations are culturally appropriate
 
 CRITICAL RULES:
-- "patuhanneri/patuhannery" ALWAYS means WINDOWS (պատուհաններ), NEVER door handles
-- "ruchkan/ruchka" means HANDLE/KNOB (ռուչկա) - context determines if it's door, window, or other
-- If text mentions "patuhanneri" + "maqrum" = window cleaning
-- If text mentions "patuhanneri" + "pakvum/bacvum" = windows opening/closing
-- NEVER confuse windows (պատուհաններ) with door handles (ռուչկա)
-- For Armenian: ALWAYS use proper Armenian script - NEVER transliteration
-- For Russian: ALWAYS use proper Cyrillic script
-- Preserve exact meaning - do not add or change information
-
-EXAMPLES:
-
-Example 1:
-Input Title: "Patuhanneri maqrum"
-Input Description: "Tan patuhannery chen pakvum"
-Analysis: "patuhanneri" = windows, "maqrum" = cleaning, "patuhannery" = the windows, "chen pakvum" = don't close
-Output:
-- detectedLanguage: "hy"
-- titleEn: "Window Cleaning"
-- titleRu: "Мытье окон"
-- titleHy: "Պատուհանների մաքրում"
-- descriptionEn: "The windows of the house do not close."
-- descriptionRu: "Окна дома не закрываются."
-- descriptionHy: "Տան պատուհանները չեն փակվում։"
-
-Example 2:
-Input Title: "ktrvac chaynik"
-Input Description: "Chayniky ktrvac e"
-Analysis: "ktrvac" = broken, "chaynik" = kettle
-Output:
-- detectedLanguage: "hy"
-- titleEn: "Broken Kettle"
-- titleRu: "Сломанный чайник"
-- titleHy: "Կոտրված չայնիկ"
-- descriptionEn: "The kettle is broken."
-- descriptionRu: "Чайник сломан."
-- descriptionHy: "Չայնիկը կոտրված է։"
-
-Example 3:
-Input Title: "Dran ruchkan"
-Input Description: "Dran ruchkan pchacela. Chi bacvum"
-Analysis: "dran" = that/the, "ruchkan" = handle, "pchacela" = broken, context suggests door handle
-Output:
-- detectedLanguage: "hy"
-- titleEn: "Door Handle"
-- titleRu: "Дверная ручка"
-- titleHy: "Դռան ռուչկա"
-- descriptionEn: "The door handle is broken. It doesn't open."
-- descriptionRu: "Дверная ручка сломана. Она не открывается."
-- descriptionHy: "Դռան ռուչկան փչացել է։ Չի բացվում։"
+- ALWAYS detect the source language FIRST - this determines all subsequent processing
+- Do not assume a language - analyze the text carefully
+- For transliterated text, identify which language it represents before converting
+- Use proper native scripts - never leave transliteration in the output
+- Preserve exact meaning - translations must be accurate, not creative interpretations
+- Maintain professional tone while keeping the original intent
+- All three language outputs must be grammatically correct and natural
 
 Return your response as a JSON object with this exact structure:
 {
@@ -145,21 +118,19 @@ Return your response as a JSON object with this exact structure:
   "descriptionHy": "Armenian description"
 }`;
 
-      const userPrompt = `Analyze this order text step by step:
+      const userPrompt = `Analyze and enhance this order text:
 
 Title: ${title}
 Description: ${description}
 
-STEP 1: Identify each transliterated Armenian word and its meaning:
-- Look for patterns like "patuhanneri" (windows), "ruchkan" (handle), "maqrum" (cleaning), etc.
-- Pay special attention: "patuhanneri/patuhannery" = WINDOWS, NOT door handles
-- Determine if "pakvum/bacvum" means opening or closing based on context
+Follow the process:
+1. Detect the source language (English, Russian, or Armenian) by analyzing vocabulary, grammar, and linguistic patterns
+2. Convert any transliteration to proper native script
+3. Understand the full context and meaning
+4. Enhance grammar, spelling, and clarity while preserving exact meaning
+5. Translate accurately to all three languages using proper native scripts
 
-STEP 2: Convert transliteration to proper Armenian script
-
-STEP 3: Translate to all three languages (English, Russian, Armenian) with proper scripts
-
-IMPORTANT: If you see "patuhanneri" or "patuhannery", it ALWAYS refers to WINDOWS (պատուհաններ), never door handles.`;
+Ensure all outputs are professional, clear, and grammatically correct in their respective languages.`;
 
       const completion = await this.openai.chat.completions.create({
         model: "gpt-4o-mini",
