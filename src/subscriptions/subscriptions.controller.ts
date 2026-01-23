@@ -223,6 +223,32 @@ export class SubscriptionsController {
   }
 
   /**
+   * Get all subscription plans (admin only - includes inactive)
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get("admin/plans")
+  async getAllPlansAdmin(@Query("language") language: string = "en") {
+    return this.subscriptionsService.getAllPlansAdmin(language);
+  }
+
+  /**
+   * Get all market subscriptions (admin only)
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get("admin/market-subscriptions")
+  async getAllMarketSubscriptions(
+    @Query("page") page: string = "1",
+    @Query("limit") limit: string = "20",
+  ) {
+    const pageNumber = Number.parseInt(page, 10) || 1;
+    const limitNumber = Number.parseInt(limit, 10) || 20;
+    return this.subscriptionsService.getAllMarketSubscriptions(
+      pageNumber,
+      limitNumber,
+    );
+  }
+
+  /**
    * Market subscription endpoints
    */
 
@@ -265,5 +291,59 @@ export class SubscriptionsController {
     @Param("marketId", ParseIntPipe) marketId: number,
   ) {
     return this.subscriptionsService.getMarketSubscriptions(marketId);
+  }
+
+  /**
+   * Admin: Cancel a user subscription
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post("admin/user-subscriptions/:id/cancel")
+  async adminCancelUserSubscription(
+    @Param("id", ParseIntPipe) subscriptionId: number,
+  ) {
+    return this.subscriptionsService.adminCancelUserSubscription(subscriptionId);
+  }
+
+  /**
+   * Admin: Extend a user subscription
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post("admin/user-subscriptions/:id/extend")
+  async adminExtendUserSubscription(
+    @Param("id", ParseIntPipe) subscriptionId: number,
+    @Body() body: { additionalDays: number },
+  ) {
+    return this.subscriptionsService.adminExtendUserSubscription(
+      subscriptionId,
+      body.additionalDays,
+    );
+  }
+
+  /**
+   * Admin: Cancel a market subscription
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post("admin/market-subscriptions/:id/cancel")
+  async adminCancelMarketSubscription(
+    @Param("id", ParseIntPipe) subscriptionId: number,
+  ) {
+    return this.subscriptionsService.adminCancelMarketSubscription(
+      subscriptionId,
+    );
+  }
+
+  /**
+   * Admin: Extend a market subscription
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post("admin/market-subscriptions/:id/extend")
+  async adminExtendMarketSubscription(
+    @Param("id", ParseIntPipe) subscriptionId: number,
+    @Body() body: { additionalDays: number },
+  ) {
+    return this.subscriptionsService.adminExtendMarketSubscription(
+      subscriptionId,
+      body.additionalDays,
+    );
   }
 }

@@ -264,16 +264,22 @@ export class OrderProposalsService {
               }
               console.log("User found:", user.id, user.name);
 
-              // Check if user has an active subscription
+              // Check if user has an active subscription with unlimitedApplications feature
               const activeSubscription = await this.subscriptionsService.getUserActiveSubscription(
                 createOrderProposalDto.userId
               );
 
               let shouldDeductCredits = true;
-              if (activeSubscription) {
-                // User has active subscription - skip credit deduction
+              if (
+                activeSubscription &&
+                this.subscriptionsService.hasFeature(
+                  activeSubscription,
+                  "unlimitedApplications"
+                )
+              ) {
+                // User has active subscription with unlimitedApplications feature - skip credit deduction
                 console.log(
-                  "User has active subscription, skipping credit deduction"
+                  "User has active subscription with unlimitedApplications, skipping credit deduction"
                 );
                 shouldDeductCredits = false;
               } else {

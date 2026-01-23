@@ -9,6 +9,15 @@ import { PrismaService } from "../prisma.service";
 import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import { NotificationsService } from "../notifications/notifications.service";
 
+interface SubscriptionFeatures {
+  unlimitedApplications?: boolean;
+  publishPermanentOrders?: boolean;
+  publishMarkets?: boolean;
+  prioritySupport?: boolean;
+  advancedFilters?: boolean;
+  featuredProfile?: boolean;
+}
+
 @Injectable()
 export class MarketsService {
   private readonly logger = new Logger(MarketsService.name);
@@ -69,6 +78,9 @@ export class MarketsService {
               gte: new Date(),
             },
           },
+          include: {
+            SubscriptionPlan: true,
+          },
         },
       },
     });
@@ -81,10 +93,24 @@ export class MarketsService {
       throw new ForbiddenException("You can only publish your own markets");
     }
 
-    // Check for market-specific subscription
-    if (!market.Subscriptions || market.Subscriptions.length === 0) {
+    // Check for market-specific subscription with publishMarkets feature
+    const hasFeature = market.Subscriptions?.some(
+      (sub) => {
+        if (
+          sub.status !== "active" ||
+          new Date(sub.endDate) <= new Date() ||
+          !sub.SubscriptionPlan?.features
+        ) {
+          return false;
+        }
+        const features = sub.SubscriptionPlan.features as SubscriptionFeatures;
+        return features.publishMarkets === true;
+      }
+    );
+
+    if (!hasFeature) {
       throw new BadRequestException(
-        "An active market subscription is required to publish markets."
+        "A subscription with 'publishMarkets' feature is required to publish markets."
       );
     }
 

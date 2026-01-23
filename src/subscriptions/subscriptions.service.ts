@@ -58,6 +58,66 @@ export class SubscriptionsService {
   }
 
   /**
+   * Check if a subscription has a specific feature enabled
+   */
+  hasFeature(
+    subscription: any,
+    featureKey: string
+  ): boolean {
+    if (!subscription) {
+      return false;
+    }
+
+    // Check if subscription is active
+    const now = new Date();
+    if (
+      subscription.status !== "active" ||
+      new Date(subscription.endDate) <= now
+    ) {
+      return false;
+    }
+
+    // Check if plan has the feature
+    const plan = subscription.Plan || subscription.SubscriptionPlan;
+    if (!plan || !plan.features || typeof plan.features !== "object") {
+      return false;
+    }
+
+    const features = plan.features as Record<string, any>;
+    return features[featureKey] === true || features[featureKey] === "true";
+  }
+
+  /**
+   * Describe plan features in human-readable format
+   */
+  describePlanFeatures(plan: any): Array<{ key: string; label: string }> {
+    if (!plan || !plan.features || typeof plan.features !== "object") {
+      return [];
+    }
+
+    const features = plan.features as Record<string, any>;
+    const featureLabels: Record<string, string> = {
+      unlimitedApplications: "Unlimited order applications (no credit cost)",
+      publishPermanentOrders: "Publish permanent/bookable orders",
+      publishMarkets: "Publish markets/services",
+      prioritySupport: "Priority customer support",
+      advancedFilters: "Access to advanced search filters",
+      featuredProfile: "Featured specialist profile",
+    };
+
+    const descriptions: Array<{ key: string; label: string }> = [];
+
+    for (const [key, value] of Object.entries(features)) {
+      if (value === true || value === "true") {
+        const label = featureLabels[key] || key;
+        descriptions.push({ key, label });
+      }
+    }
+
+    return descriptions;
+  }
+
+  /**
    * Get all active subscription plans
    */
   async getAllPlans(language: string = "en") {
@@ -67,6 +127,24 @@ export class SubscriptionsService {
     });
 
     return plans.map((plan) => this.transformPlanForLanguage(plan, language));
+  }
+
+  /**
+   * Get all subscription plans (admin only - includes inactive)
+   */
+  async getAllPlansAdmin(language: string = "en") {
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      orderBy: { price: "asc" },
+    });
+
+    return plans.map((plan) => {
+      const transformed = this.transformPlanForLanguage(plan, language);
+      return {
+        ...transformed,
+        features: plan.features,
+        featuresDescription: this.describePlanFeatures(plan),
+      };
+    });
   }
 
   /**
@@ -925,6 +1003,156 @@ export class SubscriptionsService {
       },
       orderBy: {
         createdAt: "desc",
+      },
+    });
+  }
+
+  /**
+   * Get all market subscriptions (admin only)
+   */
+  async getAllMarketSubscriptions(page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    const [subscriptions, total] = await Promise.all([
+      this.prisma.marketSubscription.findMany({
+        skip,
+        take: limit,
+        include: {
+          SubscriptionPlan: true,
+          User: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          Market: {
+            select: {
+              id: true,
+              name: true,
+              nameEn: true,
+              nameRu: true,
+              nameHy: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+      this.prisma.marketSubscription.count(),
+    ]);
+
+    return {
+      subscriptions,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Admin: Cancel a user subscription (admin only - no userId check)
+   */
+  async adminCancelUserSubscription(subscriptionId: number) {
+    const subscription = await this.prisma.userSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException("Subscription not found");
+    }
+
+    if (subscription.status !== "active") {
+      throw new BadRequestException(
+        "Only active subscriptions can be cancelled"
+      );
+    }
+
+    return this.prisma.userSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        status: "cancelled",
+        autoRenew: false,
+      },
+    });
+  }
+
+  /**
+   * Admin: Extend a user subscription by adding duration (admin only)
+   */
+  async adminExtendUserSubscription(
+    subscriptionId: number,
+    additionalDays: number
+  ) {
+    const subscription = await this.prisma.userSubscription.findUnique({
+      where: { id: subscriptionId },
+      include: { Plan: true },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException("Subscription not found");
+    }
+
+    const newEndDate = new Date(subscription.endDate);
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+
+    return this.prisma.userSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        endDate: newEndDate,
+      },
+    });
+  }
+
+  /**
+   * Admin: Cancel a market subscription (admin only)
+   */
+  async adminCancelMarketSubscription(subscriptionId: number) {
+    const subscription = await this.prisma.marketSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException("Market subscription not found");
+    }
+
+    if (subscription.status !== "active") {
+      throw new BadRequestException(
+        "Only active subscriptions can be cancelled"
+      );
+    }
+
+    return this.prisma.marketSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        status: "cancelled",
+      },
+    });
+  }
+
+  /**
+   * Admin: Extend a market subscription by adding duration (admin only)
+   */
+  async adminExtendMarketSubscription(
+    subscriptionId: number,
+    additionalDays: number
+  ) {
+    const subscription = await this.prisma.marketSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException("Market subscription not found");
+    }
+
+    const newEndDate = new Date(subscription.endDate);
+    newEndDate.setDate(newEndDate.getDate() + additionalDays);
+
+    return this.prisma.marketSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        endDate: newEndDate,
       },
     });
   }

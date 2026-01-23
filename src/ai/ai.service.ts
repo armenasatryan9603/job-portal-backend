@@ -1,4 +1,5 @@
-import { Injectable, Logger, BadRequestException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+
 import OpenAI from "openai";
 
 export interface EnhancedOrderText {
@@ -53,7 +54,7 @@ export class AIService {
     }
 
     try {
-      const systemPrompt = `You are an expert multilingual text enhancement assistant specializing in Armenian, Russian, and English. Your task is to detect the source language, convert any transliteration to proper native scripts, and provide accurate translations to all three languages.
+      const systemPrompt = `You are an expert multilingual text enhancement assistant specializing in Armenian, Russian, and English. Your task is to detect the source language, convert any transliteration to proper native scripts, and provide accurate, literal translations to all three languages without adding new meaning.
 
 CRITICAL: LANGUAGE DETECTION IS THE FIRST AND MOST IMPORTANT STEP!
 
@@ -63,12 +64,16 @@ STEP 1: LANGUAGE DETECTION
    Analyze the input text to determine the source language:
    - Examine vocabulary, grammar patterns, and linguistic structures
    - Consider whether text is in native script or transliteration
+   - For Latin-only input, carefully decide if it is:
+     * Real English words/phrases, OR
+     * Armenian or Russian written with Latin letters (transliteration)
    - Identify characteristic linguistic markers for each language:
      * English: Standard English vocabulary, grammar, and sentence structure
      * Russian: Russian vocabulary patterns, grammar (cases, verb conjugations), Cyrillic script or Latin transliteration
      * Armenian: Armenian vocabulary patterns, grammar, Armenian script or Latin transliteration
    - Pay attention to context clues and surrounding words
-   - Be careful not to confuse transliterated words from different languages
+   - Be very careful not to confuse transliterated words from different languages
+   - If a word or phrase is not valid, natural English but clearly resembles Armenian or Russian sounds when read aloud, treat it as transliteration of that language, not as an English idiom or metaphor
 
 STEP 2: SCRIPT CONVERSION (if needed)
    - If Armenian transliteration detected: Convert to proper Armenian script (պատուհաններ, not patuhanneri)
@@ -80,13 +85,13 @@ STEP 3: CONTEXTUAL UNDERSTANDING
    - Understand the full context and meaning of the text
    - Identify the subject matter and intent
    - Resolve any ambiguities based on context
-   - Preserve the exact meaning and intent
+   - Preserve the exact meaning and intent; do NOT introduce new ideas, metaphors, or idioms that are not present in the source
 
 STEP 4: ENHANCEMENT
    - Fix grammar, spelling, and punctuation errors
    - Improve clarity and professionalism while maintaining original meaning
    - Ensure proper formatting and structure
-   - Do not add, remove, or change information
+   - Do not add, remove, or change information. If the source phrase is short, unclear, or colloquial, keep the translation close to its literal meaning instead of trying to creatively "improve" it.
 
 STEP 5: TRANSLATION
    - Translate accurately to all three languages (English, Russian, Armenian)
@@ -94,7 +99,9 @@ STEP 5: TRANSLATION
      * English: Standard Latin alphabet
      * Russian: Cyrillic script (кириллица)
      * Armenian: Armenian script (հայերեն)
-   - Maintain natural, idiomatic expressions in each language
+   - Maintain natural, idiomatic expressions in each language, but:
+     * Prefer close, literal translations when the source text is short, ambiguous, or colloquial
+     * Do NOT turn neutral or unclear phrases into creative idioms or metaphors that are not explicitly present in the source
    - Preserve technical terms and domain-specific vocabulary appropriately
    - Ensure translations are culturally appropriate
 
@@ -103,7 +110,7 @@ CRITICAL RULES:
 - Do not assume a language - analyze the text carefully
 - For transliterated text, identify which language it represents before converting
 - Use proper native scripts - never leave transliteration in the output
-- Preserve exact meaning - translations must be accurate, not creative interpretations
+- Preserve exact meaning - translations must be accurate, not creative reinterpretations
 - Maintain professional tone while keeping the original intent
 - All three language outputs must be grammatically correct and natural
 
@@ -118,27 +125,28 @@ Return your response as a JSON object with this exact structure:
   "descriptionHy": "Armenian description"
 }`;
 
-      const userPrompt = `Analyze and enhance this order text:
+      const userPrompt = `Analyze and enhance this order text very conservatively:
 
 Title: ${title}
 Description: ${description}
 
 Follow the process:
 1. Detect the source language (English, Russian, or Armenian) by analyzing vocabulary, grammar, and linguistic patterns
-2. Convert any transliteration to proper native script
+2. If the text is transliteration (Armenian or Russian written with Latin letters), convert it to proper native script
 3. Understand the full context and meaning
-4. Enhance grammar, spelling, and clarity while preserving exact meaning
-5. Translate accurately to all three languages using proper native scripts
+4. Enhance grammar, spelling, and clarity while preserving exact meaning. Do NOT add new ideas or metaphors.
+5. Translate accurately to all three languages using proper native scripts. For short or ambiguous phrases, stay as close as possible to the literal meaning.
 
-Ensure all outputs are professional, clear, and grammatically correct in their respective languages.`;
+Ensure all outputs are professional, clear, and grammatically correct in their respective languages, but prioritize literal accuracy over creativity.`;
 
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.2,
+        // Keep the model as deterministic and non-creative as possible
+        temperature: 0,
         max_tokens: 2000,
         response_format: { type: "json_object" },
       });

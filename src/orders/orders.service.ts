@@ -12,6 +12,15 @@ import { AIService } from "../ai/ai.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
 import { SkillsService } from "../skills/skills.service";
 
+interface SubscriptionFeatures {
+  unlimitedApplications?: boolean;
+  publishPermanentOrders?: boolean;
+  publishMarkets?: boolean;
+  prioritySupport?: boolean;
+  advancedFilters?: boolean;
+  featuredProfile?: boolean;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -455,7 +464,7 @@ export class OrdersService {
             avatarUrl: true,
           },
         },
-        Service: true,
+        Category: true,
         questions: {
           orderBy: { order: "asc" },
         },
@@ -2789,6 +2798,9 @@ export class OrdersService {
                   gte: new Date(),
                 },
               },
+              include: {
+                Plan: true,
+              },
             },
           },
         },
@@ -2816,13 +2828,17 @@ export class OrdersService {
       throw new BadRequestException("Order is already published");
     }
 
-    // Check if user has active subscription
-    if (
-      !order.Client.Subscriptions ||
-      order.Client.Subscriptions.length === 0
-    ) {
+    // Check if user has active subscription with publishPermanentOrders feature
+    const hasFeature = order.Client.Subscriptions?.some(
+      (sub) =>
+        sub.status === "active" &&
+        new Date(sub.endDate) > new Date() &&
+        (sub.Plan?.features as any)?.publishPermanentOrders === true
+    );
+
+    if (!hasFeature) {
       throw new BadRequestException(
-        "An active subscription is required to publish permanent orders."
+        "A subscription with 'publishPermanentOrders' feature is required to publish permanent orders."
       );
     }
 

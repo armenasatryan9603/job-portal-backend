@@ -1569,5 +1569,10 @@
   "updateFailed": "Update failed",
   "updatedAt": "Updated At",
   "updating": "Updating...",
-  "writeYourReview": "Write your review"
+  "writeYourReview": "Write your review",
+  "failedToCreateOrderWithMediaFiles": "Failed to create order with media files",
+  "failedToUploadFile": "Failed to upload file",
+  "newNotification": "New notification",
+  "notification": "Notification",
+  "unified": "Unified"
 }

@@ -1569,5 +1569,9 @@
   "updateFailed": "Не удалось обновить",
   "updatedAt": "Обновлено",
   "updating": "Обновление...",
-  "writeYourReview": "Напишите свой отзыв"
+  "writeYourReview": "Напишите свой отзыв",
+  "failedToCreateOrderWithMediaFiles": "Не удалось создать заказ с медиа файлами",
+  "failedToUploadFile": "Не удалось загрузить файл",
+  "newNotification": "Новое уведомление",
+  "notification": "Уведомление"
 }
