@@ -491,6 +491,8 @@
   "newProposalReceived": "New Proposal Received",
   "hoursAgo": "hours ago",
   "now": "now",
+  "showMore": "Show More",
+  "showLess": "Show Less",
   "minutesAgo": "m ago",
   "daysAgo": "d ago",
   "specialistName": "Specialist Name",
@@ -1574,5 +1576,8 @@
   "failedToUploadFile": "Failed to upload file",
   "newNotification": "New notification",
   "notification": "Notification",
+  "continueForm": "Continue Form",
+  "unsavedChangesContinue": "You have unsaved changes. Would you like to continue?",
+  "startFresh": "Start Fresh",
   "unified": "Unified"
 }
