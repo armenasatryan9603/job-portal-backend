@@ -29,12 +29,14 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('role') role?: string,
+    @Query('deleted') deleted?: string,
   ) {
     return this.adminService.getUsers(
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 10,
       search,
       role,
+      deleted,
     );
   }
 

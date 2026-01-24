@@ -18,13 +18,21 @@ export class AdminService {
     private userCleanupService: UserCleanupService,
   ) {}
 
-  async getUsers(page: number = 1, limit: number = 10, search?: string, role?: string) {
+  async getUsers(page: number = 1, limit: number = 10, search?: string, role?: string, deleted?: string) {
     const skip = (page - 1) * limit;
     const where: any = {};
 
     if (role) {
       where.role = role;
     }
+
+    // Handle deleted filter: 'true' for soft-deleted, 'false' for active, undefined for all
+    if (deleted === 'true') {
+      where.deletedAt = { not: null };
+    } else if (deleted === 'false') {
+      where.deletedAt = null;
+    }
+    // If deleted is undefined, show all users (both deleted and active)
 
     if (search) {
       where.OR = [
@@ -52,7 +60,7 @@ export class AdminService {
           createdAt: true,
           deletedAt: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: deleted === 'true' ? { deletedAt: 'desc' } : { createdAt: 'desc' },
       }),
       this.prisma.user.count({ where }),
     ]);
