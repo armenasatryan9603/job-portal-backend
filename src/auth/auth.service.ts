@@ -53,6 +53,7 @@ export class AuthService {
     password: string,
     referralCode?: string
   ) {
+    // Check for any user with this email (including deleted) to prevent email reuse
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -113,7 +114,9 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findFirst({
+      where: { email, deletedAt: null },
+    });
     if (!user) throw new UnauthorizedException("Invalid credentials");
 
     const passwordValid = await bcrypt.compare(password, user.passwordHash);
@@ -125,7 +128,9 @@ export class AuthService {
   }
 
   async resetPassword(email: string, newPassword: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findFirst({
+      where: { email, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -141,7 +146,9 @@ export class AuthService {
   }
 
   async getUserById(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -163,7 +170,9 @@ export class AuthService {
       experienceYears?: number;
     }
   ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -230,7 +239,9 @@ export class AuthService {
       dateFormat?: string;
     }
   ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -255,7 +266,9 @@ export class AuthService {
   }
 
   async getPreferences(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -266,7 +279,9 @@ export class AuthService {
   }
 
   async updateRole(userId: number, role: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) {
       throw new UnauthorizedException("User not found");
     }
@@ -471,8 +486,8 @@ export class AuthService {
     if (isSimulator || !this.smsEnabled || !this.unimtxClient) {
       // Fallback to local verification when Unimtx is not configured
       // Use cleanPhone for consistency
-      const user = await this.prisma.user.findUnique({
-        where: { phone: cleanPhone },
+      const user = await this.prisma.user.findFirst({
+        where: { phone: cleanPhone, deletedAt: null },
       });
 
       if (!user || !user.otpCode || !user.otpExpiresAt) {

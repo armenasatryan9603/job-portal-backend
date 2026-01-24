@@ -66,6 +66,9 @@ model User {
   MarketReviews            MarketReview[]
   MarketMediaFiles         MarketMediaFile[]         @relation("MarketMediaUploader")
   MarketSubscriptions      MarketSubscription[]
+  deletedAt                DateTime?
+
+  @@index([deletedAt])
 }
 
 model Category {
@@ -215,9 +218,11 @@ model Order {
   OrderSkills             OrderSkill[]
   Bookings                Booking[]
   Markets                 MarketOrder[]
+  deletedAt               DateTime?
 
   @@index([status])
   @@index([orderType])
+  @@index([deletedAt])
 }
 
 model OrderProposal {

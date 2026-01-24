@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatService } from '../chat/chat.service';
+import { UserCleanupService } from '../users/user-cleanup.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -14,6 +15,7 @@ export class AdminService {
     private usersService: UsersService,
     private notificationsService: NotificationsService,
     private chatService: ChatService,
+    private userCleanupService: UserCleanupService,
   ) {}
 
   async getUsers(page: number = 1, limit: number = 10, search?: string, role?: string) {
@@ -48,6 +50,7 @@ export class AdminService {
           creditBalance: true,
           verified: true,
           createdAt: true,
+          deletedAt: true,
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -82,6 +85,7 @@ export class AdminService {
         creditBalance: true,
         verified: true,
         createdAt: true,
+        deletedAt: true,
         experienceYears: true,
         priceMin: true,
         priceMax: true,
@@ -259,5 +263,27 @@ export class AdminService {
         total: totalNotifications,
       },
     };
+  }
+
+  async hardDeleteUser(id: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    if (!user.deletedAt) {
+      throw new BadRequestException(
+        `User with ID ${id} is not soft-deleted. Please soft-delete the user first before permanently deleting.`,
+      );
+    }
+
+    return this.userCleanupService.hardDeleteUser(id);
   }
 }

@@ -2,18 +2,29 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { PusherService } from "../pusher/pusher.service";
 import * as bcrypt from "bcrypt";
 import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+    private pusherService: PusherService
+  ) {}
 
   async findAll(page: number = 1, limit: number = 10, role?: string) {
     const skip = (page - 1) * limit;
-    const where = role ? { role } : {};
+    const where = role
+      ? { role, deletedAt: null }
+      : { deletedAt: null };
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -52,11 +63,11 @@ export class UsersService {
 
   async findOne(id: number) {
     if (!id || isNaN(id) || id <= 0) {
-      throw new BadRequestException("Invalid user ID");
+      throw new NotFoundException("Invalid user ID");
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+    const user = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -186,10 +197,104 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    // Check if user is already soft-deleted
+    if (existingUser.deletedAt) {
+      throw new BadRequestException("User is already deleted");
+    }
+
     // Use a transaction to ensure all deletions happen atomically
-    // Increase timeout to 30 seconds for large deletions
+    // Increase timeout to 60 seconds for large deletions with notifications
     return await this.prisma.$transaction(
       async (tx) => {
+        // STEP 1: Handle permanent orders with active bookings
+        const permanentOrders = await tx.order.findMany({
+          where: {
+            clientId: id,
+            orderType: "permanent",
+            deletedAt: null,
+          },
+          include: {
+            Bookings: {
+              where: {
+                clientId: { not: id }, // Bookings from other users
+                status: { in: ["pending", "confirmed"] }, // Active bookings
+                scheduledDate: {
+                  gte: new Date().toISOString().split("T")[0], // Future bookings only
+                },
+              },
+              include: {
+                Client: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // Cancel future bookings and notify affected users
+        const today = new Date().toISOString().split("T")[0];
+        for (const order of permanentOrders) {
+          for (const booking of order.Bookings) {
+            // Only cancel future bookings
+            if (booking.scheduledDate >= today) {
+              // Update booking status to cancelled
+              await tx.booking.update({
+                where: { id: booking.id },
+                data: { status: "cancelled" },
+              });
+
+              // Notify the booking client
+              try {
+                const specialistName = existingUser.name || "The specialist";
+
+                await this.notificationsService.createNotificationWithPush(
+                  booking.clientId,
+                  "booking_cancelled",
+                  "bookingCancelled",
+                  "bookingCancelledAccountDeletion",
+                  {
+                    bookingId: booking.id,
+                    orderId: order.id,
+                    scheduledDate: booking.scheduledDate,
+                    startTime: booking.startTime,
+                    endTime: booking.endTime,
+                    reason: "account_deletion",
+                  },
+                  {
+                    date: booking.scheduledDate,
+                    startTime: booking.startTime,
+                    endTime: booking.endTime,
+                  }
+                );
+
+                // Send real-time Pusher notification
+                await this.pusherService.trigger(
+                  `user-${booking.clientId}`,
+                  "booking-cancelled",
+                  {
+                    bookingId: booking.id,
+                    orderId: order.id,
+                    cancellerName: specialistName,
+                    scheduledDate: booking.scheduledDate,
+                    startTime: booking.startTime,
+                    endTime: booking.endTime,
+                    reason: "account_deletion",
+                  }
+                );
+              } catch (error) {
+                this.logger.error(
+                  `Failed to send cancellation notification for booking ${booking.id}:`,
+                  error
+                );
+                // Continue with deletion even if notification fails
+              }
+            }
+          }
+        }
+
         // Delete lightweight items first (faster operations)
         // 1. Delete notifications
         await tx.notification.deleteMany({
@@ -216,10 +321,11 @@ export class UsersService {
           where: { userId: id },
         });
 
-        // 6. Delete credit transactions
-        await tx.creditTransaction.deleteMany({
-          where: { userId: id },
-        });
+        // 6. Delete credit transactions (keep for financial records - actually, we should keep these)
+        // Commented out to preserve financial records
+        // await tx.creditTransaction.deleteMany({
+        //   where: { userId: id },
+        // });
 
         // 7. Delete order change history entries
         await tx.orderChangeHistory.deleteMany({
@@ -307,19 +413,58 @@ export class UsersService {
           where: { reviewerId: id },
         });
 
-        // 18. Delete user's orders (cascade will handle related data like OrderQuestions, OrderSkills, etc.)
-        // This is done last as it may cascade to many related records
-        await tx.order.deleteMany({
-          where: { clientId: id },
+        // 18. Handle orders - soft delete permanent orders, hard delete one-time orders
+        const oneTimeOrders = await tx.order.findMany({
+          where: {
+            clientId: id,
+            orderType: "one_time",
+            deletedAt: null,
+          },
         });
 
-        // 19. Finally, delete the user (cascade will handle remaining relationships)
-        return await tx.user.delete({
+        // Hard delete one-time orders (as before)
+        if (oneTimeOrders.length > 0) {
+          await tx.order.deleteMany({
+            where: {
+              clientId: id,
+              orderType: "one_time",
+            },
+          });
+        }
+
+        // Soft delete permanent orders
+        const permanentOrderIds = permanentOrders.map((o) => o.id);
+        if (permanentOrderIds.length > 0) {
+          await tx.order.updateMany({
+            where: {
+              id: { in: permanentOrderIds },
+            },
+            data: {
+              deletedAt: new Date(),
+            },
+          });
+        }
+
+        // 19. Soft delete the user (anonymize sensitive data)
+        return await tx.user.update({
           where: { id },
+          data: {
+            deletedAt: new Date(),
+            email: null,
+            phone: null,
+            name: "Deleted User",
+            passwordHash: "", // Clear password
+            fcmToken: null,
+            avatarUrl: null,
+            bannerUrl: null,
+            bio: null,
+            otpCode: null,
+            otpExpiresAt: null,
+          },
         });
       },
       {
-        timeout: 30000, // 30 seconds timeout
+        timeout: 60000, // 60 seconds timeout (increased for notifications)
       }
     );
   }
@@ -371,6 +516,7 @@ export class UsersService {
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { email: { contains: query, mode: "insensitive" } },
@@ -500,7 +646,7 @@ export class UsersService {
       });
 
       // Build where clause
-      const whereClause: any = { role: "specialist" };
+      const whereClause: any = { role: "specialist", deletedAt: null };
 
       if (categoryId) {
         whereClause.UserCategories = {
@@ -709,8 +855,8 @@ export class UsersService {
   */
 
   async getSpecialistById(id: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id, role: "specialist" },
+    const user = await this.prisma.user.findFirst({
+      where: { id, role: "specialist", deletedAt: null },
       include: {
           UserCategories: {
             include: {
@@ -918,6 +1064,7 @@ export class UsersService {
       this.prisma.user.findMany({
         where: {
           role: "specialist",
+          deletedAt: null,
           OR: [
             { location: { contains: query, mode: "insensitive" } },
             { name: { contains: query, mode: "insensitive" } },

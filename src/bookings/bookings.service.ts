@@ -115,8 +115,8 @@ export class BookingsService {
     }
 
     // Verify order exists and is a permanent order
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, deletedAt: null },
       include: {
         Client: true,
         Bookings: {
@@ -279,8 +279,8 @@ export class BookingsService {
    * Get all bookings for an order
    */
   async getOrderBookings(orderId: number) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, deletedAt: null },
     });
 
     if (!order) {

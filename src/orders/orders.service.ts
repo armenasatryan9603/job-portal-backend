@@ -505,7 +505,7 @@ export class OrdersService {
     orderType?: string
   ) {
     const skip = (page - 1) * limit;
-    const where: any = {};
+    const where: any = { deletedAt: null };
 
     // Handle "not_applied" status specially
     if (status === "not_applied") {
@@ -700,8 +700,8 @@ export class OrdersService {
       throw new Error(`Invalid order ID: ${id}`);
     }
 
-    const order = await this.prisma.order.findUnique({
-      where: { id: Number(id) },
+    const order = await this.prisma.order.findFirst({
+      where: { id: Number(id), deletedAt: null },
       include: {
         Client: {
           select: {
@@ -824,8 +824,8 @@ export class OrdersService {
 
   async setBannerImage(orderId: number, mediaFileId: number) {
     // Verify order exists
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, deletedAt: null },
     });
 
     if (!order) {
@@ -897,8 +897,8 @@ export class OrdersService {
     }
 
     // Check if order exists
-    const existingOrder = await this.prisma.order.findUnique({
-      where: { id: Number(id) },
+    const existingOrder = await this.prisma.order.findFirst({
+      where: { id: Number(id), deletedAt: null },
     });
 
     if (!existingOrder) {
@@ -1356,8 +1356,8 @@ export class OrdersService {
     }
 
     // Check if order exists
-    const existingOrder = await this.prisma.order.findUnique({
-      where: { id: Number(id) },
+    const existingOrder = await this.prisma.order.findFirst({
+      where: { id: Number(id), deletedAt: null },
     });
 
     if (!existingOrder) {
@@ -1399,6 +1399,7 @@ export class OrdersService {
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
         where: {
+          deletedAt: null,
           Proposals: {
             some: {
               userId: specialistId,
@@ -1506,6 +1507,7 @@ export class OrdersService {
     const skip = (page - 1) * limit;
 
     const where: any = {
+      deletedAt: null,
       OR: [
         { title: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
@@ -1729,6 +1731,7 @@ export class OrdersService {
   ) {
     const skip = (page - 1) * limit;
     const where: any = {
+      deletedAt: null,
       // Show only open orders (exclude pending_review and rejected)
       status: "open",
     };
@@ -2105,8 +2108,8 @@ export class OrdersService {
   ): Promise<void> {
     try {
       // ✅ CRITICAL: Check order status - only send notifications for "open" orders
-      const order = await this.prisma.order.findUnique({
-        where: { id: orderId },
+      const order = await this.prisma.order.findFirst({
+        where: { id: orderId, deletedAt: null },
         select: {
           clientId: true,
           status: true,
@@ -2214,8 +2217,8 @@ export class OrdersService {
    */
   async saveOrder(userId: number, orderId: number) {
     // Check if order exists
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, deletedAt: null },
     });
 
     if (!order) {

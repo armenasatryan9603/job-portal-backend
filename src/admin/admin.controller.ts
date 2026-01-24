@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Query,
   Body,
@@ -71,5 +72,10 @@ export class AdminController {
   @Get('stats')
   async getStats() {
     return this.adminService.getStats();
+  }
+
+  @Delete('users/:id')
+  async hardDeleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.hardDeleteUser(id);
   }
 }
