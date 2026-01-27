@@ -362,13 +362,13 @@ export class OrdersController {
     if (isNaN(orderId)) {
       throw new Error(`Invalid order ID: ${id}`);
     }
-
+    
     // Check if this is a web browser request (for Universal Links)
     const acceptHeader = req.headers['accept'] || '';
     const isWebRequest =
-      acceptHeader.includes("text/html") ||
-      req.headers["user-agent"]?.includes("Mozilla");
-
+    acceptHeader.includes("text/html") ||
+    req.headers["user-agent"]?.includes("Mozilla");
+    
     if (isWebRequest) {
       // Serve HTML page for Universal Links
       const order = await this.ordersService.findOne(orderId);
@@ -459,7 +459,8 @@ export class OrdersController {
     }
 
     // Return JSON for API requests
-    return this.ordersService.findOne(orderId);
+    const order = await this.ordersService.findOne(orderId);
+    return res.json(order);
   }
 
   @UseGuards(JwtAuthGuard)
