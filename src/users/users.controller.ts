@@ -11,9 +11,11 @@ import {
   BadRequestException,
   ForbiddenException,
   Req,
+  Res,
   UseInterceptors,
   UploadedFile,
 } from "@nestjs/common";
+import type { Request as ExpressRequest, Response } from "express";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import { extname } from "path";
@@ -260,8 +262,114 @@ export class UsersController {
   }
 
   @Get("specialists/:id")
-  async getSpecialistById(@Param("id") id: string) {
-    return this.usersService.getSpecialistById(+id);
+  async getSpecialistById(
+    @Param("id") id: string,
+    @Req() req: ExpressRequest,
+    @Res() res: Response
+  ) {
+    const specialistId = parseInt(id, 10);
+    if (isNaN(specialistId)) {
+      throw new BadRequestException(`Invalid specialist ID: ${id}`);
+    }
+
+    // Check if this is a web browser request (for Universal Links)
+    const acceptHeader = req.headers["accept"] || "";
+    const isWebRequest =
+      acceptHeader.includes("text/html") ||
+      req.headers["user-agent"]?.includes("Mozilla");
+
+    if (isWebRequest) {
+      // Serve HTML page for Universal Links
+      const specialist = await this.usersService.getSpecialistById(specialistId);
+      const safeName = (specialist.User?.name || "")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+      const safeBio = (specialist.User?.bio || "")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeName || `Specialist #${specialistId}`} - HotWork</title>
+  <meta name="description" content="${safeBio || safeName}">
+  
+  <!-- Universal Links / App Links meta tags -->
+  <meta property="al:ios:url" content="jobportalmobile://specialists/${specialistId}">
+  <meta property="al:ios:app_name" content="HotWork">
+  <meta property="al:android:url" content="jobportalmobile://specialists/${specialistId}">
+  <meta property="al:android:app_name" content="HotWork">
+  <meta property="al:android:package" content="com.jobportalmobile.app">
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { margin: 0 0 16px 0; color: #333; }
+    .specialist-info { margin: 16px 0; }
+    .specialist-info p { margin: 8px 0; color: #666; }
+    .open-app-btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 24px;
+      background: #007AFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+  </style>
+  
+  <script>
+    // Try to open the app immediately
+    window.location.href = "jobportalmobile://specialists/${specialistId}";
+    
+    // Fallback: if app doesn't open after 2 seconds, show the page
+    setTimeout(function() {
+      document.getElementById('fallback').style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+    }, 2000);
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>${safeName || `Specialist #${specialistId}`}</h1>
+    <div id="loading" style="text-align: center; margin-top: 20px; color: #999;">
+      Opening in app...
+    </div>
+    <div id="fallback" style="display: none;">
+      <div class="specialist-info">
+        <p><strong>Name:</strong> ${safeName || "N/A"}</p>
+        <p><strong>Bio:</strong> ${safeBio || "N/A"}</p>
+        <p><strong>Rating:</strong> ${specialist.averageRating || "N/A"} (${specialist.reviewCount || 0} reviews)</p>
+        <p><strong>Location:</strong> ${specialist.User?.location || "N/A"}</p>
+      </div>
+      <a href="jobportalmobile://specialists/${specialistId}" class="open-app-btn">
+        Open in HotWork App
+      </a>
+    </div>
+  </div>
+</body>
+</html>`;
+      res.setHeader("Content-Type", "text/html");
+      return res.send(html);
+    }
+
+    // Return JSON for API requests
+    const specialist = await this.usersService.getSpecialistById(specialistId);
+    return res.json(specialist);
   }
 
   @Patch("specialists/:id")

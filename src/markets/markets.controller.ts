@@ -11,7 +11,10 @@ import {
   Request,
   BadRequestException,
   ParseIntPipe,
+  Req,
+  Res,
 } from "@nestjs/common";
+import type { Request as ExpressRequest, Response } from "express";
 import { MarketsService } from "./markets.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
@@ -109,13 +112,114 @@ export class MarketsController {
 
   @UseGuards(OptionalJwtAuthGuard)
   @Get(":id")
-  async findOne(@Param("id") id: string) {
+  async findOne(
+    @Param("id") id: string,
+    @Req() req: ExpressRequest,
+    @Res() res: Response
+  ) {
     const marketId = parseInt(id, 10);
     if (isNaN(marketId)) {
       throw new BadRequestException(`Invalid market ID: ${id}`);
     }
 
-    return this.marketsService.getMarketById(marketId);
+    // Check if this is a web browser request (for Universal Links)
+    const acceptHeader = req.headers["accept"] || "";
+    const isWebRequest =
+      acceptHeader.includes("text/html") ||
+      req.headers["user-agent"]?.includes("Mozilla");
+
+    if (isWebRequest) {
+      // Serve HTML page for Universal Links
+      const market = await this.marketsService.getMarketById(marketId);
+      const safeName = (market.name || market.nameEn || "")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+      const safeDescription = (market.description || market.descriptionEn || "")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeName || `Service #${marketId}`} - HotWork</title>
+  <meta name="description" content="${safeDescription || safeName}">
+  
+  <!-- Universal Links / App Links meta tags -->
+  <meta property="al:ios:url" content="jobportalmobile://services/${marketId}">
+  <meta property="al:ios:app_name" content="HotWork">
+  <meta property="al:android:url" content="jobportalmobile://services/${marketId}">
+  <meta property="al:android:app_name" content="HotWork">
+  <meta property="al:android:package" content="com.jobportalmobile.app">
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 { margin: 0 0 16px 0; color: #333; }
+    .service-info { margin: 16px 0; }
+    .service-info p { margin: 8px 0; color: #666; }
+    .open-app-btn {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 24px;
+      background: #007AFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+  </style>
+  
+  <script>
+    // Try to open the app immediately
+    window.location.href = "jobportalmobile://services/${marketId}";
+    
+    // Fallback: if app doesn't open after 2 seconds, show the page
+    setTimeout(function() {
+      document.getElementById('fallback').style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+    }, 2000);
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>${safeName || `Service #${marketId}`}</h1>
+    <div id="loading" style="text-align: center; margin-top: 20px; color: #999;">
+      Opening in app...
+    </div>
+    <div id="fallback" style="display: none;">
+      <div class="service-info">
+        <p><strong>Name:</strong> ${safeName || "N/A"}</p>
+        <p><strong>Description:</strong> ${safeDescription || "N/A"}</p>
+        <p><strong>Location:</strong> ${market.location || "N/A"}</p>
+        <p><strong>Rating:</strong> ${market.rating || "N/A"}</p>
+      </div>
+      <a href="jobportalmobile://services/${marketId}" class="open-app-btn">
+        Open in HotWork App
+      </a>
+    </div>
+  </div>
+</body>
+</html>`;
+      res.setHeader("Content-Type", "text/html");
+      return res.send(html);
+    }
+
+    // Return JSON for API requests
+    const market = await this.marketsService.getMarketById(marketId);
+    return res.json(market);
   }
 
   @UseGuards(JwtAuthGuard)
