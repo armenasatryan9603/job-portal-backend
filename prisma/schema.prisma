@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ResourceBookingMode {
+  select        // Client selects resource
+  auto          // System assigns automatically
+  multi         // Requires multiple resources
+}
+
 model User {
   id                       Int                       @id @default(autoincrement())
   role                     String
@@ -205,6 +211,8 @@ model Order {
   workDurationPerClient   Int? // Duration in minutes for each appointment
   weeklySchedule          Json? // Recurring weekly schedule for permanent orders
   checkinRequiresApproval Boolean              @default(false) // If true, bookings require owner approval
+  resourceBookingMode     ResourceBookingMode? // How clients book resources
+  requiredResourceCount   Int? // Number of resources required per booking session (for multi mode)
   Conversations           Conversation[]
   MediaFiles              MediaFile[]
   BannerImage             MediaFile?           @relation("BannerImage", fields: [bannerImageId], references: [id])
@@ -723,15 +731,18 @@ model Booking {
   startTime     String // Start time (HH:MM format)
   endTime       String // End time (HH:MM format)
   status        String   @default("confirmed") // pending, confirmed, completed, cancelled
+  marketMemberId Int? // Market member (specialist) assigned to this booking (for select mode)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   Order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   Client        User     @relation("ClientBookings", fields: [clientId], references: [id])
+  MarketMember  MarketMember? @relation(fields: [marketMemberId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([clientId])
   @@index([scheduledDate])
   @@index([status])
+  @@index([marketMemberId])
 }
 
 model Market {
@@ -780,6 +791,7 @@ model MarketMember {
   isActive  Boolean  @default(true)
   Market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Bookings  Booking[] // Bookings assigned to this market member
 
   @@unique([marketId, userId])
   @@index([marketId])

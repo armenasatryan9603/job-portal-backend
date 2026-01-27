@@ -56,7 +56,44 @@ export class SubscriptionRenewalService {
       },
     });
 
-    this.logger.log(`Marked ${result.count} subscriptions as expired`);
+    this.logger.log(`Marked ${result.count} user subscriptions as expired`);
     return result;
+  }
+
+  /**
+   * Mark expired market subscriptions as expired
+   * Can be called manually or from user actions
+   */
+  async markExpiredMarketSubscriptions() {
+    const now = new Date();
+
+    const result = await this.prisma.marketSubscription.updateMany({
+      where: {
+        status: "active",
+        endDate: {
+          lt: now,
+        },
+      },
+      data: {
+        status: "expired",
+      },
+    });
+
+    this.logger.log(`Marked ${result.count} market subscriptions as expired`);
+    return result;
+  }
+
+  /**
+   * Mark all expired subscriptions (both user and market) as expired
+   */
+  async markAllExpiredSubscriptions() {
+    const userResult = await this.markExpiredSubscriptions();
+    const marketResult = await this.markExpiredMarketSubscriptions();
+
+    return {
+      userSubscriptions: userResult.count,
+      marketSubscriptions: marketResult.count,
+      total: userResult.count + marketResult.count,
+    };
   }
 }

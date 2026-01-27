@@ -1,16 +1,20 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Injectable,
   Logger,
+  NotFoundException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma.service";
-import { OrderPricingService } from "../order-pricing/order-pricing.service";
-import { NotificationsService } from "../notifications/notifications.service";
+
 import { AIService } from "../ai/ai.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
+import { NotificationsService } from "../notifications/notifications.service";
+import { OrderPricingService } from "../order-pricing/order-pricing.service";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../prisma.service";
+import { PusherService } from "../pusher/pusher.service";
 import { SkillsService } from "../skills/skills.service";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 interface SubscriptionFeatures {
   unlimitedApplications?: boolean;
@@ -34,7 +38,9 @@ export class OrdersService {
     private notificationsService: NotificationsService,
     private aiService: AIService,
     private creditTransactionsService: CreditTransactionsService,
-    private skillsService: SkillsService
+    private skillsService: SkillsService,
+    private subscriptionsService: SubscriptionsService,
+    private pusherService: PusherService,
   ) {}
 
   /**
@@ -189,6 +195,171 @@ export class OrdersService {
   }
 
   /**
+   * Helper method to check if a booking overlaps with breaks
+   */
+  private doesBookingOverlapWithBreaks(
+    booking: { scheduledDate: string; startTime: string; endTime: string },
+    weeklySchedule: any
+  ): { overlaps: boolean; overlappingBreaks: Array<{ start: string; end: string }> } {
+    if (!weeklySchedule) {
+      return { overlaps: false, overlappingBreaks: [] };
+    }
+
+    const bookingDate = new Date(booking.scheduledDate);
+    const dayOfWeek = bookingDate.getDay();
+    const dayNames = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const dayName = dayNames[dayOfWeek];
+    const daySchedule = weeklySchedule[dayName];
+
+    if (!daySchedule?.enabled || !daySchedule?.breaks || daySchedule.breaks.length === 0) {
+      return { overlaps: false, overlappingBreaks: [] };
+    }
+
+    // Check for break exclusions (priority bookings)
+    const breakExclusions = weeklySchedule.breakExclusions || {};
+    const exclusionsForDate = breakExclusions[booking.scheduledDate] || [];
+
+    // Filter out excluded breaks
+    const activeBreaks = daySchedule.breaks.filter((breakItem: { start: string; end: string }) => {
+      return !exclusionsForDate.some(
+        (exclusion: { start: string; end: string }) =>
+          exclusion.start === breakItem.start && exclusion.end === breakItem.end
+      );
+    });
+
+    const overlappingBreaks: Array<{ start: string; end: string }> = [];
+
+    // Check if booking overlaps with any break
+    for (const breakItem of activeBreaks) {
+      const breakStart = this.timeToMinutes(breakItem.start);
+      const breakEnd = this.timeToMinutes(breakItem.end);
+      const bookingStart = this.timeToMinutes(booking.startTime);
+      const bookingEnd = this.timeToMinutes(booking.endTime);
+
+      // Check if time ranges overlap
+      if (bookingStart < breakEnd && bookingEnd > breakStart) {
+        overlappingBreaks.push(breakItem);
+      }
+    }
+
+    return {
+      overlaps: overlappingBreaks.length > 0,
+      overlappingBreaks,
+    };
+  }
+
+  /**
+   * Helper method to convert time string to minutes since midnight
+   */
+  private timeToMinutes(time: string): number {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  }
+
+  /**
+   * Helper method to notify clients about break overlaps
+   */
+  private async notifyBreakOverlaps(
+    bookings: Array<{
+      id: number;
+      scheduledDate: string;
+      startTime: string;
+      endTime: string;
+      clientId: number;
+      Client?: { name: string };
+      MarketMember?: {
+        User?: {
+          id: number;
+          name: string;
+        };
+      };
+    }>,
+    orderId: number,
+    orderTitle: string,
+    weeklySchedule: any,
+    resourceBookingMode?: "select" | "auto" | "multi" | null
+  ): Promise<void> {
+    if (bookings.length === 0) return;
+
+    // Send notifications to clients
+    for (const booking of bookings) {
+      try {
+        const { overlappingBreaks } = this.doesBookingOverlapWithBreaks(booking, weeklySchedule);
+        
+        if (overlappingBreaks.length === 0) {
+          continue; // Skip if no overlaps (shouldn't happen, but safety check)
+        }
+
+        const breakTimes = overlappingBreaks
+          .map((b) => `${b.start}-${b.end}`)
+          .join(", ");
+
+        // Build notification message with specialist info if resourceBookingMode is "select"
+        let specialistInfo = "";
+        if (resourceBookingMode === "select" && booking.MarketMember?.User) {
+          specialistInfo = ` with ${booking.MarketMember.User.name}`;
+        }
+
+        await this.notificationsService.createNotificationWithPush(
+          booking.clientId,
+          "booking_break_overlap",
+          "Booking Overlaps with Break",
+          `Your booking${specialistInfo} on ${booking.scheduledDate} from ${booking.startTime} to ${booking.endTime} for "${orderTitle}" now overlaps with a break period (${breakTimes}). Please contact the specialist if you need to reschedule.`,
+          {
+            bookingId: booking.id,
+            orderId: orderId,
+            scheduledDate: booking.scheduledDate,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            reason: "break_overlap",
+            breakTimes: breakTimes,
+            ...(resourceBookingMode === "select" && booking.MarketMember?.User ? {
+              specialistId: booking.MarketMember.User.id,
+              specialistName: booking.MarketMember.User.name,
+            } : {}),
+          }
+        );
+
+        // Send real-time Pusher notification
+        await this.pusherService.trigger(
+          `user-${booking.clientId}`,
+          "booking-break-overlap",
+          {
+            bookingId: booking.id,
+            orderId: orderId,
+            scheduledDate: booking.scheduledDate,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            orderTitle,
+            breakTimes,
+            ...(resourceBookingMode === "select" && booking.MarketMember?.User ? {
+              specialistId: booking.MarketMember.User.id,
+              specialistName: booking.MarketMember.User.name,
+            } : {}),
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send break overlap notification for booking ${booking.id}:`,
+          error
+        );
+      }
+    }
+
+    this.logger.log(
+      `Notified ${bookings.length} client(s) about break overlaps for order ${orderId}`
+    );
+  }
+
+  /**
    * Helper method to log order changes
    */
   private async logOrderChange(
@@ -238,7 +409,9 @@ export class OrdersService {
     orderType: string = "one_time",
     workDurationPerClient?: number,
     weeklySchedule?: any,
-    checkinRequiresApproval: boolean = false
+    checkinRequiresApproval: boolean = false,
+    resourceBookingMode?: "select" | "auto" | "multi",
+    requiredResourceCount?: number
   ) {
     // Check if client exists
     const client = await this.prisma.user.findUnique({
@@ -433,6 +606,8 @@ export class OrdersService {
               ? this.generateWeeklySchedule(workDurationPerClient)
               : undefined,
         checkinRequiresApproval: orderType === "permanent" ? checkinRequiresApproval : false,
+        resourceBookingMode: resourceBookingMode || undefined,
+        requiredResourceCount: requiredResourceCount || undefined,
         ...(finalSkillIds.length > 0
           ? {
               OrderSkills: {
@@ -651,6 +826,56 @@ export class OrdersService {
       this.prisma.order.count({ where }),
     ]);
 
+    // Check and update permanent orders with expired subscriptions
+    // This ensures orders are hidden when subscription expires
+    const permanentOrdersToCheck = orders.filter(
+      (order) => order.orderType === "permanent" && (order.status === "active" || order.status === "open")
+    );
+
+    if (permanentOrdersToCheck.length > 0) {
+      await Promise.all(
+        permanentOrdersToCheck.map(async (order) => {
+          try {
+            const ownerSubscription = await this.subscriptionsService.getUserActiveSubscription(
+              order.clientId
+            );
+
+            if (!ownerSubscription) {
+              // No active subscription - change to draft
+              await this.prisma.order.update({
+                where: { id: order.id },
+                data: { status: "draft" },
+              });
+              order.status = "draft";
+              this.logger.log(
+                `Order ${order.id} status changed to draft due to expired subscription`
+              );
+            } else {
+              const hasFeature = this.subscriptionsService.hasFeature(
+                ownerSubscription,
+                "publishPermanentOrders"
+              );
+              if (!hasFeature) {
+                // Subscription doesn't have required feature - change to draft
+                await this.prisma.order.update({
+                  where: { id: order.id },
+                  data: { status: "draft" },
+                });
+                order.status = "draft";
+                this.logger.log(
+                  `Order ${order.id} status changed to draft - subscription missing publishPermanentOrders feature`
+                );
+              }
+            }
+          } catch (error) {
+            this.logger.error(
+              `Error checking subscription for order ${order.id}: ${error.message}`
+            );
+          }
+        })
+      );
+    }
+
     // Calculate credit cost and refund percentage for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
       orders.map(async (order) => {
@@ -765,6 +990,16 @@ export class OrdersService {
         OrderSkills: {
           include: {
             Skill: true,
+          },
+        },
+        Markets: {
+          include: {
+            Market: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         _count: {
@@ -887,6 +1122,8 @@ export class OrdersService {
       weeklySchedule?: any;
       availableDates?: string[];
       checkinRequiresApproval?: boolean;
+      resourceBookingMode?: "select" | "auto" | "multi";
+      requiredResourceCount?: number;
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -1244,6 +1481,16 @@ export class OrdersService {
               name: true,
             },
           },
+          MarketMember: {
+            include: {
+              User: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -1314,6 +1561,56 @@ export class OrdersService {
             this.logger.log(
               `Auto-cancelled ${futureBookings.length} future booking(s) for order ${id} due to schedule change`
             );
+          }
+        }
+
+        // Check for break overlaps with existing bookings (only if schedule has breaks)
+        // Only check if schedule actually changed and new schedule has breaks
+        const scheduleChanged =
+          updateOrderDto.weeklySchedule !== undefined &&
+          JSON.stringify(oldWeeklySchedule) !== JSON.stringify(newWeeklySchedule);
+        
+        if (scheduleChanged && newWeeklySchedule) {
+          // Check if new schedule has any breaks
+          const hasBreaks = Object.values(newWeeklySchedule).some((daySchedule: any) => {
+            return daySchedule?.breaks && Array.isArray(daySchedule.breaks) && daySchedule.breaks.length > 0;
+          });
+
+          if (hasBreaks) {
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+
+            // Get all future bookings
+            const futureBookings = existingBookings.filter((booking) => {
+              const bookingDate = new Date(booking.scheduledDate);
+              bookingDate.setHours(0, 0, 0, 0);
+              return bookingDate > now;
+            });
+
+            // Check which bookings overlap with breaks
+            const bookingsWithBreakOverlaps = futureBookings.filter((booking) => {
+              const { overlaps } = this.doesBookingOverlapWithBreaks(booking, newWeeklySchedule);
+              return overlaps;
+            });
+
+            // Send notifications for bookings that overlap with breaks
+            if (bookingsWithBreakOverlaps.length > 0) {
+              await this.notifyBreakOverlaps(
+                bookingsWithBreakOverlaps.map((b) => ({
+                  id: b.id,
+                  scheduledDate: b.scheduledDate,
+                  startTime: b.startTime,
+                  endTime: b.endTime,
+                  clientId: b.clientId,
+                  Client: b.Client,
+                  MarketMember: (b as any).MarketMember,
+                })),
+                id,
+                existingOrder.title || "Untitled",
+                newWeeklySchedule,
+                existingOrder.resourceBookingMode as "select" | "auto" | "multi" | null
+              );
+            }
           }
         }
       }
@@ -1811,7 +2108,9 @@ export class OrdersService {
     orderType: string = "one_time",
     workDurationPerClient?: number,
     weeklySchedule?: any,
-    checkinRequiresApproval: boolean = false
+    checkinRequiresApproval: boolean = false,
+    resourceBookingMode?: "select" | "auto" | "multi",
+    requiredResourceCount?: number
   ) {
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
@@ -1979,6 +2278,8 @@ export class OrdersService {
                 ? this.generateWeeklySchedule(workDurationPerClient)
                 : undefined,
           checkinRequiresApproval: orderType === "permanent" ? checkinRequiresApproval : false,
+          resourceBookingMode: resourceBookingMode || undefined,
+          requiredResourceCount: requiredResourceCount || undefined,
           ...(finalSkillIds.length > 0
             ? {
                 OrderSkills: {
@@ -2685,6 +2986,13 @@ export class OrdersService {
       }
     });
 
+    // Include subscribeAheadDays from customSchedule if provided, otherwise default to 90 days
+    if (customSchedule?.subscribeAheadDays !== undefined) {
+      schedule.subscribeAheadDays = customSchedule.subscribeAheadDays;
+    } else {
+      schedule.subscribeAheadDays = 90;
+    }
+
     return schedule;
   }
 
@@ -2695,24 +3003,93 @@ export class OrdersService {
   async getAvailableSlotsForDateRange(
     orderId: number,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    marketMemberId?: number
   ) {
-    const order = await this.prisma.order.findUnique({
+    // Build bookings where clause
+    const bookingsWhere: any = {
+      status: {
+        in: ["confirmed", "completed"],
+      },
+    };
+
+    // If marketMemberId is provided, filter bookings by that specialist
+    if (marketMemberId) {
+      bookingsWhere.marketMemberId = marketMemberId;
+    }
+
+    const orderResult = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
         Bookings: {
-          where: {
-            status: {
-              in: ["confirmed", "completed"],
-            },
+          where: bookingsWhere,
+        },
+        Markets: {
+          include: {
+            Market: true,
           },
         },
       },
     });
 
-    if (!order) {
+    if (!orderResult) {
       throw new NotFoundException(`Order with ID ${orderId} not found`);
     }
+
+    // Type assertion for the order with all necessary fields
+    // We need to explicitly type this because Prisma's generated types
+    // don't always include all fields when using includes with where clauses
+    type OrderWithBookings = {
+      id: number;
+      clientId: number;
+      categoryId: number | null;
+      title: string | null;
+      description: string | null;
+      budget: number | null;
+      currency: string;
+      rateUnit: string;
+      availableDates: string[];
+      location: string | null;
+      status: string;
+      createdAt: Date;
+      bannerImageId: number | null;
+      titleEn: string | null;
+      titleRu: string | null;
+      titleHy: string | null;
+      descriptionEn: string | null;
+      descriptionRu: string | null;
+      descriptionHy: string | null;
+      rejectionReason: string | null;
+      orderType: string;
+      workDurationPerClient: number | null;
+      weeklySchedule: Prisma.JsonValue | null;
+      checkinRequiresApproval: boolean;
+      resourceBookingMode: string | null;
+      requiredResourceCount: number | null;
+      deletedAt: Date | null;
+      Bookings: Array<{
+        id: number;
+        orderId: number;
+        clientId: number;
+        scheduledDate: string;
+        startTime: string;
+        endTime: string;
+        status: string;
+        createdAt: Date;
+        updatedAt: Date;
+      }>;
+      Markets: Array<{
+        id: number;
+        orderId: number;
+        marketId: number;
+        Market: {
+          id: number;
+          name: string;
+        };
+      }>;
+    };
+
+    const order = orderResult as unknown as OrderWithBookings;
 
     if (!order.weeklySchedule) {
       return {
@@ -2721,11 +3098,16 @@ export class OrdersService {
       };
     }
 
-    const weeklySchedule = order.weeklySchedule as any;
+    // At this point, we know weeklySchedule exists (checked above)
+    const weeklySchedule = order.weeklySchedule as Record<string, {
+      enabled: boolean;
+      workHours: { start: string; end: string } | null;
+    }>;
     const availableDays: Array<{
       date: string;
-      workHours: { start: string; end: string };
-      bookings: Array<{ startTime: string; endTime: string; clientId: number }>;
+      workHours: { start: string; end: string } | null;
+      bookings: Array<{ startTime: string; endTime: string; clientId?: number }>;
+      capacity?: { total: number; booked: number; available: number };
     }> = [];
 
     const dayNames = [
@@ -2760,20 +3142,45 @@ export class OrdersService {
 
         // Get all bookings for this date
         const dayBookings = order.Bookings.filter(
-          (booking) => booking.scheduledDate === dateStr
+          (booking: OrderWithBookings['Bookings'][0]) => booking.scheduledDate === dateStr
         )
-          .map((booking) => ({
+          .map((booking: OrderWithBookings['Bookings'][0]) => ({
             startTime: booking.startTime,
             endTime: booking.endTime,
             clientId: booking.clientId,
           }))
           .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-        availableDays.push({
+        // Calculate availability based on mode
+        let dayData: {
+          date: string;
+          workHours: { start: string; end: string } | null;
+          bookings: Array<{ startTime: string; endTime: string; clientId?: number }>;
+          capacity?: { total: number; booked: number; available: number };
+        } = {
           date: dateStr,
           workHours: daySchedule.workHours,
           bookings: dayBookings,
-        });
+        };
+
+        // Handle multi mode - show capacity based on requiredResourceCount
+        const mode = order.resourceBookingMode;
+        if (mode === "multi") {
+          const requiredResourceCount = (order as any).requiredResourceCount;
+          if (requiredResourceCount && requiredResourceCount > 0) {
+            // Count bookings for this day
+            const bookedCount = dayBookings.length;
+            const availableCount = Math.max(0, requiredResourceCount - bookedCount);
+
+            dayData.capacity = {
+              total: requiredResourceCount,
+              booked: bookedCount,
+              available: availableCount,
+            };
+          }
+        }
+
+        availableDays.push(dayData);
       }
 
       currentDate.setDate(currentDate.getDate() + 1);
@@ -2781,8 +3188,26 @@ export class OrdersService {
 
     return {
       availableDays,
-      workDurationPerClient: order.workDurationPerClient, // Suggestion only
+      workDurationPerClient: order.workDurationPerClient,
     };
+  }
+
+  /**
+   * Get available slots for a specific resource
+   * Note: Resources feature removed - this method returns all slots for backward compatibility
+   */
+  async getAvailableSlotsByResource(
+    orderId: number,
+    resourceId: number,
+    startDate: Date,
+    endDate: Date
+  ) {
+    // Return all available slots (resources feature removed)
+    return this.getAvailableSlotsForDateRange(
+      orderId,
+      startDate,
+      endDate
+    );
   }
 
   /**
@@ -2826,8 +3251,38 @@ export class OrdersService {
       );
     }
 
-    // Check if already published
-    if (order.status !== "draft") {
+    // Allow republishing if order is active/open but subscription expired
+    // Check if order owner has active subscription
+    const ownerSubscription = await this.subscriptionsService.getUserActiveSubscription(
+      userId
+    );
+
+    if (order.status === "active" || order.status === "open") {
+      // If order is active/open, check if subscription is still valid
+      if (ownerSubscription) {
+        const hasFeature = this.subscriptionsService.hasFeature(
+          ownerSubscription,
+          "publishPermanentOrders"
+        );
+        if (hasFeature) {
+          throw new BadRequestException("Order is already published and active");
+        }
+      }
+      // Subscription expired - allow republishing by changing to draft first
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: "draft" },
+      });
+      // Log status change
+      await this.logOrderChange(
+        orderId,
+        "status",
+        order.status,
+        "draft",
+        userId,
+        "Order status changed to draft due to expired subscription - ready for republishing"
+      );
+    } else if (order.status !== "draft") {
       throw new BadRequestException("Order is already published");
     }
 
@@ -2845,10 +3300,36 @@ export class OrdersService {
       );
     }
 
-    // Update status to pending_review (admin will approve)
+    // Check if order was previously approved by admin
+    // Look for a history entry where status changed from "pending_review" to "active" or "open"
+    const previousApproval = await this.prisma.orderChangeHistory.findFirst({
+      where: {
+        orderId: orderId,
+        fieldChanged: "status",
+        oldValue: "pending_review",
+        newValue: {
+          in: ["active", "open"],
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    // If order was previously approved, skip admin approval and restore to previous status
+    // Otherwise, require admin approval (go to "pending_review")
+    // For permanent orders, prefer "active" status, but use previous status if available
+    const newStatus = previousApproval 
+      ? (previousApproval.newValue === "open" ? "open" : "active")
+      : "pending_review";
+    const logReason = previousApproval
+      ? `Permanent order republished - previously approved (was ${previousApproval.newValue}), skipping admin review`
+      : "Permanent order published - pending admin review";
+
+    // Update status
     const updatedOrder = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: "pending_review" },
+      data: { status: newStatus },
       include: {
         Client: {
           select: {
@@ -2876,10 +3357,31 @@ export class OrdersService {
       orderId,
       "status",
       "draft",
-      "pending_review",
+      newStatus,
       userId,
-      "Permanent order published - pending admin review"
+      logReason
     );
+
+    // If going directly to active/open (skipping admin approval), send notification
+    if (newStatus === "active" || newStatus === "open") {
+      try {
+        await this.notificationsService.createNotificationWithPush(
+          userId,
+          "order_approved",
+          "Order Published",
+          `Your permanent order "${order.title || order.titleEn || "Untitled"}" has been published and is now live.`,
+          {
+            orderId: order.id,
+            orderTitle: order.title || order.titleEn || "Untitled",
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send notification for order ${orderId}:`,
+          error
+        );
+      }
+    }
 
     return updatedOrder;
   }
@@ -2887,8 +3389,9 @@ export class OrdersService {
   /**
    * Get available slots for a permanent order
    * Supports both weekly schedule (new) and availableDates (legacy)
+   * @param marketMemberId - Optional market member ID to filter slots by specialist (for select mode)
    */
-  async getAvailableSlots(orderId: number, startDate?: Date, endDate?: Date) {
+  async getAvailableSlots(orderId: number, startDate?: Date, endDate?: Date, marketMemberId?: number) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -2916,7 +3419,7 @@ export class OrdersService {
     if (order.weeklySchedule) {
       const start = startDate || new Date();
       const end = endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 3 months default
-      return this.getAvailableSlotsForDateRange(orderId, start, end);
+      return this.getAvailableSlotsForDateRange(orderId, start, end, marketMemberId);
     }
 
     // Legacy: Parse available dates from the order (for backward compatibility)

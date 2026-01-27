@@ -29,10 +29,11 @@ export class BookingsController {
     @Body()
     body: {
       orderId: number;
-      slots?: Array<{ date: string; startTime: string; endTime: string }>;
+      slots?: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number }>;
       scheduledDate?: string;
       startTime?: string;
       endTime?: string;
+      marketMemberId?: number;
     }
   ) {
     const userId = req.user.userId;
@@ -52,7 +53,8 @@ export class BookingsController {
         userId,
         body.scheduledDate,
         body.startTime,
-        body.endTime
+        body.endTime,
+        body.marketMemberId
       );
     } else {
       throw new Error(

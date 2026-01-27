@@ -1,13 +1,15 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Injectable,
   Logger,
+  NotFoundException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma.service";
+
 import { NotificationsService } from "../notifications/notifications.service";
+import { PrismaService } from "../prisma.service";
 import { PusherService } from "../pusher/pusher.service";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 @Injectable()
 export class BookingsService {
@@ -16,7 +18,8 @@ export class BookingsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private pusherService: PusherService
+    private pusherService: PusherService,
+    private subscriptionsService: SubscriptionsService
   ) {}
 
   /**
@@ -93,12 +96,87 @@ export class BookingsService {
     return daySchedule;
   }
 
-  async createBooking(
+  /**
+   * Check if client has overlapping bookings in other orders from the same market
+   */
+  private async checkMarketOrderBookingConflict(
     orderId: number,
     clientId: number,
     scheduledDate: string,
     startTime: string,
     endTime: string
+  ): Promise<boolean> {
+    // Load the order with Markets relation
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, deletedAt: null },
+      include: {
+        Markets: true,
+      },
+    });
+
+    if (!order || !order.Markets || order.Markets.length === 0) {
+      // Order doesn't belong to a market, no conflict check needed
+      return false;
+    }
+
+    // Get the marketId from the first MarketOrder entry
+    const marketId = order.Markets[0].marketId;
+
+    // Find all other orders in the same market
+    const otherMarketOrders = await this.prisma.marketOrder.findMany({
+      where: {
+        marketId,
+        orderId: {
+          not: orderId,
+        },
+      },
+      select: {
+        orderId: true,
+      },
+    });
+
+    if (otherMarketOrders.length === 0) {
+      // No other orders in the same market, no conflict
+      return false;
+    }
+
+    // Extract order IDs
+    const otherOrderIds = otherMarketOrders.map((mo) => mo.orderId);
+
+    // Get all bookings for the client in those other orders on the same date
+    const conflictingBookings = await this.prisma.booking.findMany({
+      where: {
+        clientId,
+        scheduledDate,
+        orderId: {
+          in: otherOrderIds,
+        },
+        status: {
+          in: ["confirmed", "completed", "pending"],
+        },
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    // Check if any of those bookings overlap with the requested time range
+    if (conflictingBookings.length === 0) {
+      return false;
+    }
+
+    // Use the existing hasOverlap method to check for conflicts
+    return this.hasOverlap(startTime, endTime, conflictingBookings);
+  }
+
+  async createBooking(
+    orderId: number,
+    clientId: number,
+    scheduledDate: string,
+    startTime: string,
+    endTime: string,
+    marketMemberId?: number
   ) {
     // Validate time format
     if (
@@ -119,11 +197,12 @@ export class BookingsService {
       where: { id: orderId, deletedAt: null },
       include: {
         Client: true,
+        Markets: true,
         Bookings: {
           where: {
             scheduledDate,
             status: {
-              in: ["confirmed", "completed"],
+              in: ["confirmed", "completed", "pending"],
             },
           },
         },
@@ -150,6 +229,43 @@ export class BookingsService {
       );
     }
 
+    // Check if order owner has active subscription with publishPermanentOrders feature
+    const ownerSubscription = await this.subscriptionsService.getUserActiveSubscription(
+      order.clientId
+    );
+
+    if (!ownerSubscription) {
+      throw new BadRequestException(
+        "This service is currently unavailable. The service owner's subscription has expired. Please contact the service provider."
+      );
+    }
+
+    const hasFeature = this.subscriptionsService.hasFeature(
+      ownerSubscription,
+      "publishPermanentOrders"
+    );
+
+    if (!hasFeature) {
+      throw new BadRequestException(
+        "This service is currently unavailable. The service owner's subscription has expired. Please contact the service provider."
+      );
+    }
+
+    // Check for overlapping bookings in other orders from the same market
+    const hasMarketConflict = await this.checkMarketOrderBookingConflict(
+      orderId,
+      clientId,
+      scheduledDate,
+      startTime,
+      endTime
+    );
+
+    if (hasMarketConflict) {
+      throw new BadRequestException(
+        "You already have a booking for this time in another order from the same service. Please choose a different time."
+      );
+    }
+
     // Get day schedule and validate against work hours
     const daySchedule = this.getDaySchedule(order, scheduledDate);
 
@@ -159,16 +275,51 @@ export class BookingsService {
       );
     }
 
-    // Check for overlapping bookings
-    const existingBookings = order.Bookings.map((booking) => ({
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-    }));
+    // Handle booking based on order's resourceBookingMode
+    const mode = order.resourceBookingMode as "select" | "auto" | "multi" | null;
+    
+    // Get all bookings for the same time slot (for capacity checking)
+    // Include pending bookings for capacity calculation
+    const allBookingsForDate = await this.prisma.booking.findMany({
+      where: {
+        orderId,
+        scheduledDate,
+        status: {
+          in: ["confirmed", "completed", "pending"],
+        },
+      },
+    });
 
-    if (this.hasOverlap(startTime, endTime, existingBookings)) {
-      throw new BadRequestException(
-        "Time range conflicts with an existing booking"
+    const overlappingBookings = allBookingsForDate.filter((booking) => {
+      // Check if bookings overlap in time
+      return (
+        (startTime < booking.endTime && endTime > booking.startTime)
       );
+    });
+
+    // For multi mode, check capacity based on requiredResourceCount
+    if (mode === "multi") {
+      const requiredResourceCount = (order as any).requiredResourceCount;
+      
+      if (!requiredResourceCount || requiredResourceCount <= 0) {
+        throw new BadRequestException(
+          "requiredResourceCount must be set for multi mode orders"
+        );
+      }
+
+      // Check if adding this booking would exceed the required resource count
+      if (overlappingBookings.length >= requiredResourceCount) {
+        throw new BadRequestException(
+          `Maximum capacity reached for this time slot. Maximum resources: ${requiredResourceCount}, Current bookings: ${overlappingBookings.length}`
+        );
+      }
+    } else {
+      // For select and auto modes, check for time conflicts (no overlapping bookings allowed)
+      if (overlappingBookings.length > 0) {
+        throw new BadRequestException(
+          "Time range conflicts with an existing booking"
+        );
+      }
     }
 
     // Create the booking
@@ -180,6 +331,7 @@ export class BookingsService {
         startTime,
         endTime,
         status: bookingStatus,
+        ...(marketMemberId ? { marketMemberId } : {}),
       },
       include: {
         Order: {
@@ -188,15 +340,33 @@ export class BookingsService {
           },
         },
         Client: true,
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
     // Send notification to the specialist (order creator)
     try {
+      // Build notification message with specialist info if resourceBookingMode is "select"
+      let specialistInfo = "";
+      if (mode === "select" && booking.MarketMember?.User) {
+        specialistInfo = ` with ${booking.MarketMember.User.name}`;
+      }
+
       const notificationTitle = requiresApproval ? "New Booking Request" : "New Booking";
       const notificationMessage = requiresApproval
-        ? `${booking.Client.name} has requested a booking for ${scheduledDate} from ${startTime} to ${endTime}. Approval required.`
-        : `${booking.Client.name} has checked in for ${scheduledDate} from ${startTime} to ${endTime}`;
+        ? `${booking.Client.name} has requested a booking${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}. Approval required.`
+        : `${booking.Client.name} has checked in${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}`;
       
       await this.notificationsService.createNotificationWithPush(
         order.clientId,
@@ -211,6 +381,10 @@ export class BookingsService {
           startTime,
           endTime,
           status: bookingStatus,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
 
@@ -226,6 +400,10 @@ export class BookingsService {
           scheduledDate,
           startTime,
           endTime,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
     } catch (error) {
@@ -242,11 +420,11 @@ export class BookingsService {
   async createMultipleBookings(
     orderId: number,
     clientId: number,
-    slots: Array<{ date: string; startTime: string; endTime: string }>
+    slots: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number }>
   ) {
     const bookings: any[] = [];
     const errors: Array<{
-      slot: { date: string; startTime: string; endTime: string };
+      slot: { date: string; startTime: string; endTime: string; marketMemberId?: number };
       error: string;
     }> = [];
 
@@ -257,7 +435,8 @@ export class BookingsService {
           clientId,
           slot.date,
           slot.startTime,
-          slot.endTime
+          slot.endTime,
+          slot.marketMemberId
         );
         bookings.push(booking);
       } catch (error: any) {
@@ -304,6 +483,20 @@ export class BookingsService {
             id: true,
             title: true,
             workDurationPerClient: true,
+            resourceBookingMode: true,
+          },
+        },
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+                verified: true,
+              },
+            },
           },
         },
       },
@@ -328,6 +521,7 @@ export class BookingsService {
             description: true,
             location: true,
             workDurationPerClient: true,
+            resourceBookingMode: true,
             Client: {
               select: {
                 id: true,
@@ -352,6 +546,19 @@ export class BookingsService {
             email: true,
             avatarUrl: true,
             verified: true,
+          },
+        },
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+                verified: true,
+              },
+            },
           },
         },
       },
@@ -372,6 +579,7 @@ export class BookingsService {
             description: true,
             location: true,
             workDurationPerClient: true,
+            resourceBookingMode: true,
             Client: {
               select: {
                 id: true,
@@ -396,6 +604,19 @@ export class BookingsService {
             email: true,
             avatarUrl: true,
             verified: true,
+          },
+        },
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+                verified: true,
+              },
+            },
           },
         },
       },
@@ -428,6 +649,18 @@ export class BookingsService {
           },
         },
         Client: true,
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -457,6 +690,18 @@ export class BookingsService {
           },
         },
         Client: true,
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -470,17 +715,28 @@ export class BookingsService {
           ? booking.Client.name
           : booking.Order.Client.name;
 
+      // Build notification message with specialist info if resourceBookingMode is "select"
+      const mode = booking.Order.resourceBookingMode as "select" | "auto" | "multi" | null;
+      let specialistInfo = "";
+      if (mode === "select" && booking.MarketMember?.User) {
+        specialistInfo = ` with ${booking.MarketMember.User.name}`;
+      }
+
       await this.notificationsService.createNotificationWithPush(
         notifyUserId,
         "booking_cancelled",
         "Booking Cancelled",
-        `${cancellerName} cancelled booking for ${booking.scheduledDate} from ${booking.startTime} to ${booking.endTime}`,
+        `${cancellerName} cancelled booking${specialistInfo} for ${booking.scheduledDate} from ${booking.startTime} to ${booking.endTime}`,
         {
           bookingId: booking.id,
           orderId: booking.orderId,
           scheduledDate: booking.scheduledDate,
           startTime: booking.startTime,
           endTime: booking.endTime,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
 
@@ -495,6 +751,10 @@ export class BookingsService {
           scheduledDate: booking.scheduledDate,
           startTime: booking.startTime,
           endTime: booking.endTime,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
     } catch (error) {
@@ -591,6 +851,18 @@ export class BookingsService {
           },
         },
         Client: true,
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -667,22 +939,45 @@ export class BookingsService {
           },
         },
         Client: true,
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
       },
     });
 
     // Send notification to the client who made the booking
     try {
+      // Build notification message with specialist info if resourceBookingMode is "select"
+      const mode = booking.Order.resourceBookingMode as "select" | "auto" | "multi" | null;
+      let specialistInfo = "";
+      if (mode === "select" && booking.MarketMember?.User) {
+        specialistInfo = ` with ${booking.MarketMember.User.name}`;
+      }
+
       await this.notificationsService.createNotificationWithPush(
         booking.clientId,
         "booking_updated",
         "Booking Updated",
-        `Your booking has been moved to ${scheduledDate} from ${startTime} to ${endTime}`,
+        `Your booking${specialistInfo} has been moved to ${scheduledDate} from ${startTime} to ${endTime}`,
         {
           bookingId: updatedBooking.id,
           orderId: updatedBooking.orderId,
           scheduledDate,
           startTime,
           endTime,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
 
@@ -697,6 +992,10 @@ export class BookingsService {
           startTime,
           endTime,
           updatedBy: booking.Order.Client.name,
+          ...(mode === "select" && booking.MarketMember?.User ? {
+            specialistId: booking.MarketMember.User.id,
+            specialistName: booking.MarketMember.User.name,
+          } : {}),
         }
       );
     } catch (error) {
@@ -739,6 +1038,19 @@ export class BookingsService {
             email: true,
             avatarUrl: true,
             verified: true,
+          },
+        },
+        MarketMember: {
+          include: {
+            User: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+                verified: true,
+              },
+            },
           },
         },
       },

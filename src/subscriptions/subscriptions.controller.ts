@@ -11,6 +11,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { SubscriptionsService } from "./subscriptions.service";
+import { SubscriptionRenewalService } from "./subscription-renewal.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
 import { CreateSubscriptionPlanDto } from "./dto/subscription-plan.dto";
@@ -20,7 +21,10 @@ import { CancelSubscriptionDto } from "./dto/user-subscription.dto";
 
 @Controller("subscriptions")
 export class SubscriptionsController {
-  constructor(private subscriptionsService: SubscriptionsService) {}
+  constructor(
+    private subscriptionsService: SubscriptionsService,
+    private subscriptionRenewalService: SubscriptionRenewalService
+  ) {}
 
   /**
    * Get all active subscription plans
@@ -345,5 +349,22 @@ export class SubscriptionsController {
       subscriptionId,
       body.additionalDays,
     );
+  }
+
+  /**
+   * Admin: Mark expired subscriptions as expired
+   * This endpoint manually triggers the expiration marking process for both user and market subscriptions
+   */
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post("admin/mark-expired")
+  async markExpiredSubscriptions() {
+    const result = await this.subscriptionRenewalService.markAllExpiredSubscriptions();
+    return {
+      success: true,
+      message: `Marked ${result.total} subscription(s) as expired (${result.userSubscriptions} user, ${result.marketSubscriptions} market)`,
+      userSubscriptions: result.userSubscriptions,
+      marketSubscriptions: result.marketSubscriptions,
+      total: result.total,
+    };
   }
 }

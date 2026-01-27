@@ -657,8 +657,8 @@ export class SubscriptionsService {
   }
 
   /**
-   * Renew subscription manually (purchase same plan again)
-   * This extends the subscription or creates a new one if expired
+   * Renew subscription manually (extends existing subscription)
+   * Allows renewal up to 7 days before expiration or when expired
    */
   async renewSubscription(userId: number, subscriptionId: number) {
     const subscription = await this.prisma.userSubscription.findFirst({
@@ -682,17 +682,156 @@ export class SubscriptionsService {
       );
     }
 
-    // If subscription is still active, user needs to wait for it to expire or cancel first
     const now = new Date();
-    if (subscription.status === "active" && subscription.endDate > now) {
+    const endDate = new Date(subscription.endDate);
+    const daysRemaining = Math.ceil(
+      (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Allow renewal if:
+    // 1. Subscription is expired (daysRemaining < 0)
+    // 2. Subscription is expiring soon (≤7 days remaining)
+    // 3. Subscription is cancelled (can be renewed)
+    if (
+      subscription.status === "active" &&
+      daysRemaining > 7
+    ) {
       throw new BadRequestException(
-        "Your subscription is still active. Please wait for it to expire or cancel it first before renewing."
+        `Your subscription is still active with ${daysRemaining} days remaining. You can renew when there are 7 days or less remaining.`
       );
     }
 
-    // Purchase the same plan again
-    return this.purchaseSubscription(userId, {
-      planId: subscription.planId,
+    // Get the plan
+    const plan = subscription.Plan;
+
+    // Get user's credit balance
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { creditBalance: true, currency: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Convert subscription price to USD (base currency for credits)
+    const planCurrency = plan.currency || "USD";
+    let subscriptionPriceUSD = plan.price;
+    let exchangeRate = 1;
+    let originalAmount = plan.price;
+
+    if (planCurrency.toUpperCase() !== this.BASE_CURRENCY) {
+      try {
+        exchangeRate = await this.exchangeRateService.getExchangeRate(
+          planCurrency.toUpperCase(),
+          this.BASE_CURRENCY
+        );
+        subscriptionPriceUSD = plan.price * exchangeRate;
+        subscriptionPriceUSD = Math.round(subscriptionPriceUSD * 100) / 100;
+        this.logger.log(
+          `Currency conversion: ${plan.price} ${planCurrency} = ${subscriptionPriceUSD} ${this.BASE_CURRENCY} (rate: ${exchangeRate})`
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to convert subscription price: ${error.message}. Using price as-is.`
+        );
+        exchangeRate = 1;
+      }
+    }
+
+    // Check if user has enough credits
+    if (user.creditBalance < subscriptionPriceUSD) {
+      throw new BadRequestException({
+        code: "INSUFFICIENT_CREDITS",
+        message: "Insufficient credits to renew this subscription",
+        required: subscriptionPriceUSD,
+        available: user.creditBalance,
+      });
+    }
+
+    // Renew subscription by extending endDate
+    return await this.prisma.$transaction(async (tx) => {
+      // Deduct credits
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { creditBalance: { decrement: subscriptionPriceUSD } },
+        select: { creditBalance: true },
+      });
+
+      // Calculate new end date
+      // If subscription is expired, start from now, otherwise extend from current endDate
+      const currentEndDate = endDate > now ? endDate : now;
+      const newEndDate = new Date(currentEndDate);
+      newEndDate.setDate(newEndDate.getDate() + plan.durationDays);
+
+      // Update existing subscription
+      const renewedSubscription = await tx.userSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: "active",
+          endDate: newEndDate,
+          autoRenew: false,
+        },
+        include: {
+          Plan: true,
+        },
+      });
+
+      // Log credit transaction
+      await this.creditTransactionsService.logTransaction({
+        userId,
+        amount: -subscriptionPriceUSD,
+        balanceAfter: updatedUser.creditBalance,
+        type: "subscription",
+        status: "completed",
+        description: `Subscription renewal: ${plan.nameEn || plan.nameRu || plan.nameHy || plan.name || "Plan"} - ${originalAmount} ${planCurrency} = ${subscriptionPriceUSD} ${this.BASE_CURRENCY} credits`,
+        referenceId: subscriptionId.toString(),
+        referenceType: "subscription_renewal",
+        currency: planCurrency,
+        baseCurrency: this.BASE_CURRENCY,
+        exchangeRate,
+        originalAmount,
+        convertedAmount: subscriptionPriceUSD,
+        metadata: {
+          planId: plan.id,
+          planName: plan.nameEn || plan.nameRu || plan.nameHy || plan.name,
+          durationDays: plan.durationDays,
+          previousEndDate: subscription.endDate.toISOString(),
+          newEndDate: newEndDate.toISOString(),
+        },
+        tx,
+      });
+
+      // Create subscription transaction
+      await tx.subscriptionTransaction.create({
+        data: {
+          userId,
+          subscriptionId: subscriptionId,
+          amount: originalAmount,
+          currency: planCurrency,
+          paymentId: null,
+          status: "completed",
+          type: "renewal",
+        },
+      });
+
+      this.logger.log(
+        `Subscription renewed: user ${userId}, subscription ${subscriptionId}, plan ${plan.id}, extended to ${newEndDate.toISOString()}, credits deducted: ${subscriptionPriceUSD} ${this.BASE_CURRENCY}`
+      );
+
+      return {
+        success: true,
+        subscription: renewedSubscription,
+        planId: plan.id,
+        planName: plan.nameEn || plan.nameRu || plan.nameHy || plan.name || "",
+        amount: originalAmount,
+        currency: planCurrency,
+        creditsDeducted: subscriptionPriceUSD,
+        creditsRemaining: updatedUser.creditBalance,
+        previousEndDate: subscription.endDate,
+        newEndDate: newEndDate,
+        daysAdded: plan.durationDays,
+      };
     });
   }
 

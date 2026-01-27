@@ -46,6 +46,8 @@ export class OrdersController {
       workDurationPerClient?: number;
       weeklySchedule?: any;
       checkinRequiresApproval?: boolean;
+      resourceBookingMode?: "select" | "auto" | "multi";
+      requiredResourceCount?: number;
     }
   ) {
     // Validate user is authenticated
@@ -70,7 +72,9 @@ export class OrdersController {
       body.orderType || "one_time",
       body.workDurationPerClient,
       body.weeklySchedule,
-      body.checkinRequiresApproval ?? false
+      body.checkinRequiresApproval ?? false,
+      body.resourceBookingMode,
+      body.requiredResourceCount
     );
   }
 
@@ -103,6 +107,8 @@ export class OrdersController {
       workDurationPerClient?: number;
       weeklySchedule?: any;
       checkinRequiresApproval?: boolean;
+      resourceBookingMode?: "select" | "auto" | "multi";
+      requiredResourceCount?: number;
     }
   ) {
     return this.ordersService.createOrderWithMedia(
@@ -123,7 +129,9 @@ export class OrdersController {
       body.orderType || "one_time",
       body.workDurationPerClient,
       body.weeklySchedule,
-      body.checkinRequiresApproval ?? false
+      body.checkinRequiresApproval ?? false,
+      body.resourceBookingMode,
+      body.requiredResourceCount
     );
   }
 
@@ -377,6 +385,8 @@ export class OrdersController {
       workDurationPerClient?: number;
       weeklySchedule?: any;
       availableDates?: string[];
+      resourceBookingMode?: "select" | "auto" | "multi";
+      requiredResourceCount?: number;
     },
     @Request() req
   ) {
@@ -526,7 +536,8 @@ export class OrdersController {
   async getAvailableSlots(
     @Param("id") id: string,
     @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string
+    @Query("endDate") endDate?: string,
+    @Query("marketMemberId") marketMemberId?: string
   ) {
     const orderId = parseInt(id, 10);
     if (isNaN(orderId)) {
@@ -535,8 +546,9 @@ export class OrdersController {
 
     const start = startDate ? new Date(startDate) : undefined;
     const end = endDate ? new Date(endDate) : undefined;
+    const memberId = marketMemberId ? parseInt(marketMemberId, 10) : undefined;
 
-    return this.ordersService.getAvailableSlots(orderId, start, end);
+    return this.ordersService.getAvailableSlots(orderId, start, end, memberId);
   }
 
   @UseGuards(JwtAuthGuard)

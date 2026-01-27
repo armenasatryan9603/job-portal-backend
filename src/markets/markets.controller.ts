@@ -19,7 +19,9 @@ import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 
 @Controller("markets")
 export class MarketsController {
-  constructor(private marketsService: MarketsService) {}
+  constructor(
+    private marketsService: MarketsService
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post()
@@ -378,4 +380,19 @@ export class MarketsController {
       marketMemberId
     );
   }
+
+  /**
+   * Get market members (specialists) for an order
+   */
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get(":id/specialists")
+  async getMarketSpecialists(
+    @Param("id", ParseIntPipe) marketId: number
+  ) {
+    const market = await this.marketsService.getMarketById(marketId);
+    return market.Members.filter(
+      (member) => member.status === "accepted" && member.isActive
+    );
+  }
+
 }
