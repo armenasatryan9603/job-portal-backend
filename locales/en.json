@@ -1021,6 +1021,7 @@
   "notificationReferralBonusTitle": "Welcome Bonus!",
   "notificationReferralBonusMessage": "You received {bonusAmount} credits as a welcome bonus for using a referral code!",
   "notificationPeerInvitationTitle": "Peer Invitation",
+  "selectYourSkills": "Select your skills",
   "notificationPeerInvitationMessage": "{inviterName} wants to add you as a peer",
   "notificationPeerInvitationAcceptedTitle": "Peer Invitation Accepted",
   "notificationPeerInvitationAcceptedMessage": "{peerName} accepted your peer invitation",
