@@ -3026,7 +3026,13 @@ export class OrdersService {
         },
         Markets: {
           include: {
-            Market: true,
+            Market: {
+              select: {
+                id: true,
+                name: true,
+                weeklySchedule: true,
+              },
+            },
           },
         },
       },
@@ -3085,24 +3091,46 @@ export class OrdersService {
         Market: {
           id: number;
           name: string;
+          weeklySchedule?: Prisma.JsonValue | null;
         };
       }>;
     };
 
     const order = orderResult as unknown as OrderWithBookings;
 
-    if (!order.weeklySchedule) {
-      return {
-        availableDays: [],
-        workDurationPerClient: order.workDurationPerClient,
-      };
-    }
-
-    // At this point, we know weeklySchedule exists (checked above)
-    const weeklySchedule = order.weeklySchedule as Record<string, {
+    // Get weeklySchedule from order, or fallback to market's schedule
+    let weeklySchedule = order.weeklySchedule as Record<string, {
       enabled: boolean;
       workHours: { start: string; end: string } | null;
-    }>;
+    }> | null;
+
+    // If order doesn't have a schedule, try to use market's schedule as fallback
+    if (!weeklySchedule && order.Markets && order.Markets.length > 0) {
+      // Find first market with a weeklySchedule
+      for (const marketOrder of order.Markets) {
+        const market = marketOrder.Market;
+        if (market && (market as any).weeklySchedule) {
+          weeklySchedule = (market as any).weeklySchedule as Record<string, {
+            enabled: boolean;
+            workHours: { start: string; end: string } | null;
+          }>;
+          break;
+        }
+      }
+    }
+
+    // If no schedule found, default to 24-hour working schedule for all days
+    if (!weeklySchedule) {
+      weeklySchedule = {
+        monday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        tuesday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        wednesday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        thursday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        friday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        saturday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+        sunday: { enabled: true, workHours: { start: "00:00", end: "23:59" } },
+      };
+    }
     const availableDays: Array<{
       date: string;
       workHours: { start: string; end: string } | null;
@@ -3402,6 +3430,17 @@ export class OrdersService {
             },
           },
         },
+        Markets: {
+          include: {
+            Market: {
+              select: {
+                id: true,
+                name: true,
+                weeklySchedule: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -3415,8 +3454,13 @@ export class OrdersService {
       );
     }
 
-    // If order uses new weekly schedule format
-    if (order.weeklySchedule) {
+    // Check if order has weeklySchedule or if it can use market's schedule as fallback
+    const hasOrderSchedule = !!order.weeklySchedule;
+    const hasMarketSchedule = order.Markets && order.Markets.length > 0 && 
+      order.Markets.some(mo => mo.Market && (mo.Market as any).weeklySchedule);
+
+    // If order uses new weekly schedule format (either own or market's)
+    if (hasOrderSchedule || hasMarketSchedule) {
       const start = startDate || new Date();
       const end = endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 3 months default
       return this.getAvailableSlotsForDateRange(orderId, start, end, marketMemberId);

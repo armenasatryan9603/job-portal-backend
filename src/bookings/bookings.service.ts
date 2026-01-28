@@ -64,12 +64,29 @@ export class BookingsService {
   }
 
   /**
-   * Get day schedule from order's weekly schedule
+   * Get day schedule from order's weekly schedule, with fallback to market's schedule
    */
   private getDaySchedule(order: any, scheduledDate: string): any {
-    const weeklySchedule = order.weeklySchedule as any;
+    let weeklySchedule = order.weeklySchedule as any;
+    
+    // If order doesn't have a schedule, try to use market's schedule as fallback
+    if (!weeklySchedule && order.Markets && order.Markets.length > 0) {
+      // Find first market with a weeklySchedule
+      for (const marketOrder of order.Markets) {
+        const market = marketOrder.Market || marketOrder;
+        if (market && market.weeklySchedule) {
+          weeklySchedule = market.weeklySchedule;
+          break;
+        }
+      }
+    }
+
+    // If no schedule found, default to 24-hour working day
     if (!weeklySchedule) {
-      throw new BadRequestException("Order does not have a weekly schedule");
+      return {
+        enabled: true,
+        workHours: { start: "00:00", end: "23:59" },
+      };
     }
 
     const date = new Date(scheduledDate);
@@ -85,12 +102,12 @@ export class BookingsService {
     const dayName = dayNames[date.getDay()];
     const daySchedule = weeklySchedule[dayName];
 
-    if (!daySchedule || !daySchedule.enabled) {
-      throw new BadRequestException(`No work hours available for ${dayName}`);
-    }
-
-    if (!daySchedule.workHours) {
-      throw new BadRequestException(`Work hours not configured for ${dayName}`);
+    // If day is not enabled or doesn't have work hours, default to 24-hour working day
+    if (!daySchedule || !daySchedule.enabled || !daySchedule.workHours) {
+      return {
+        enabled: true,
+        workHours: { start: "00:00", end: "23:59" },
+      };
     }
 
     return daySchedule;
@@ -197,7 +214,16 @@ export class BookingsService {
       where: { id: orderId, deletedAt: null },
       include: {
         Client: true,
-        Markets: true,
+        Markets: {
+          include: {
+            Market: {
+              select: {
+                id: true,
+                weeklySchedule: true,
+              },
+            },
+          },
+        },
         Bookings: {
           where: {
             scheduledDate,
@@ -840,6 +866,16 @@ export class BookingsService {
         Order: {
           include: {
             Client: true,
+            Markets: {
+              include: {
+                Market: {
+                  select: {
+                    id: true,
+                    weeklySchedule: true,
+                  },
+                },
+              },
+            },
             Bookings: {
               where: {
                 id: { not: bookingId }, // Exclude current booking
