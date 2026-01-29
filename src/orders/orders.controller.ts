@@ -384,14 +384,14 @@ export class OrdersController {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Order #${orderId} - HotWork</title>
+  <title>Order #${orderId} - TopWork</title>
   <meta name="description" content="${safeTitle}">
   
   <!-- Universal Links / App Links meta tags -->
   <meta property="al:ios:url" content="jobportalmobile://orders/${orderId}">
-  <meta property="al:ios:app_name" content="HotWork">
+  <meta property="al:ios:app_name" content="TopWork">
   <meta property="al:android:url" content="jobportalmobile://orders/${orderId}">
-  <meta property="al:android:app_name" content="HotWork">
+  <meta property="al:android:app_name" content="TopWork">
   <meta property="al:android:package" content="com.jobportalmobile.app">
   
   <style>
@@ -448,7 +448,7 @@ export class OrdersController {
         <p><strong>Status:</strong> ${order.status || "N/A"}</p>
       </div>
       <a href="jobportalmobile://orders/${orderId}" class="open-app-btn">
-        Open in HotWork App
+        Open in TopWork App
       </a>
     </div>
   </div>
