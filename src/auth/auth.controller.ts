@@ -45,8 +45,8 @@ export class AuthController {
   }
 
   @Post("send-otp")
-  async sendOTP(@Body() body: { phone: string; isSimulator?: boolean }) {
-    return this.authService.sendOTP(body.phone, body.isSimulator);
+  async sendOTP(@Body() body: { phone: string; countryCode: string; isSimulator?: boolean }) {
+    return this.authService.sendOTP(body.phone, body.countryCode, body.isSimulator);
   }
 
   @Post("verify-otp")
@@ -54,6 +54,7 @@ export class AuthController {
     @Body()
     body: {
       phone: string;
+      countryCode: string;
       otp: string;
       name?: string;
       isSimulator?: boolean;
@@ -62,6 +63,7 @@ export class AuthController {
   ) {
     return this.authService.verifyOTP(
       body.phone,
+      body.countryCode,
       body.otp,
       body.name,
       body.isSimulator,
@@ -70,8 +72,8 @@ export class AuthController {
   }
 
   @Post("reset-otp")
-  async resetOTP(@Body() body: { phone: string; isSimulator?: boolean }) {
-    return this.authService.resetOTP(body.phone, body.isSimulator);
+  async resetOTP(@Body() body: { phone: string; countryCode: string; isSimulator?: boolean }) {
+    return this.authService.resetOTP(body.phone, body.countryCode, body.isSimulator);
   }
 
   @Get("profile")

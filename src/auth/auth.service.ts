@@ -151,7 +151,16 @@ export class AuthService {
 
       const payload = { sub: adminUser.id, email: adminUser.email, role: adminUser.role };
       const token = this.jwtService.sign(payload);
-      return { access_token: token, user: adminUser };
+      // Return simplified user object matching frontend LoginResponse type
+      return { 
+        access_token: token, 
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          name: adminUser.name,
+          role: adminUser.role,
+        }
+      };
     }
 
     // Normal database authentication
@@ -352,24 +361,46 @@ export class AuthService {
     };
   }
 
-  async sendOTP(phone: string, isSimulator: boolean = false) {
-    // Clean phone number: remove spaces and dashes
+  /**
+   * Formats a phone number with country code into E.164 format
+   * @param phone - The phone number (local format)
+   * @param countryCode - The country code (e.g., "374", "+374", or "1")
+   * @returns Formatted phone number in E.164 format (e.g., "+374123456789")
+   */
+  private formatPhoneNumber(phone: string, countryCode: string): string {
+    // Validate countryCode is provided
+    if (!countryCode || countryCode.trim() === "") {
+      throw new BadRequestException("Country code is required");
+    }
+
+    // Normalize country code (remove + if present, then add it back)
+    let normalizedCountryCode = countryCode.replace(/^\+/, "");
+    if (!/^\d+$/.test(normalizedCountryCode)) {
+      throw new BadRequestException("Invalid country code format");
+    }
+    normalizedCountryCode = "+" + normalizedCountryCode;
+
+    // Clean phone number
     let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
 
-    // Format phone number: ensure E.164 format with country code
-    if (!cleanPhone.startsWith("+")) {
-      // If it starts with 0, remove it and add country code
-      if (cleanPhone.startsWith("0")) {
-        cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
-      } else if (cleanPhone.startsWith("374")) {
-        // Already has country code without +
-        cleanPhone = "+" + cleanPhone;
-      } else {
-        // Assume it's a local number, add country code
-        cleanPhone = "+374" + cleanPhone;
-      }
+    // If phone already has +, check if it matches country code or use as-is
+    if (cleanPhone.startsWith("+")) {
+      // Phone already has country code, validate or use as-is
+      return cleanPhone;
     }
-    // If it already starts with +, keep it as is
+
+    // Remove leading 0 if present
+    if (cleanPhone.startsWith("0")) {
+      cleanPhone = cleanPhone.substring(1);
+    }
+
+    // Combine country code with phone number
+    return normalizedCountryCode + cleanPhone;
+  }
+
+  async sendOTP(phone: string, countryCode: string, isSimulator: boolean = false) {
+    // Format phone number: ensure E.164 format with country code
+    const cleanPhone = this.formatPhoneNumber(phone, countryCode);
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -477,28 +508,14 @@ export class AuthService {
 
   async verifyOTP(
     phone: string,
+    countryCode: string,
     otp: string,
     name?: string,
     isSimulator: boolean = false,
     referralCode?: string
   ) {
-    // Clean phone number: ensure E.164 format
-    let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-
     // Format phone number: ensure E.164 format with country code
-    if (!cleanPhone.startsWith("+")) {
-      // If it starts with 0, remove it and add country code
-      if (cleanPhone.startsWith("0")) {
-        cleanPhone = "+374" + cleanPhone.substring(1); // Remove leading 0, add Armenia country code
-      } else if (cleanPhone.startsWith("374")) {
-        // Already has country code without +
-        cleanPhone = "+" + cleanPhone;
-      } else {
-        // Assume it's a local number, add country code
-        cleanPhone = "+374" + cleanPhone;
-      }
-    }
-    // If it already starts with +, keep it as is
+    const cleanPhone = this.formatPhoneNumber(phone, countryCode);
 
     // If simulator mode, skip Unimtx verification and use local verification
     if (isSimulator) {
@@ -664,20 +681,9 @@ export class AuthService {
     };
   }
 
-  async resetOTP(phone: string, isSimulator: boolean = false) {
-    // Clean phone number: remove spaces and dashes
-    let cleanPhone = phone.replace(/[\s\-\(\)]/g, "");
-
+  async resetOTP(phone: string, countryCode: string, isSimulator: boolean = false) {
     // Format phone number: ensure E.164 format with country code
-    if (!cleanPhone.startsWith("+")) {
-      if (cleanPhone.startsWith("0")) {
-        cleanPhone = "+374" + cleanPhone.substring(1);
-      } else if (cleanPhone.startsWith("374")) {
-        cleanPhone = "+" + cleanPhone;
-      } else {
-        cleanPhone = "+374" + cleanPhone;
-      }
-    }
+    const cleanPhone = this.formatPhoneNumber(phone, countryCode);
 
     // Clear existing OTP for the phone number
     await this.prisma.user.updateMany({
