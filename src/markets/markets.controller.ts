@@ -143,14 +143,14 @@ export class MarketsController {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${safeName || `Service #${marketId}`} - TopWork</title>
+  <title>${safeName || `Service #${marketId}`} - HotWork</title>
   <meta name="description" content="${safeDescription || safeName}">
   
   <!-- Universal Links / App Links meta tags -->
   <meta property="al:ios:url" content="jobportalmobile://services/${marketId}">
-  <meta property="al:ios:app_name" content="TopWork">
+  <meta property="al:ios:app_name" content="HotWork">
   <meta property="al:android:url" content="jobportalmobile://services/${marketId}">
-  <meta property="al:android:app_name" content="TopWork">
+  <meta property="al:android:app_name" content="HotWork">
   <meta property="al:android:package" content="com.jobportalmobile.app">
   
   <style>
@@ -207,7 +207,7 @@ export class MarketsController {
         <p><strong>Rating:</strong> ${market.rating || "N/A"}</p>
       </div>
       <a href="jobportalmobile://services/${marketId}" class="open-app-btn">
-        Open in TopWork App
+        Open in HotWork App
       </a>
     </div>
   </div>
