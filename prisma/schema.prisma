@@ -732,6 +732,7 @@ model Booking {
   endTime       String // End time (HH:MM format)
   status        String   @default("confirmed") // pending, confirmed, completed, cancelled
   marketMemberId Int? // Market member (specialist) assigned to this booking (for select mode)
+  clientMessage  String? // Optional message from client when creating the booking
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   Order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)

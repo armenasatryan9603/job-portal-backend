@@ -29,18 +29,19 @@ export class BookingsController {
     @Body()
     body: {
       orderId: number;
-      slots?: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number }>;
+      slots?: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number; message?: string }>;
       scheduledDate?: string;
       startTime?: string;
       endTime?: string;
       marketMemberId?: number;
+      message?: string;
     }
   ) {
     const userId = req.user.userId;
 
     // Support both single booking and multiple bookings
     if (body.slots && body.slots.length > 0) {
-      // Create multiple bookings
+      // Create multiple bookings (message per slot in each item)
       return this.bookingsService.createMultipleBookings(
         body.orderId,
         userId,
@@ -54,7 +55,8 @@ export class BookingsController {
         body.scheduledDate,
         body.startTime,
         body.endTime,
-        body.marketMemberId
+        body.marketMemberId,
+        body.message
       );
     } else {
       throw new Error(

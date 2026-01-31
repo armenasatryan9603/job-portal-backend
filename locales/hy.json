@@ -1331,6 +1331,7 @@
   "availableSlots": "Հասանելի սլոթեր",
   "noSlotsAvailable": "Այս ամսաթվի համար սլոթեր հասանելի չեն",
   "selectedBookings": "Ընտրված ամրագրումներ",
+  "bookingMessagePlaceholder": "Ավելացնել հաղորդագրություն (ընտրովի)",
   "selectAnotherDate": "Ընտրել մեկ այլ ամսաթիվ",
   "confirmAllBookings": "Հաստատել բոլոր ամրագրումները",
   "selectSpecialist": "Ընտրել սպասվողներից մեկին",

@@ -1328,6 +1328,7 @@
   "availableSlots": "Доступные слоты",
   "noSlotsAvailable": "Нет доступных слотов на эту дату",
   "selectedBookings": "Выбранные бронирования",
+  "bookingMessagePlaceholder": "Добавить сообщение (необязательно)",
   "selectAnotherDate": "Выбрать другую дату",
   "confirmAllBookings": "Подтвердить все бронирования",
   "setWeeklySchedule": "Установить недельное расписание",

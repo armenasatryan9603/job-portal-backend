@@ -193,7 +193,8 @@ export class BookingsService {
     scheduledDate: string,
     startTime: string,
     endTime: string,
-    marketMemberId?: number
+    marketMemberId?: number,
+    message?: string
   ) {
     // Validate time format
     if (
@@ -358,6 +359,7 @@ export class BookingsService {
         endTime,
         status: bookingStatus,
         ...(marketMemberId ? { marketMemberId } : {}),
+        ...(message ? { clientMessage: message } : {}),
       },
       include: {
         Order: {
@@ -390,10 +392,13 @@ export class BookingsService {
       }
 
       const notificationTitle = requiresApproval ? "New Booking Request" : "New Booking";
+      const messageSuffix = booking.clientMessage?.trim()
+        ? ` Message: ${booking.clientMessage.trim()}`
+        : "";
       const notificationMessage = requiresApproval
-        ? `${booking.Client.name} has requested a booking${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}. Approval required.`
-        : `${booking.Client.name} has checked in${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}`;
-      
+        ? `${booking.Client.name} has requested a booking${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}. Approval required.${messageSuffix}`
+        : `${booking.Client.name} has checked in${specialistInfo} for ${scheduledDate} from ${startTime} to ${endTime}.${messageSuffix}`;
+
       await this.notificationsService.createNotificationWithPush(
         order.clientId,
         "new_booking",
@@ -407,6 +412,7 @@ export class BookingsService {
           startTime,
           endTime,
           status: bookingStatus,
+          ...(booking.clientMessage?.trim() ? { clientMessage: booking.clientMessage.trim() } : {}),
           ...(mode === "select" && booking.MarketMember?.User ? {
             specialistId: booking.MarketMember.User.id,
             specialistName: booking.MarketMember.User.name,
@@ -426,6 +432,7 @@ export class BookingsService {
           scheduledDate,
           startTime,
           endTime,
+          ...(booking.clientMessage?.trim() ? { clientMessage: booking.clientMessage.trim() } : {}),
           ...(mode === "select" && booking.MarketMember?.User ? {
             specialistId: booking.MarketMember.User.id,
             specialistName: booking.MarketMember.User.name,
@@ -446,11 +453,11 @@ export class BookingsService {
   async createMultipleBookings(
     orderId: number,
     clientId: number,
-    slots: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number }>
+    slots: Array<{ date: string; startTime: string; endTime: string; marketMemberId?: number; message?: string }>
   ) {
     const bookings: any[] = [];
     const errors: Array<{
-      slot: { date: string; startTime: string; endTime: string; marketMemberId?: number };
+      slot: { date: string; startTime: string; endTime: string; marketMemberId?: number; message?: string };
       error: string;
     }> = [];
 
@@ -462,7 +469,8 @@ export class BookingsService {
           slot.date,
           slot.startTime,
           slot.endTime,
-          slot.marketMemberId
+          slot.marketMemberId,
+          slot.message
         );
         bookings.push(booking);
       } catch (error: any) {

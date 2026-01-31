@@ -1323,6 +1323,7 @@
   "availableSlots": "Available Slots",
   "noSlotsAvailable": "No slots available for this date",
   "selectedBookings": "Selected Bookings",
+  "bookingMessagePlaceholder": "Add a message (optional)",
   "selectAnotherDate": "Select Another Date",
   "confirmAllBookings": "Confirm All Bookings",
   "setWeeklySchedule": "Set Weekly Schedule",
