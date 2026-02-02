@@ -69,6 +69,7 @@
   "jobDescription": "Աշխատանքի նկարագրություն",
   "budget": "Բյուջե",
   "location": "Տեղակայություն",
+  "searchLocation": "Որոնել տեղակայություն...",
   "category": "Կատեգորիա",
   "requiredSkills": "Պահանջվող հմտություններ",
   "availableDates": "Հասանելի ամսաթվեր",

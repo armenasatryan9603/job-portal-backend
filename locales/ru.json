@@ -62,6 +62,7 @@
   "jobDescription": "Описание работы",
   "budget": "Бюджет",
   "location": "Местоположение",
+  "searchLocation": "Поиск местоположения...",
   "category": "Категория",
   "requiredSkills": "Необходимые навыки",
   "availableDates": "Доступные даты",

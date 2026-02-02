@@ -3,6 +3,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
 import { BookingsModule } from "./bookings/bookings.module";
+import { CardsModule } from "./cards/cards.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { ChatModule } from "./chat/chat.module";
 import { ConstantsModule } from "./constants/constants.module";
@@ -38,6 +39,7 @@ import { UsersModule } from "./users/users.module";
     AuthModule,
     OrdersModule,
     CreditModule,
+    CardsModule,
     UsersModule,
     CategoriesModule,
     OrderProposalsModule,

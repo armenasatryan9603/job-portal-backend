@@ -70,6 +70,7 @@
   "jobDescription": "Job Description",
   "budget": "Budget",
   "location": "Location",
+  "searchLocation": "Search location...",
   "category": "Category",
   "requiredSkills": "Required Skills",
   "availableDates": "Available Dates",
