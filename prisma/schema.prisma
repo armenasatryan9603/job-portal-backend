@@ -757,6 +757,7 @@ model Market {
   descriptionRu   String?
   descriptionHy   String?
   location        String?
+  phoneNumbers    String[]             @default([]) // Contact phone numbers for the service
   status          String               @default("draft") // draft, pending_review, active, closed, rejected
   verified        Boolean              @default(false)
   bannerImageId   Int? // References MarketMediaFile.id

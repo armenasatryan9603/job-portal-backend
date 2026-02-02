@@ -133,6 +133,7 @@
   "role": "Role",
   "creditBalance": "Credit Balance",
   "enterPhoneNumber": "Enter your phone number",
+  "noPhoneNumbers": "No phone numbers added",
   "resendCode": "Resend Code",
   "verify": "Verify",
   "name": "Name",

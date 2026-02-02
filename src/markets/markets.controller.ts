@@ -41,6 +41,7 @@ export class MarketsController {
       descriptionRu?: string;
       descriptionHy?: string;
       location?: string;
+      phoneNumbers?: string[];
       weeklySchedule?: any;
     }
   ) {
@@ -238,6 +239,7 @@ export class MarketsController {
       descriptionRu?: string;
       descriptionHy?: string;
       location?: string;
+      phoneNumbers?: string[];
       weeklySchedule?: any;
     }
   ) {

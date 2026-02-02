@@ -137,6 +137,7 @@
   "role": "Դեր",
   "creditBalance": "Կրեդիտային մնացորդ",
   "enterPhoneNumber": "Մուտքագրեք ձեր հեռախոսահամարը",
+  "noPhoneNumbers": "Հեռախոսահամարներ չեն ավելացվել",
   "enterVerificationCode": "Մուտքագրեք հաստատման կոդը",
   "resendCode": "Ուղարկել կոդը կրկին",
   "verify": "Հաստատել",

@@ -1,13 +1,14 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Injectable,
   Logger,
+  NotFoundException,
 } from "@nestjs/common";
+
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma.service";
 import { SubscriptionsService } from "../subscriptions/subscriptions.service";
-import { NotificationsService } from "../notifications/notifications.service";
 
 interface SubscriptionFeatures {
   unlimitedApplications?: boolean;
@@ -149,6 +150,7 @@ export class MarketsService {
       descriptionRu?: string;
       descriptionHy?: string;
       location?: string;
+      phoneNumbers?: string[];
       weeklySchedule?: any;
     }
   ) {
@@ -167,6 +169,7 @@ export class MarketsService {
         descriptionRu: data.descriptionRu,
         descriptionHy: data.descriptionHy,
         location: data.location,
+        phoneNumbers: data.phoneNumbers ?? [],
         weeklySchedule: data.weeklySchedule,
         status: "draft",
         createdBy: userId,
@@ -552,6 +555,7 @@ export class MarketsService {
       descriptionRu?: string;
       descriptionHy?: string;
       location?: string;
+      phoneNumbers?: string[];
       weeklySchedule?: any;
     }
   ) {
@@ -603,6 +607,7 @@ export class MarketsService {
           descriptionHy: data.descriptionHy,
         }),
         ...(data.location !== undefined && { location: data.location }),
+        ...(data.phoneNumbers !== undefined && { phoneNumbers: data.phoneNumbers }),
         ...(data.weeklySchedule !== undefined && { weeklySchedule: data.weeklySchedule }),
       },
       include: {

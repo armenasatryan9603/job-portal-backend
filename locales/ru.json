@@ -454,6 +454,7 @@
   "enterFullName": "Введите ваше полное имя",
   "emailCannotBeChanged": "Email нельзя изменить",
   "enterPhoneNumber": "Введите номер телефона",
+  "noPhoneNumbers": "Номера телефонов не добавлены",
   "tellUsAboutYourself": "Расскажите нам о себе, вашем опыте и том, что делает вас уникальным...",
   "profileUpdatedSuccessfully": "Профиль успешно обновлен!",
   "failedToUpdateProfile": "Не удалось обновить профиль. Пожалуйста, попробуйте снова.",
