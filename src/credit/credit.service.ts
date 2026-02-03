@@ -40,8 +40,8 @@ export class CreditService {
         binding_id: string | null;
         card_holder_id: string | null;
       }>>`
-        SELECT id, binding_id, card_holder_id 
-        FROM "card" 
+        SELECT id, "binding_id", "card_holder_id" 
+        FROM "Card" 
         WHERE id = ${parseInt(cardId, 10)} 
           AND "userId" = ${userId} 
           AND "isActive" = true
@@ -607,46 +607,50 @@ export class CreditService {
         const last4 = cardNumber.length >= 4 ? cardNumber.slice(-4) : null;
         
         // Try to find existing card without bindingId for this user
-        // Use raw SQL query to find cards without bindingId since Prisma types may not be updated yet
-        const cardsWithoutBinding = await this.prisma.$queryRaw<Array<{
-          id: number;
-          userId: number;
-          paymentMethodId: string;
-          brand: string;
-          last4: string;
-          expMonth: number;
-          expYear: number;
-          holderName: string | null;
-          isDefault: boolean;
-          isActive: boolean;
-          createdAt: Date;
-          updatedAt: Date;
-        }>>`
-          SELECT * FROM "card" 
-          WHERE "userId" = ${userId} 
-            AND "isActive" = true 
-            AND binding_id IS NULL
-          ORDER BY "createdAt" DESC
-          LIMIT 1
-        `;
+        // Use Prisma findMany first, then check binding_id with raw query
+        const allCards = await this.prisma.card.findMany({
+          where: {
+            userId,
+            isActive: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
         
-        let card: typeof cardsWithoutBinding[0] | null = cardsWithoutBinding.length > 0 ? cardsWithoutBinding[0] : null;
+        // Filter cards without bindingId using raw query to check binding_id
+        let cardToUpdate: typeof allCards[0] | null = null;
+        for (const c of allCards) {
+          try {
+            const checkBinding = await this.prisma.$queryRaw<Array<{ binding_id: string | null }>>`
+              SELECT "binding_id" FROM "Card" WHERE id = ${c.id}
+            `;
+            if (checkBinding.length > 0 && !checkBinding[0].binding_id) {
+              cardToUpdate = c;
+              break;
+            }
+          } catch (error) {
+            // If raw query fails (table/column doesn't exist), skip this card
+            this.logger.warn(`Could not check binding_id for card ${c.id}: ${error}`);
+            continue;
+          }
+        }
+        
+        const card = cardToUpdate;
 
         if (card) {
           // Update existing card with binding info using raw SQL to avoid TypeScript issues
           if (last4 && last4 !== card.last4) {
             await this.prisma.$executeRaw`
-              UPDATE "card" 
-              SET binding_id = ${bindingId}, 
-                  card_holder_id = ${cardHolderId},
-                  last4 = ${last4}
+              UPDATE "Card" 
+              SET "binding_id" = ${bindingId}, 
+                  "card_holder_id" = ${cardHolderId},
+                  "last4" = ${last4}
               WHERE id = ${card.id}
             `;
           } else {
             await this.prisma.$executeRaw`
-              UPDATE "card" 
-              SET binding_id = ${bindingId}, 
-                  card_holder_id = ${cardHolderId}
+              UPDATE "Card" 
+              SET "binding_id" = ${bindingId}, 
+                  "card_holder_id" = ${cardHolderId}
               WHERE id = ${card.id}
             `;
           }
@@ -703,7 +707,7 @@ export class CreditService {
               createdAt: Date;
               updatedAt: Date;
             }>>`
-              INSERT INTO "card" (
+              INSERT INTO "Card" (
                 "userId", "paymentMethodId", "brand", "last4", 
                 "expMonth", "expYear", "binding_id", "card_holder_id", 
                 "isDefault", "isActive", "createdAt", "updatedAt"
@@ -762,7 +766,7 @@ export class CreditService {
               createdAt: Date;
               updatedAt: Date;
             }>>`
-              INSERT INTO "card" (
+              INSERT INTO "Card" (
                 "userId", "paymentMethodId", "brand", "last4", 
                 "expMonth", "expYear", "binding_id", "card_holder_id", 
                 "isDefault", "isActive", "createdAt", "updatedAt"
