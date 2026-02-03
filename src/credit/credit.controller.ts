@@ -77,7 +77,8 @@ export class CreditController {
       query.paymentID || query.paymentId || query.payment_id || query.PaymentID;
     const opaque = query.opaque || query.Opaque;
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Use BACKEND_URL for universal links (mobile app is configured to handle this domain)
+    const redirectUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
     const redirectPath = '/profile/refill-credits'; // Adjust to your actual path
 
     try {
@@ -89,7 +90,7 @@ export class CreditController {
           this.getErrorHtml(
             'Missing payment parameters',
             'The payment callback is missing required parameters. Please contact support.',
-            frontendUrl,
+            redirectUrl,
             redirectPath
           )
         );
@@ -108,7 +109,7 @@ export class CreditController {
         this.getSuccessHtml(
           'Payment Successful',
           'Your credits have been added successfully!',
-          frontendUrl,
+          redirectUrl,
           redirectPath
         )
       );
@@ -121,7 +122,7 @@ export class CreditController {
         this.getErrorHtml(
           'Payment Processing Error',
           error.message || 'An error occurred while processing your payment. Please contact support.',
-          frontendUrl,
+          redirectUrl,
           redirectPath
         )
       );
@@ -131,7 +132,7 @@ export class CreditController {
   private getSuccessHtml(
     title: string,
     message: string,
-    frontendUrl: string,
+    redirectUrl: string,
     redirectPath: string
   ): string {
     return `
@@ -195,12 +196,12 @@ export class CreditController {
     <h1>${title}</h1>
     <p>${message}</p>
     <p class="redirect-info">
-      Redirecting you back... <a href="${frontendUrl}${redirectPath}">Click here if not redirected</a>
+      Redirecting you back... <a href="${redirectUrl}${redirectPath}">Click here if not redirected</a>
     </p>
   </div>
   <script>
     setTimeout(function() {
-      window.location.href = '${frontendUrl}${redirectPath}';
+      window.location.href = '${redirectUrl}${redirectPath}';
     }, 3000);
   </script>
 </body>
@@ -210,7 +211,7 @@ export class CreditController {
   private getErrorHtml(
     title: string,
     message: string,
-    frontendUrl: string,
+    redirectUrl: string,
     redirectPath: string
   ): string {
     return `
@@ -274,7 +275,7 @@ export class CreditController {
     <h1>${title}</h1>
     <p>${message}</p>
     <p class="redirect-info">
-      <a href="${frontendUrl}${redirectPath}">Return to payment page</a>
+      <a href="${redirectUrl}${redirectPath}">Return to payment page</a>
     </p>
   </div>
 </body>
@@ -293,7 +294,8 @@ export class CreditController {
     },
     @Res() res: Response,
   ) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Use BACKEND_URL for universal links (mobile app is configured to handle this domain)
+    const redirectUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
     const redirectPath = '/profile/refill-credits';
 
     try {
@@ -305,7 +307,7 @@ export class CreditController {
           this.getErrorHtml(
             'Missing payment parameters',
             'The payment callback is missing required parameters. Please contact support.',
-            frontendUrl,
+            redirectUrl,
             redirectPath
           )
         );
@@ -323,7 +325,7 @@ export class CreditController {
         this.getSuccessHtml(
           'Payment Successful',
           'Your credits have been added successfully!',
-          frontendUrl,
+          redirectUrl,
           redirectPath
         )
       );
@@ -336,7 +338,7 @@ export class CreditController {
         this.getErrorHtml(
           'Payment Processing Error',
           error.message || 'An error occurred while processing your payment. Please contact support.',
-          frontendUrl,
+          redirectUrl,
           redirectPath
         )
       );

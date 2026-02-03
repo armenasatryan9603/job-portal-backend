@@ -39,7 +39,7 @@ export class AppController {
         details: [
           {
             appID: appID,
-            paths: ['/orders/*'],
+            paths: ['/orders/*', '/profile/refill-credits'],
           },
         ],
       },
