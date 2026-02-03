@@ -189,6 +189,13 @@ export class CreditService {
     // CardHolderID is typically the user identifier - using userId as string
     if (saveCard) {
       payload.CardHolderID = userId.toString();
+      this.logger.log(
+        `saveCard is true - adding CardHolderID=${payload.CardHolderID} to InitPayment request`
+      );
+    } else {
+      this.logger.log(
+        `saveCard is false - CardHolderID will not be sent (binding will not be created)`
+      );
     }
     
     // Validate payload before sending
@@ -203,7 +210,10 @@ export class CreditService {
     }
 
     this.logger.log(
-      `Initiating payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, URL=${this.vposUrl}, BackURL=${backUrl}`
+      `Initiating payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, URL=${this.vposUrl}, BackURL=${backUrl}, saveCard=${saveCard}, CardHolderID=${payload.CardHolderID || "not set"}`
+    );
+    this.logger.log(
+      `InitPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
     );
 
     // Initiate payment
@@ -477,47 +487,110 @@ export class CreditService {
     // Extract and save BindingID if present (for card binding)
     // Check if saveCard was requested and fetch binding info if needed
     const saveCard = conversionMetadata?.saveCard === true;
+    this.logger.log(
+      `Checking for binding info. saveCard flag: ${saveCard}, PaymentID: ${paymentID}, OrderID: ${orderID}`
+    );
+    this.logger.log(
+      `PaymentDetails keys: ${Object.keys(paymentDetails).join(", ")}`
+    );
+    this.logger.log(
+      `PaymentDetails BindingID: ${paymentDetails.BindingID}, CardHolderID: ${paymentDetails.CardHolderID}`
+    );
+    
     let bindingId: string | null = null;
     let cardHolderId: string | null = null;
     let cardNumber = "";
     let expDate = "";
 
-    // First, check if binding info is in the callback response
+    // First, check if binding info is in the initial payment details response
     if (paymentDetails.BindingID && paymentDetails.CardHolderID) {
       bindingId = paymentDetails.BindingID;
       cardHolderId = paymentDetails.CardHolderID;
       cardNumber = paymentDetails.CardNumber || "";
       expDate = paymentDetails.ExpDate || "";
       this.logger.log(
-        `Binding info found in callback response: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+        `✅ Binding info found in payment details: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
       );
     } else if (saveCard && paymentID) {
-      // If saveCard was true but binding info not in callback, fetch it via GetPaymentDetails
+      // If saveCard was true but binding info not in initial response, try fetching again
       this.logger.log(
-        `saveCard was true but binding info not in callback. Fetching payment details for PaymentID: ${paymentID}`
+        `saveCard was true (${saveCard}) but binding info not in initial response. PaymentDetails: ${JSON.stringify({
+          BindingID: paymentDetails.BindingID,
+          CardHolderID: paymentDetails.CardHolderID,
+          CardNumber: paymentDetails.CardNumber ? "***" + paymentDetails.CardNumber.slice(-4) : null,
+          ResponseCode: paymentDetails.ResponseCode,
+          PaymentState: paymentDetails.PaymentState,
+        })}`
       );
-      try {
-        // Wait a bit for AmeriaBank to process the binding
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        
-        const paymentDetailsResponse = await this.getPaymentDetails(paymentID);
-        if (paymentDetailsResponse?.BindingID && paymentDetailsResponse?.CardHolderID) {
-          bindingId = paymentDetailsResponse.BindingID;
-          cardHolderId = paymentDetailsResponse.CardHolderID;
-          cardNumber = paymentDetailsResponse.CardNumber || "";
-          expDate = paymentDetailsResponse.ExpDate || "";
+      
+      // Try multiple times with delays - AmeriaBank might need time to process binding
+      let attempts = 0;
+      const maxAttempts = 3;
+      while (attempts < maxAttempts && !bindingId) {
+        attempts++;
+        try {
+          // Wait progressively longer: 2s, 4s, 6s
+          const delay = attempts * 2000;
           this.logger.log(
-            `Binding info retrieved from GetPaymentDetails: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+            `Attempt ${attempts}/${maxAttempts}: Waiting ${delay}ms before fetching payment details...`
           );
-        } else {
-          this.logger.warn(
-            `saveCard was true but GetPaymentDetails did not return binding info. Response: ${JSON.stringify(paymentDetailsResponse)}`
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          
+          const paymentDetailsResponse = await this.getPaymentDetails(paymentID);
+          this.logger.log(
+            `GetPaymentDetails attempt ${attempts} response keys: ${Object.keys(paymentDetailsResponse || {}).join(", ")}`
+          );
+          this.logger.log(
+            `GetPaymentDetails attempt ${attempts} BindingID: ${paymentDetailsResponse?.BindingID}, CardHolderID: ${paymentDetailsResponse?.CardHolderID}`
+          );
+          
+          if (paymentDetailsResponse?.BindingID && paymentDetailsResponse?.CardHolderID) {
+            bindingId = paymentDetailsResponse.BindingID;
+            cardHolderId = paymentDetailsResponse.CardHolderID;
+            cardNumber = paymentDetailsResponse.CardNumber || "";
+            expDate = paymentDetailsResponse.ExpDate || "";
+            this.logger.log(
+              `✅ Binding info retrieved from GetPaymentDetails (attempt ${attempts}): BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+            );
+            break;
+          } else {
+            this.logger.warn(
+              `Attempt ${attempts}: GetPaymentDetails did not return binding info. Full response: ${JSON.stringify(paymentDetailsResponse)}`
+            );
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Attempt ${attempts}: Failed to fetch payment details for binding: ${error.message}`
           );
         }
-      } catch (error: any) {
-        this.logger.error(
-          `Failed to fetch payment details for binding: ${error.message}. Payment still succeeded.`
+      }
+      
+      // If still no binding, try GetBindings API as fallback
+      if (!bindingId && saveCard) {
+        this.logger.log(
+          `GetPaymentDetails didn't return binding. Trying GetBindings API as fallback...`
         );
+        try {
+          const bindings = await this.getBindings(userId);
+          this.logger.log(`GetBindings returned ${bindings.length} bindings`);
+          if (bindings.length > 0) {
+            // Use the most recent binding (assuming it's the one we just created)
+            const latestBinding = bindings[0];
+            if (latestBinding.bindingId && latestBinding.cardHolderId) {
+              bindingId = latestBinding.bindingId;
+              cardHolderId = latestBinding.cardHolderId;
+              cardNumber = latestBinding.cardNumber || "";
+              expDate = latestBinding.expDate || "";
+              this.logger.log(
+                `✅ Binding info retrieved from GetBindings: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+              );
+            }
+          }
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to fetch bindings: ${error.message}. Payment still succeeded.`
+          );
+        }
       }
     }
 
@@ -603,9 +676,40 @@ export class CreditService {
             `Created new card ${card.id} with BindingID ${bindingId} for user ${userId}`
           );
         } else {
+          // Even without card details, try to create a minimal card record with just binding info
+          // This allows the binding to be saved for future use
           this.logger.warn(
-            `BindingID ${bindingId} received but no card details available to create card record`
+            `BindingID ${bindingId} received but no card details (last4) available. Attempting to create minimal card record...`
           );
+          
+          try {
+            const existingCount = await this.prisma.card.count({
+              where: { userId, isActive: true },
+            });
+            const isDefault = existingCount === 0;
+
+            card = await this.prisma.card.create({
+              data: {
+                userId,
+                paymentMethodId: `pm_ameriabank_${userId}_${Date.now()}`,
+                brand: "unknown",
+                last4: "****", // Placeholder since we don't have card number
+                expMonth: 12,
+                expYear: new Date().getFullYear() + 1,
+                bindingId: bindingId as any,
+                cardHolderId: cardHolderId as any,
+                isDefault,
+                isActive: true,
+              } as any,
+            });
+            this.logger.log(
+              `Created minimal card ${card.id} with BindingID ${bindingId} (no card details available)`
+            );
+          } catch (createError: any) {
+            this.logger.error(
+              `Failed to create minimal card record: ${createError.message}`
+            );
+          }
         }
       } catch (error: any) {
         // Don't fail the payment if binding save fails
