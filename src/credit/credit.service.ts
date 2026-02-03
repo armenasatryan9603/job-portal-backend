@@ -603,8 +603,12 @@ export class CreditService {
 
     // Save binding info if we have it
     if (bindingId && cardHolderId) {
+      this.logger.log(
+        `Attempting to save binding: bindingId=${bindingId}, cardHolderId=${cardHolderId}, userId=${userId}`
+      );
       try {
         const last4 = cardNumber.length >= 4 ? cardNumber.slice(-4) : null;
+        this.logger.log(`Card details: last4=${last4}, cardNumber length=${cardNumber.length}`);
         
         // Try to find existing card without bindingId for this user
         // Use Prisma findMany first, then check binding_id with raw query
@@ -616,6 +620,8 @@ export class CreditService {
           orderBy: { createdAt: "desc" },
         });
         
+        this.logger.log(`Found ${allCards.length} active cards for user ${userId}`);
+        
         // Filter cards without bindingId using raw query to check binding_id
         let cardToUpdate: typeof allCards[0] | null = null;
         for (const c of allCards) {
@@ -623,13 +629,15 @@ export class CreditService {
             const checkBinding = await this.prisma.$queryRaw<Array<{ binding_id: string | null }>>`
               SELECT "binding_id" FROM "Card" WHERE id = ${c.id}
             `;
+            this.logger.log(`Card ${c.id} binding_id check: ${JSON.stringify(checkBinding)}`);
             if (checkBinding.length > 0 && !checkBinding[0].binding_id) {
               cardToUpdate = c;
+              this.logger.log(`Found card ${c.id} without binding_id, will update it`);
               break;
             }
-          } catch (error) {
+          } catch (error: any) {
             // If raw query fails (table/column doesn't exist), skip this card
-            this.logger.warn(`Could not check binding_id for card ${c.id}: ${error}`);
+            this.logger.warn(`Could not check binding_id for card ${c.id}: ${error.message || error}`);
             continue;
           }
         }
@@ -638,25 +646,44 @@ export class CreditService {
 
         if (card) {
           // Update existing card with binding info using raw SQL to avoid TypeScript issues
-          if (last4 && last4 !== card.last4) {
-            await this.prisma.$executeRaw`
-              UPDATE "Card" 
-              SET "binding_id" = ${bindingId}, 
-                  "card_holder_id" = ${cardHolderId},
-                  "last4" = ${last4}
-              WHERE id = ${card.id}
-            `;
-          } else {
-            await this.prisma.$executeRaw`
-              UPDATE "Card" 
-              SET "binding_id" = ${bindingId}, 
-                  "card_holder_id" = ${cardHolderId}
-              WHERE id = ${card.id}
-            `;
-          }
           this.logger.log(
-            `Updated card ${card.id} with BindingID ${bindingId} for user ${userId}`
+            `Updating card ${card.id} with bindingId=${bindingId}, cardHolderId=${cardHolderId}`
           );
+          try {
+            if (last4 && last4 !== card.last4) {
+              const result = await this.prisma.$executeRaw`
+                UPDATE "Card" 
+                SET "binding_id" = ${bindingId}, 
+                    "card_holder_id" = ${cardHolderId},
+                    "last4" = ${last4}
+                WHERE id = ${card.id}
+              `;
+              this.logger.log(`UPDATE result (with last4): ${JSON.stringify(result)}`);
+            } else {
+              const result = await this.prisma.$executeRaw`
+                UPDATE "Card" 
+                SET "binding_id" = ${bindingId}, 
+                    "card_holder_id" = ${cardHolderId}
+                WHERE id = ${card.id}
+              `;
+              this.logger.log(`UPDATE result: ${JSON.stringify(result)}`);
+            }
+            
+            // Verify the update worked
+            const verifyUpdate = await this.prisma.$queryRaw<Array<{ binding_id: string | null; card_holder_id: string | null }>>`
+              SELECT "binding_id", "card_holder_id" FROM "Card" WHERE id = ${card.id}
+            `;
+            this.logger.log(`Verification after UPDATE: ${JSON.stringify(verifyUpdate)}`);
+            
+            this.logger.log(
+              `✅ Successfully updated card ${card.id} with BindingID ${bindingId} for user ${userId}`
+            );
+          } catch (updateError: any) {
+            this.logger.error(
+              `❌ Failed to UPDATE card ${card.id}: ${updateError.message || updateError}. Stack: ${updateError.stack}`
+            );
+            throw updateError;
+          }
         } else if (last4) {
           // Create new card record with binding info
           // Determine brand from card number
@@ -693,47 +720,64 @@ export class CreditService {
             const finalExpMonth = expMonth || 12;
             const finalExpYear = expYear || new Date().getFullYear() + 1;
             
-            const createdCard = await this.prisma.$queryRaw<Array<{
-              id: number;
-              userId: number;
-              paymentMethodId: string;
-              brand: string;
-              last4: string;
-              expMonth: number;
-              expYear: number;
-              holderName: string | null;
-              isDefault: boolean;
-              isActive: boolean;
-              createdAt: Date;
-              updatedAt: Date;
-            }>>`
-              INSERT INTO "Card" (
-                "userId", "paymentMethodId", "brand", "last4", 
-                "expMonth", "expYear", "binding_id", "card_holder_id", 
-                "isDefault", "isActive", "createdAt", "updatedAt"
-              )
-              VALUES (
-                ${userId}, 
-                ${paymentMethodId}, 
-                ${brand}, 
-                ${last4}, 
-                ${finalExpMonth}, 
-                ${finalExpYear}, 
-                ${bindingId}, 
-                ${cardHolderId}, 
-                ${isDefault}, 
-                true, 
-                NOW(), 
-                NOW()
-              )
-              RETURNING *
-            `;
+            this.logger.log(
+              `Creating new card with bindingId=${bindingId}, cardHolderId=${cardHolderId}, last4=${last4}`
+            );
             
-            const newCard = createdCard.length > 0 ? createdCard[0] : null;
-            if (newCard) {
-              this.logger.log(
-                `Created new card ${newCard.id} with BindingID ${bindingId} for user ${userId}`
+            try {
+              const createdCard = await this.prisma.$queryRaw<Array<{
+                id: number;
+                userId: number;
+                paymentMethodId: string;
+                brand: string;
+                last4: string;
+                expMonth: number;
+                expYear: number;
+                holderName: string | null;
+                isDefault: boolean;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                binding_id: string | null;
+                card_holder_id: string | null;
+              }>>`
+                INSERT INTO "Card" (
+                  "userId", "paymentMethodId", "brand", "last4", 
+                  "expMonth", "expYear", "binding_id", "card_holder_id", 
+                  "isDefault", "isActive", "createdAt", "updatedAt"
+                )
+                VALUES (
+                  ${userId}, 
+                  ${paymentMethodId}, 
+                  ${brand}, 
+                  ${last4}, 
+                  ${finalExpMonth}, 
+                  ${finalExpYear}, 
+                  ${bindingId}, 
+                  ${cardHolderId}, 
+                  ${isDefault}, 
+                  true, 
+                  NOW(), 
+                  NOW()
+                )
+                RETURNING *
+              `;
+              
+              this.logger.log(`INSERT result: ${JSON.stringify(createdCard)}`);
+              
+              const newCard = createdCard.length > 0 ? createdCard[0] : null;
+              if (newCard) {
+                this.logger.log(
+                  `✅ Successfully created new card ${newCard.id} with BindingID ${bindingId} for user ${userId}. binding_id=${newCard.binding_id}, card_holder_id=${newCard.card_holder_id}`
+                );
+              } else {
+                this.logger.error(`❌ INSERT returned no rows`);
+              }
+            } catch (insertError: any) {
+              this.logger.error(
+                `❌ Failed to INSERT new card: ${insertError.message || insertError}. Stack: ${insertError.stack}`
               );
+              throw insertError;
             }
         } else {
           // Even without card details, try to create a minimal card record with just binding info
@@ -752,46 +796,62 @@ export class CreditService {
             const paymentMethodId = `pm_ameriabank_${userId}_${Date.now()}`;
             const expYearValue = new Date().getFullYear() + 1;
             
-            const createdCard = await this.prisma.$queryRaw<Array<{
-              id: number;
-              userId: number;
-              paymentMethodId: string;
-              brand: string;
-              last4: string;
-              expMonth: number;
-              expYear: number;
-              holderName: string | null;
-              isDefault: boolean;
-              isActive: boolean;
-              createdAt: Date;
-              updatedAt: Date;
-            }>>`
-              INSERT INTO "Card" (
-                "userId", "paymentMethodId", "brand", "last4", 
-                "expMonth", "expYear", "binding_id", "card_holder_id", 
-                "isDefault", "isActive", "createdAt", "updatedAt"
-              )
-              VALUES (
-                ${userId}, 
-                ${paymentMethodId}, 
-                'unknown', 
-                '****', 
-                12, 
-                ${expYearValue}, 
-                ${bindingId}, 
-                ${cardHolderId}, 
-                ${isDefault}, 
-                true, 
-                NOW(), 
-                NOW()
-              )
-              RETURNING *
-            `;
+            this.logger.log(
+              `Creating minimal card with bindingId=${bindingId}, cardHolderId=${cardHolderId}`
+            );
             
-            const newCard = createdCard.length > 0 ? createdCard[0] : null;
-            if (newCard) {
-              this.logger.log(
-                `Created minimal card ${newCard.id} with BindingID ${bindingId} (no card details available)`
+            try {
+              const createdCard = await this.prisma.$queryRaw<Array<{
+                id: number;
+                userId: number;
+                paymentMethodId: string;
+                brand: string;
+                last4: string;
+                expMonth: number;
+                expYear: number;
+                holderName: string | null;
+                isDefault: boolean;
+                isActive: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+                binding_id: string | null;
+                card_holder_id: string | null;
+              }>>`
+                INSERT INTO "Card" (
+                  "userId", "paymentMethodId", "brand", "last4", 
+                  "expMonth", "expYear", "binding_id", "card_holder_id", 
+                  "isDefault", "isActive", "createdAt", "updatedAt"
+                )
+                VALUES (
+                  ${userId}, 
+                  ${paymentMethodId}, 
+                  'unknown', 
+                  '****', 
+                  12, 
+                  ${expYearValue}, 
+                  ${bindingId}, 
+                  ${cardHolderId}, 
+                  ${isDefault}, 
+                  true, 
+                  NOW(), 
+                  NOW()
+                )
+                RETURNING *
+              `;
+              
+              this.logger.log(`Minimal card INSERT result: ${JSON.stringify(createdCard)}`);
+              
+              const newCard = createdCard.length > 0 ? createdCard[0] : null;
+              if (newCard) {
+                this.logger.log(
+                  `✅ Successfully created minimal card ${newCard.id} with BindingID ${bindingId}. binding_id=${newCard.binding_id}, card_holder_id=${newCard.card_holder_id}`
+                );
+              } else {
+                this.logger.error(`❌ Minimal card INSERT returned no rows`);
+              }
+            } catch (insertError: any) {
+              this.logger.error(
+                `❌ Failed to INSERT minimal card: ${insertError.message || insertError}. Stack: ${insertError.stack}`
               );
             }
           } catch (createError: any) {
@@ -803,12 +863,19 @@ export class CreditService {
       } catch (error: any) {
         // Don't fail the payment if binding save fails
         this.logger.error(
-          `Failed to save binding: ${error.message}. Payment still succeeded.`
+          `❌ Failed to save binding: ${error.message || error}. Stack: ${error.stack}. Payment still succeeded.`
+        );
+        this.logger.error(
+          `Binding save error details: bindingId=${bindingId}, cardHolderId=${cardHolderId}, userId=${userId}`
         );
       }
     } else if (saveCard) {
       this.logger.warn(
-        `saveCard was true but no binding info was retrieved. PaymentID: ${paymentID}, OrderID: ${orderID}`
+        `⚠️ saveCard was true but no binding info was retrieved. PaymentID: ${paymentID}, OrderID: ${orderID}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
+      );
+    } else {
+      this.logger.log(
+        `ℹ️ Not saving binding: saveCard=${saveCard}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
       );
     }
 
