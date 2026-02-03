@@ -34,16 +34,23 @@ export class CreditService {
   ) {
     // If cardId is provided, use saved card payment (no webview)
     if (cardId) {
-      // Get card with binding info
-      const card = (await this.prisma.card.findFirst({
-        where: {
-          id: parseInt(cardId, 10),
-          userId,
-          isActive: true,
-        },
-      })) as any;
+      // Get card with binding info using raw SQL to access bindingId and cardHolderId
+      const cards = await this.prisma.$queryRaw<Array<{
+        id: number;
+        binding_id: string | null;
+        card_holder_id: string | null;
+      }>>`
+        SELECT id, binding_id, card_holder_id 
+        FROM "card" 
+        WHERE id = ${parseInt(cardId, 10)} 
+          AND "userId" = ${userId} 
+          AND "isActive" = true
+        LIMIT 1
+      `;
 
-      if (!card || !card.bindingId || !card.cardHolderId) {
+      const card = cards.length > 0 ? cards[0] : null;
+
+      if (!card || !card.binding_id || !card.card_holder_id) {
         throw new Error(
           "Card not found or not configured for saved payments. Please use a different card or add a new one."
         );
@@ -54,8 +61,8 @@ export class CreditService {
         userId,
         amount,
         currency,
-        card.bindingId,
-        card.cardHolderId
+        card.binding_id,
+        card.card_holder_id
       );
     }
     // Validate credentials and required environment variables
@@ -600,30 +607,49 @@ export class CreditService {
         const last4 = cardNumber.length >= 4 ? cardNumber.slice(-4) : null;
         
         // Try to find existing card without bindingId for this user
-        let card = await this.prisma.card.findFirst({
-          where: {
-            userId,
-            isActive: true,
-          },
-          orderBy: { createdAt: "desc" },
-        });
+        // Use raw SQL query to find cards without bindingId since Prisma types may not be updated yet
+        const cardsWithoutBinding = await this.prisma.$queryRaw<Array<{
+          id: number;
+          userId: number;
+          paymentMethodId: string;
+          brand: string;
+          last4: string;
+          expMonth: number;
+          expYear: number;
+          holderName: string | null;
+          isDefault: boolean;
+          isActive: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+        }>>`
+          SELECT * FROM "card" 
+          WHERE "userId" = ${userId} 
+            AND "isActive" = true 
+            AND binding_id IS NULL
+          ORDER BY "createdAt" DESC
+          LIMIT 1
+        `;
         
-        // Filter out cards that already have bindingId
-        if (card && (card as any).bindingId) {
-          card = null;
-        }
+        let card: typeof cardsWithoutBinding[0] | null = cardsWithoutBinding.length > 0 ? cardsWithoutBinding[0] : null;
 
         if (card) {
-          // Update existing card with binding info
-          await this.prisma.card.update({
-            where: { id: card.id },
-            data: {
-              bindingId: bindingId as any,
-              cardHolderId: cardHolderId as any,
-              // Update last4 if we have it and it's different
-              ...(last4 && last4 !== (card as any).last4 ? { last4 } : {}),
-            } as any,
-          });
+          // Update existing card with binding info using raw SQL to avoid TypeScript issues
+          if (last4 && last4 !== card.last4) {
+            await this.prisma.$executeRaw`
+              UPDATE "card" 
+              SET binding_id = ${bindingId}, 
+                  card_holder_id = ${cardHolderId},
+                  last4 = ${last4}
+              WHERE id = ${card.id}
+            `;
+          } else {
+            await this.prisma.$executeRaw`
+              UPDATE "card" 
+              SET binding_id = ${bindingId}, 
+                  card_holder_id = ${cardHolderId}
+              WHERE id = ${card.id}
+            `;
+          }
           this.logger.log(
             `Updated card ${card.id} with BindingID ${bindingId} for user ${userId}`
           );
@@ -658,23 +684,53 @@ export class CreditService {
           });
           const isDefault = existingCount === 0;
 
-          card = await this.prisma.card.create({
-            data: {
-              userId,
-              paymentMethodId: `pm_ameriabank_${userId}_${Date.now()}`,
-              brand,
-              last4: last4!,
-              expMonth: expMonth || 12,
-              expYear: (expYear || new Date().getFullYear() + 1),
-              bindingId: bindingId as any,
-              cardHolderId: cardHolderId as any,
-              isDefault,
-              isActive: true,
-            } as any,
-          });
-          this.logger.log(
-            `Created new card ${card.id} with BindingID ${bindingId} for user ${userId}`
-          );
+            // Create new card record with binding info using raw SQL
+            const paymentMethodId = `pm_ameriabank_${userId}_${Date.now()}`;
+            const finalExpMonth = expMonth || 12;
+            const finalExpYear = expYear || new Date().getFullYear() + 1;
+            
+            const createdCard = await this.prisma.$queryRaw<Array<{
+              id: number;
+              userId: number;
+              paymentMethodId: string;
+              brand: string;
+              last4: string;
+              expMonth: number;
+              expYear: number;
+              holderName: string | null;
+              isDefault: boolean;
+              isActive: boolean;
+              createdAt: Date;
+              updatedAt: Date;
+            }>>`
+              INSERT INTO "card" (
+                "userId", "paymentMethodId", "brand", "last4", 
+                "expMonth", "expYear", "binding_id", "card_holder_id", 
+                "isDefault", "isActive", "createdAt", "updatedAt"
+              )
+              VALUES (
+                ${userId}, 
+                ${paymentMethodId}, 
+                ${brand}, 
+                ${last4}, 
+                ${finalExpMonth}, 
+                ${finalExpYear}, 
+                ${bindingId}, 
+                ${cardHolderId}, 
+                ${isDefault}, 
+                true, 
+                NOW(), 
+                NOW()
+              )
+              RETURNING *
+            `;
+            
+            const newCard = createdCard.length > 0 ? createdCard[0] : null;
+            if (newCard) {
+              this.logger.log(
+                `Created new card ${newCard.id} with BindingID ${bindingId} for user ${userId}`
+              );
+            }
         } else {
           // Even without card details, try to create a minimal card record with just binding info
           // This allows the binding to be saved for future use
@@ -688,23 +744,52 @@ export class CreditService {
             });
             const isDefault = existingCount === 0;
 
-            card = await this.prisma.card.create({
-              data: {
-                userId,
-                paymentMethodId: `pm_ameriabank_${userId}_${Date.now()}`,
-                brand: "unknown",
-                last4: "****", // Placeholder since we don't have card number
-                expMonth: 12,
-                expYear: new Date().getFullYear() + 1,
-                bindingId: bindingId as any,
-                cardHolderId: cardHolderId as any,
-                isDefault,
-                isActive: true,
-              } as any,
-            });
-            this.logger.log(
-              `Created minimal card ${card.id} with BindingID ${bindingId} (no card details available)`
-            );
+            // Create minimal card record with binding info using raw SQL
+            const paymentMethodId = `pm_ameriabank_${userId}_${Date.now()}`;
+            const expYearValue = new Date().getFullYear() + 1;
+            
+            const createdCard = await this.prisma.$queryRaw<Array<{
+              id: number;
+              userId: number;
+              paymentMethodId: string;
+              brand: string;
+              last4: string;
+              expMonth: number;
+              expYear: number;
+              holderName: string | null;
+              isDefault: boolean;
+              isActive: boolean;
+              createdAt: Date;
+              updatedAt: Date;
+            }>>`
+              INSERT INTO "card" (
+                "userId", "paymentMethodId", "brand", "last4", 
+                "expMonth", "expYear", "binding_id", "card_holder_id", 
+                "isDefault", "isActive", "createdAt", "updatedAt"
+              )
+              VALUES (
+                ${userId}, 
+                ${paymentMethodId}, 
+                'unknown', 
+                '****', 
+                12, 
+                ${expYearValue}, 
+                ${bindingId}, 
+                ${cardHolderId}, 
+                ${isDefault}, 
+                true, 
+                NOW(), 
+                NOW()
+              )
+              RETURNING *
+            `;
+            
+            const newCard = createdCard.length > 0 ? createdCard[0] : null;
+            if (newCard) {
+              this.logger.log(
+                `Created minimal card ${newCard.id} with BindingID ${bindingId} (no card details available)`
+              );
+            }
           } catch (createError: any) {
             this.logger.error(
               `Failed to create minimal card record: ${createError.message}`
