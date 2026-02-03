@@ -114,7 +114,10 @@ export class CardsService {
       expiryYear: String(card.expYear),
       cardholderName: card.holderName ?? '',
       cardType: card.brand,
-      bindingId: (card.bindingId ?? null) || undefined,
+      // Return bindingId as-is if it exists and is a non-empty string, otherwise undefined
+      bindingId: card.bindingId && typeof card.bindingId === 'string' && card.bindingId.trim().length > 0 
+        ? card.bindingId 
+        : undefined,
       isDefault: card.isDefault,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,
