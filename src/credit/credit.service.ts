@@ -261,6 +261,7 @@ export class CreditService {
               convertedAmount,
               exchangeRate: exchangeRate ?? 1,
               baseCurrency: this.BASE_CURRENCY,
+              saveCard, // Store saveCard flag for callback
             }),
           },
           create: {
