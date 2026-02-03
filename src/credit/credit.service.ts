@@ -58,6 +58,16 @@ export class CreditService {
       orderIdInt =
         30164001 + Math.floor(Math.random() * (30165000 - 30164001 + 1));
       orderId = String(orderIdInt);
+      
+      // Validate OrderID is in correct range
+      if (orderIdInt < 30164001 || orderIdInt > 30165000) {
+        this.logger.error(
+          `Generated OrderID ${orderIdInt} is outside test range 30164001-30165000`
+        );
+        throw new Error("OrderID generation failed: outside test range");
+      }
+      
+      this.logger.log(`Test mode: Generated OrderID ${orderIdInt} in range 30164001-30165000`);
     } else {
       const timestamp = Date.now();
       const timestampSuffix = timestamp.toString().slice(-10);
@@ -116,7 +126,10 @@ export class CreditService {
           );
           originalAmount = 10;
           convertedAmount = Math.round(10 * exchangeRate * 100) / 100;
-        } catch {
+        } catch (error: any) {
+          this.logger.warn(
+            `Failed to get exchange rate for AMD->USD in test mode: ${error.message}. Using default rate 1.`
+          );
           exchangeRate = 1;
           originalAmount = 10;
           convertedAmount = 10;
@@ -132,33 +145,64 @@ export class CreditService {
     const backUrl = `${backendUrl}/credit/refill/callback`;
 
     // Build payment request payload (test: amount 10 AMD, OrderID in 30164001–30165000)
+    // Ensure Amount is a number (not string) and OrderID is integer
     const payload = {
       ClientID: this.credentials.clientId,
       Username: this.credentials.username,
       Password: this.credentials.password,
-      Amount: paymentAmount,
-      OrderID: orderIdInt,
+      Amount: Number(paymentAmount), // Ensure it's a number
+      OrderID: Number(orderIdInt), // Ensure it's an integer
       Description: `Credit refill - ${paymentAmount} ${isTestMode ? "AMD" : normalizedCurrency}`,
       BackURL: backUrl,
     };
+    
+    // Validate payload before sending
+    if (isNaN(payload.Amount) || payload.Amount <= 0) {
+      throw new Error(`Invalid payment amount: ${paymentAmount}`);
+    }
+    if (isNaN(payload.OrderID) || payload.OrderID <= 0) {
+      throw new Error(`Invalid OrderID: ${orderIdInt}`);
+    }
+    if (isTestMode && (payload.OrderID < 30164001 || payload.OrderID > 30165000)) {
+      throw new Error(`OrderID ${payload.OrderID} is outside test range 30164001-30165000`);
+    }
+
+    this.logger.log(
+      `Initiating payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, URL=${this.vposUrl}, BackURL=${backUrl}`
+    );
 
     // Initiate payment
-    const response = await axios.post(this.vposUrl, payload, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      timeout: 30000,
-    });
+    let response;
+    try {
+      response = await axios.post(this.vposUrl, payload, {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 30000,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Axios error calling Ameriabank InitPayment: ${error.message}. URL: ${this.vposUrl}. Response: ${JSON.stringify(error.response?.data)}`
+      );
+      throw new Error(
+        `Failed to initiate payment: ${error.message || "Network error"}`
+      );
+    }
 
     const responseData = response.data;
+    this.logger.log(
+      `Ameriabank InitPayment response: ${JSON.stringify(responseData)}`
+    );
 
     // Check for errors
     if (responseData?.ResponseCode && responseData.ResponseCode !== 1) {
       const errorMessage =
         responseData.ResponseMessage ||
         `Payment gateway error: ${responseData.ResponseCode}`;
-      this.logger.error(`Payment initiation failed: ${errorMessage}`);
+      this.logger.error(
+        `Payment initiation failed. ResponseCode: ${responseData.ResponseCode}, ResponseMessage: ${errorMessage}, Full response: ${JSON.stringify(responseData)}`
+      );
       throw new Error(errorMessage);
     }
 
@@ -171,31 +215,38 @@ export class CreditService {
 
       // Store conversion metadata temporarily in SystemConfig for callback retrieval
       // We'll use a key format: credit_refill_{orderId}
-      await this.prisma.systemConfig.upsert({
-        where: { key: `credit_refill_${orderId}` },
-        update: {
-        value: JSON.stringify({
-          userId,
-          currency: isTestMode ? "AMD" : normalizedCurrency,
-          originalAmount,
-          convertedAmount,
-          exchangeRate: exchangeRate ?? 1,
-          baseCurrency: this.BASE_CURRENCY,
-        }),
-      },
-      create: {
-        key: `credit_refill_${orderId}`,
-        value: JSON.stringify({
-          userId,
-          currency: isTestMode ? "AMD" : normalizedCurrency,
-          originalAmount,
-          convertedAmount,
-          exchangeRate: exchangeRate ?? 1,
-          baseCurrency: this.BASE_CURRENCY,
-        }),
-        description: `Temporary storage for credit refill conversion metadata`,
-      },
-    });
+      try {
+        await this.prisma.systemConfig.upsert({
+          where: { key: `credit_refill_${orderId}` },
+          update: {
+            value: JSON.stringify({
+              userId,
+              currency: isTestMode ? "AMD" : normalizedCurrency,
+              originalAmount,
+              convertedAmount,
+              exchangeRate: exchangeRate ?? 1,
+              baseCurrency: this.BASE_CURRENCY,
+            }),
+          },
+          create: {
+            key: `credit_refill_${orderId}`,
+            value: JSON.stringify({
+              userId,
+              currency: isTestMode ? "AMD" : normalizedCurrency,
+              originalAmount,
+              convertedAmount,
+              exchangeRate: exchangeRate ?? 1,
+              baseCurrency: this.BASE_CURRENCY,
+            }),
+            description: `Temporary storage for credit refill conversion metadata`,
+          },
+        });
+      } catch (dbError: any) {
+        this.logger.error(
+          `Failed to store payment metadata: ${dbError.message}. Payment will still proceed but callback may have issues.`
+        );
+        // Don't throw - payment was successful, metadata storage is secondary
+      }
 
     return {
       orderId,
@@ -392,6 +443,38 @@ export class CreditService {
   }
 
   async getPaymentDetails(paymentID: string) {
+    // Validate credentials are not placeholders
+    if (
+      !this.credentials.username ||
+      !this.credentials.password ||
+      this.credentials.username.includes("your-ameriabank") ||
+      this.credentials.password.includes("your-ameriabank")
+    ) {
+      this.logger.error(
+        "Ameriabank credentials are not properly configured. Please check environment variables."
+      );
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
+      );
+    }
+
+    // Validate URL is correct (should be test URL for test environment)
+    if (
+      this.vposUrl.includes("servicestest") &&
+      !this.vposStatusUrl.includes("servicestest")
+    ) {
+      this.logger.error(
+        `Mismatch: InitPayment URL is test (${this.vposUrl}) but Status URL is production (${this.vposStatusUrl})`
+      );
+      throw new Error(
+        "Payment gateway URL configuration mismatch. Please check environment variables."
+      );
+    }
+
+    this.logger.log(
+      `Getting payment details for PaymentID: ${paymentID}, using URL: ${this.vposStatusUrl}`
+    );
+
     const payload = {
       PaymentID: paymentID,
       Username: this.credentials.username,
