@@ -163,19 +163,33 @@ export class AppController {
     // Try to open the app via universal link (HTTPS URL)
     // The OS should intercept this if the app is installed
     var currentUrl = window.location.href;
+    var appOpened = false;
+    
+    // Listen for app to open (page visibility change)
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        appOpened = true;
+      }
+    });
     
     // Try universal link first (current URL should trigger it)
     // If that doesn't work, try custom scheme as fallback
     setTimeout(function() {
       // If still on page after 1 second, try custom scheme
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && !appOpened) {
+        // Try custom scheme
         window.location.href = "jobportalmobile://profile/refill-credits";
         
-        // Show fallback after another second
+        // Show fallback after another second if still visible
         setTimeout(function() {
-          document.getElementById('fallback').style.display = 'block';
-          document.getElementById('loading').style.display = 'none';
+          if (document.visibilityState === 'visible' && !appOpened) {
+            document.getElementById('fallback').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+          }
         }, 1000);
+      } else if (appOpened) {
+        // App opened, hide loading
+        document.getElementById('loading').style.display = 'none';
       }
     }, 1000);
   </script>
