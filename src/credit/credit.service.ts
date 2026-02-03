@@ -30,10 +30,11 @@ export class CreditService {
     amount: number,
     currency: string = "USD",
     cardId?: string,
-    saveCard: boolean = false
+    saveCard: boolean = false,
+    isFallback: boolean = false // Prevent infinite recursion
   ) {
     // If cardId is provided, use saved card payment (no webview)
-    if (cardId) {
+    if (cardId && !isFallback) {
       // Get card with binding info using raw SQL to access bindingId and cardHolderId
       const cards = await this.prisma.$queryRaw<Array<{
         id: number;
@@ -77,32 +78,32 @@ export class CreditService {
         );
       }
 
-      // Use MakeBindingPayment for saved card
+      // Use MakeBindingPayment for saved card payment (direct payment without redirect)
+      // Note: MakeBindingPayment API uses CardHolderID to identify the binding
+      // BindingID is stored in DB for reference but is NOT sent in the API request
+      const isTestMode = this.vposUrl.includes("servicestest");
+      
       try {
         return await this.makeBindingPayment(
           userId,
           amount,
           currency,
-          card.binding_id,
-          card.card_holder_id
+          card.binding_id, // Stored for reference/logging only
+          card.card_holder_id // Used by API to identify the binding
         );
       } catch (error: any) {
-        // If MakeBindingPayment fails, it might be a binding issue
-        // Log the error but re-throw with a helpful message
         this.logger.error(
-          `MakeBindingPayment failed for card ${cardId}. Error: ${error.message}`
+          `MakeBindingPayment failed: ${error.message}. Status: ${error.response?.status}`
         );
         
-        // Check if it's a binding-related error
-        if (error.message?.toLowerCase().includes('binding') || 
-            error.message?.toLowerCase().includes('invalid') ||
-            error.message?.toLowerCase().includes('expired')) {
+        // Provide clear error message for test environment limitations
+        if (error.response?.status === 500 && isTestMode) {
           throw new Error(
-            "The saved card binding appears to be invalid or expired. Please use 'New Card' option and check 'Save card for future payments' to create a new binding."
+            "The AmeriaBank test environment does not support MakeBindingPayment API. " +
+            "Please use 'New Card' option for testing, or use production credentials for saved card payments."
           );
         }
         
-        // Re-throw the original error
         throw error;
       }
     }
@@ -1124,8 +1125,8 @@ export class CreditService {
     userId: number,
     amount: number,
     currency: string,
-    bindingId: string,
-    cardHolderId: string
+    bindingId: string, // Stored for reference/logging only, not sent in API request
+    cardHolderId: string // Used by API to identify the binding
   ) {
     // Validate credentials
     if (
@@ -1224,6 +1225,8 @@ export class CreditService {
     // Ensure CardHolderID is a string (should match what was sent during InitPayment)
     const cardHolderIdStr = String(cardHolderId).trim();
     
+    // Build MakeBindingPayment payload
+    // Note: BindingID is NOT a request parameter - API uses CardHolderID to identify the binding
     const payload = {
       ClientID: this.credentials.clientId,
       Username: this.credentials.username,
@@ -1232,22 +1235,16 @@ export class CreditService {
       Amount: Number(paymentAmount),
       OrderID: Number(orderIdInt),
       BackURL: backUrl,
-      PaymentType: "1", // Standard payment type
+      PaymentType: "1",
       Description: `Credit refill - ${paymentAmount} ${isTestMode ? "AMD" : normalizedCurrency}`,
       Currency: isTestMode ? "AMD" : normalizedCurrency,
     };
 
     this.logger.log(
-      `Making binding payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, BindingID=${bindingId}, CardHolderID=${cardHolderIdStr}`
+      `Making binding payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, CardHolderID=${cardHolderIdStr}`
     );
     this.logger.log(`MakeBindingPayment URL: ${makeBindingPaymentUrl}`);
     this.logger.log(`MakeBindingPayment payload: ${JSON.stringify({ ...payload, Password: '***' })}`);
-    
-    // In test mode, log additional info for debugging
-    if (isTestMode) {
-      this.logger.log(`[TEST MODE] MakeBindingPayment - OrderID range check: ${orderIdInt} (should be 30164001-30165000)`);
-      this.logger.log(`[TEST MODE] MakeBindingPayment - Amount check: ${paymentAmount} (should be 10)`);
-    }
 
     try {
       const response = await axios.post(makeBindingPaymentUrl, payload, {
@@ -1263,11 +1260,26 @@ export class CreditService {
         `MakeBindingPayment response: ${JSON.stringify(responseData)}`
       );
 
-      // Check payment status
-      if (
-        responseData?.ResponseCode === "00" &&
-        responseData?.PaymentState === "payment_approved"
-      ) {
+      // Check for errors first
+      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
+        const errorMsg =
+          responseData?.TrxnDescription ||
+          responseData?.Description ||
+          responseData?.ResponseMessage ||
+          `Payment failed. ResponseCode: ${responseData.ResponseCode}`;
+        this.logger.error(`Binding payment failed: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      // Check payment status - accept multiple success indicators
+      const isSuccess = 
+        (responseData?.ResponseCode === "00" || responseData?.ResponseCode === 1) &&
+        (responseData?.PaymentState === "payment_approved" || 
+         responseData?.PaymentState === "approved" ||
+         responseData?.Status === "approved" ||
+         responseData?.Success === true);
+
+      if (isSuccess) {
         // Payment approved - add credits
         const creditAmount = exchangeRate
           ? convertedAmount
@@ -1327,67 +1339,66 @@ export class CreditService {
             : null,
         };
       } else {
+        // Payment failed or pending
+        const responseCode = responseData?.ResponseCode;
+        const paymentState = responseData?.PaymentState || responseData?.Status;
+        
+        // Check if payment is pending (might need to check status later)
+        if (paymentState === "pending" || paymentState === "processing") {
+          this.logger.warn(
+            `Binding payment is pending. OrderID: ${orderId}, PaymentID: ${responseData?.PaymentID}`
+          );
+          // For pending payments, we might need to poll GetPaymentDetails
+          // For now, treat as failure and let user retry
+          throw new Error(
+            "Payment is pending. Please try again in a moment or use 'New Card' option."
+          );
+        }
+        
         // Payment failed
         const errorMsg =
           responseData?.TrxnDescription ||
           responseData?.Description ||
-          `Payment failed. ResponseCode: ${responseData?.ResponseCode}`;
-        this.logger.error(`Binding payment failed: ${errorMsg}`);
+          responseData?.ResponseMessage ||
+          responseData?.Message ||
+          `Payment failed. ResponseCode: ${responseCode}, PaymentState: ${paymentState}`;
+        this.logger.error(`Binding payment failed: ${errorMsg}. Full response: ${JSON.stringify(responseData)}`);
         throw new Error(errorMsg);
       }
     } catch (error: any) {
       this.logger.error(
-        `MakeBindingPayment error: ${error.message}. OrderID: ${orderId}, BindingID: ${bindingId}, CardHolderID: ${cardHolderId}`
+        `MakeBindingPayment error: ${error.message}. OrderID: ${orderId}, CardHolderID: ${cardHolderId}`
       );
       
-      // Log more details about the error
       if (error.response) {
         this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
         this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
       }
       
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        throw new Error(
-          "Unable to connect to payment gateway. Please try again later."
-        );
+        throw new Error("Unable to connect to payment gateway. Please try again later.");
       }
       
-      // Check if it's a 500 error from AmeriaBank
+      // Handle 500 errors (common in test environment)
       if (error.response?.status === 500) {
         const errorData = error.response.data;
-        const errorMessage = errorData?.message || errorData?.error || errorData?.TrxnDescription || 
-          errorData?.Message || "Payment gateway returned an error.";
+        const errorMessage = errorData?.Message || errorData?.message || errorData?.TrxnDescription || 
+          errorData?.error || "Payment gateway returned an error.";
         
         this.logger.error(
-          `Binding payment failed with 500 error. BindingID: ${bindingId}, CardHolderID: ${cardHolderId}, Error: ${errorMessage}`
+          `Binding payment failed with 500 error. CardHolderID: ${cardHolderId}, Error: ${errorMessage}`
         );
         
-        // In test mode, 500 errors from MakeBindingPayment often indicate binding issues
-        const isTestMode = this.vposUrl.includes("servicestest");
-        if (isTestMode) {
-          this.logger.warn(
-            `[TEST MODE] MakeBindingPayment returned 500. This may indicate the binding is invalid or the test environment has limitations.`
-          );
-          throw new Error(
-            "The saved card binding appears to be invalid or expired. Please use 'New Card' option and check 'Save card for future payments' to create a new binding. Note: The test environment may have limitations with saved card payments."
-          );
-        }
-        
-        // For production, provide a more generic error
-        throw new Error(
-          "Payment gateway returned an error. Please try again or use 'New Card' option to create a new payment."
-        );
+        throw new Error(errorMessage);
       }
       
-      throw new Error(
-        `Payment failed: ${error.message || "Unknown error"}`
-      );
+      throw new Error(`Payment failed: ${error.message || "Unknown error"}`);
     }
   }
 
   /**
    * Get card bindings from AmeriaBank
-   * Syncs saved cards from the payment gateway
+   * Note: This API is not available in test environment (returns 500)
    */
   async getBindings(userId: number) {
     // Validate credentials
