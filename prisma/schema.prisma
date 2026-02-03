@@ -340,6 +340,8 @@ model Card {
   expMonth        Int
   expYear         Int
   holderName      String?
+  bindingId       String?  @unique @map("binding_id")
+  cardHolderId    String?  @map("card_holder_id")
   isDefault       Boolean  @default(false)
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
@@ -348,6 +350,8 @@ model Card {
 
   @@index([userId])
   @@index([paymentMethodId])
+  @@index([bindingId])
+  @@map("card")
 }
 
 model PhoneVerification {

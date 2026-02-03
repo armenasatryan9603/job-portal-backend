@@ -74,35 +74,26 @@ export class AppController {
   }
 
   /**
-   * Payment callback redirect handler for Universal Links
+   * Payment callback redirect handler
    * Served at: https://job-portal-backend-eight-sand.vercel.app/profile/refill-credits
-   * This page triggers the universal link to open the mobile app
+   * Simple success page - user closes webview manually
    */
   @Get('profile/refill-credits')
   paymentCallbackRedirect(@Req() req: Request, @Res() res: Response) {
-    // Check if this is a web browser request (for Universal Links)
+    // Check if this is a web browser request
     const acceptHeader = req.headers['accept'] || '';
     const isWebRequest =
       acceptHeader.includes('text/html') ||
       req.headers['user-agent']?.includes('Mozilla');
 
     if (isWebRequest) {
-      // Serve HTML page that triggers Universal Link
+      // Serve simple HTML page
       const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Payment Successful - HotWork</title>
-  <meta name="description" content="Your payment was successful. Opening the app...">
-  
-  <!-- Universal Links / App Links meta tags -->
-  <meta property="al:ios:url" content="jobportalmobile://profile/refill-credits">
-  <meta property="al:ios:app_name" content="HotWork">
-  <meta property="al:android:url" content="jobportalmobile://profile/refill-credits">
-  <meta property="al:android:app_name" content="HotWork">
-  <meta property="al:android:package" content="com.jobportalmobile.app">
-  
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -136,80 +127,21 @@ export class AppController {
       margin: 0 0 2rem 0;
       line-height: 1.6;
     }
-    .open-app-btn {
-      display: inline-block;
-      margin-top: 20px;
-      padding: 12px 24px;
-      background: #007AFF;
-      color: white;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: 500;
-    }
-    .open-app-btn:hover {
-      background: #0056b3;
-    }
-    #loading {
-      text-align: center;
-      margin-top: 20px;
-      color: #999;
-    }
-    #fallback {
-      display: none;
+    .info {
+      color: #9ca3af;
+      font-size: 0.875rem;
+      margin-top: 1rem;
     }
   </style>
-  
-  <script>
-    // Try to open the app via universal link (HTTPS URL)
-    // The OS should intercept this if the app is installed
-    var currentUrl = window.location.href;
-    var appOpened = false;
-    
-    // Listen for app to open (page visibility change)
-    document.addEventListener('visibilitychange', function() {
-      if (document.hidden) {
-        appOpened = true;
-      }
-    });
-    
-    // Try universal link first (current URL should trigger it)
-    // If that doesn't work, try custom scheme as fallback
-    setTimeout(function() {
-      // If still on page after 1 second, try custom scheme
-      if (document.visibilityState === 'visible' && !appOpened) {
-        // Try custom scheme
-        window.location.href = "jobportalmobile://profile/refill-credits";
-        
-        // Show fallback after another second if still visible
-        setTimeout(function() {
-          if (document.visibilityState === 'visible' && !appOpened) {
-            document.getElementById('fallback').style.display = 'block';
-            document.getElementById('loading').style.display = 'none';
-          }
-        }, 1000);
-      } else if (appOpened) {
-        // App opened, hide loading
-        document.getElementById('loading').style.display = 'none';
-      }
-    }, 1000);
-  </script>
 </head>
 <body>
   <div class="container">
     <div class="success-icon">✓</div>
     <h1>Payment Successful</h1>
     <p>Your credits have been added successfully!</p>
-    <div id="loading">
-      Opening in app...
-    </div>
-    <div id="fallback">
-      <p style="color: #6b7280; margin-bottom: 1rem;">
-        If the app didn't open automatically, click the button below:
-      </p>
-      <a href="jobportalmobile://profile/refill-credits" class="open-app-btn">
-        Open in HotWork App
-      </a>
-    </div>
+    <p class="info">
+      You can close this page and return to the app.
+    </p>
   </div>
 </body>
 </html>`;
@@ -221,7 +153,7 @@ export class AppController {
     return res.json({
       message: 'Payment callback redirect',
       path: '/profile/refill-credits',
-      action: 'Open the mobile app to view your updated credits',
+      action: 'Close the webview and return to the app',
     });
   }
 }

@@ -25,6 +25,7 @@ export class CardsService {
         holderName: dto.holderName ?? null,
         isDefault,
         isActive: true,
+        // bindingId and cardHolderId will be null by default (nullable fields)
       },
     });
 
@@ -94,6 +95,8 @@ export class CardsService {
     expMonth: number;
     expYear: number;
     holderName: string | null;
+    bindingId?: string | null;
+    cardHolderId?: string | null;
     isDefault: boolean;
     isActive: boolean;
     createdAt: Date;
@@ -111,6 +114,7 @@ export class CardsService {
       expiryYear: String(card.expYear),
       cardholderName: card.holderName ?? '',
       cardType: card.brand,
+      bindingId: (card.bindingId ?? null) || undefined,
       isDefault: card.isDefault,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,

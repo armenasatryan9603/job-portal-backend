@@ -30,7 +30,7 @@ export class CreditController {
   @Post('refill/initiate')
   async initiate(
     @Request() req,
-    @Body() body: { amount: number; currency?: string },
+    @Body() body: { amount: number; currency?: string; cardId?: string; saveCard?: boolean },
   ) {
     // Get user's currency preference if not provided
     const user = await this.prisma.user.findUnique({
@@ -39,11 +39,17 @@ export class CreditController {
     });
     const currency = body.currency || user?.currency || 'USD';
 
-    return this.creditService.initiatePayment(
+    const result = await this.creditService.initiatePayment(
       req.user.userId,
       body.amount,
       currency,
+      body.cardId,
+      body.saveCard || false,
     );
+
+    // If using saved card, result is from makeBindingPayment (direct success)
+    // If using new card, result contains paymentUrl for webview
+    return result;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -175,18 +181,10 @@ export class CreditController {
       margin: 0 0 2rem 0;
       line-height: 1.6;
     }
-    .redirect-info {
+    .info {
       color: #9ca3af;
       font-size: 0.875rem;
       margin-top: 1rem;
-    }
-    a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    a:hover {
-      text-decoration: underline;
     }
   </style>
 </head>
@@ -195,15 +193,10 @@ export class CreditController {
     <div class="success-icon">✓</div>
     <h1>${title}</h1>
     <p>${message}</p>
-    <p class="redirect-info">
-      Redirecting you back... <a href="${redirectUrl}${redirectPath}">Click here if not redirected</a>
+    <p class="info">
+      You can close this page and return to the app.
     </p>
   </div>
-  <script>
-    setTimeout(function() {
-      window.location.href = '${redirectUrl}${redirectPath}';
-    }, 3000);
-  </script>
 </body>
 </html>`;
   }
@@ -254,18 +247,10 @@ export class CreditController {
       margin: 0 0 2rem 0;
       line-height: 1.6;
     }
-    .redirect-info {
+    .info {
       color: #9ca3af;
       font-size: 0.875rem;
       margin-top: 1rem;
-    }
-    a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    a:hover {
-      text-decoration: underline;
     }
   </style>
 </head>
@@ -274,8 +259,8 @@ export class CreditController {
     <div class="error-icon">✗</div>
     <h1>${title}</h1>
     <p>${message}</p>
-    <p class="redirect-info">
-      <a href="${redirectUrl}${redirectPath}">Return to payment page</a>
+    <p class="info">
+      You can close this page and return to the app.
     </p>
   </div>
 </body>
