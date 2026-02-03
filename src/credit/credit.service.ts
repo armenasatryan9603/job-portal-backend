@@ -374,6 +374,7 @@ export class CreditService {
       convertedAmount: number;
       exchangeRate: number;
       baseCurrency: string;
+      saveCard?: boolean;
     } | null = null;
 
     try {
@@ -473,15 +474,56 @@ export class CreditService {
     });
 
     // Extract and save BindingID if present (for card binding)
+    // Check if saveCard was requested and fetch binding info if needed
+    const saveCard = conversionMetadata?.saveCard === true;
+    let bindingId: string | null = null;
+    let cardHolderId: string | null = null;
+    let cardNumber = "";
+    let expDate = "";
+
+    // First, check if binding info is in the callback response
     if (paymentDetails.BindingID && paymentDetails.CardHolderID) {
+      bindingId = paymentDetails.BindingID;
+      cardHolderId = paymentDetails.CardHolderID;
+      cardNumber = paymentDetails.CardNumber || "";
+      expDate = paymentDetails.ExpDate || "";
+      this.logger.log(
+        `Binding info found in callback response: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+      );
+    } else if (saveCard && paymentID) {
+      // If saveCard was true but binding info not in callback, fetch it via GetPaymentDetails
+      this.logger.log(
+        `saveCard was true but binding info not in callback. Fetching payment details for PaymentID: ${paymentID}`
+      );
       try {
-        const bindingId = paymentDetails.BindingID;
-        const cardHolderId = paymentDetails.CardHolderID;
+        // Wait a bit for AmeriaBank to process the binding
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         
-        // Extract card details from payment response if available
-        const cardNumber = paymentDetails.CardNumber || "";
+        const paymentDetailsResponse = await this.getPaymentDetails(paymentID);
+        if (paymentDetailsResponse?.BindingID && paymentDetailsResponse?.CardHolderID) {
+          bindingId = paymentDetailsResponse.BindingID;
+          cardHolderId = paymentDetailsResponse.CardHolderID;
+          cardNumber = paymentDetailsResponse.CardNumber || "";
+          expDate = paymentDetailsResponse.ExpDate || "";
+          this.logger.log(
+            `Binding info retrieved from GetPaymentDetails: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+          );
+        } else {
+          this.logger.warn(
+            `saveCard was true but GetPaymentDetails did not return binding info. Response: ${JSON.stringify(paymentDetailsResponse)}`
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to fetch payment details for binding: ${error.message}. Payment still succeeded.`
+        );
+      }
+    }
+
+    // Save binding info if we have it
+    if (bindingId && cardHolderId) {
+      try {
         const last4 = cardNumber.length >= 4 ? cardNumber.slice(-4) : null;
-        const expDate = paymentDetails.ExpDate || "";
         
         // Try to find existing card without bindingId for this user
         let card = await this.prisma.card.findFirst({
@@ -570,6 +612,10 @@ export class CreditService {
           `Failed to save binding: ${error.message}. Payment still succeeded.`
         );
       }
+    } else if (saveCard) {
+      this.logger.warn(
+        `saveCard was true but no binding info was retrieved. PaymentID: ${paymentID}, OrderID: ${orderID}`
+      );
     }
 
     this.logger.log(`Credits added: user ${userId}, amount ${creditAmount} ${this.BASE_CURRENCY}`);
