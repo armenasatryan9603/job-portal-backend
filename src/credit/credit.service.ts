@@ -50,20 +50,61 @@ export class CreditService {
 
       const card = cards.length > 0 ? cards[0] : null;
 
-      if (!card || !card.binding_id || !card.card_holder_id) {
+      if (!card) {
+        this.logger.error(`Card ${cardId} not found for user ${userId}`);
         throw new Error(
-          "Card not found or not configured for saved payments. Please use a different card or add a new one."
+          "Card not found. Please use a different card or add a new one."
+        );
+      }
+
+      this.logger.log(
+        `Card found: id=${card.id}, binding_id=${card.binding_id}, card_holder_id=${card.card_holder_id}`
+      );
+
+      if (!card.binding_id) {
+        this.logger.error(`Card ${cardId} missing binding_id`);
+        throw new Error(
+          "Card does not have a binding ID. Please save the card during a payment first."
+        );
+      }
+
+      if (!card.card_holder_id || card.card_holder_id.trim().length === 0) {
+        this.logger.error(
+          `Card ${cardId} has bindingId (${card.binding_id}) but missing cardHolderId`
+        );
+        throw new Error(
+          "Card is missing required payment information. Please save the card again during a payment."
         );
       }
 
       // Use MakeBindingPayment for saved card
-      return this.makeBindingPayment(
-        userId,
-        amount,
-        currency,
-        card.binding_id,
-        card.card_holder_id
-      );
+      try {
+        return await this.makeBindingPayment(
+          userId,
+          amount,
+          currency,
+          card.binding_id,
+          card.card_holder_id
+        );
+      } catch (error: any) {
+        // If MakeBindingPayment fails, it might be a binding issue
+        // Log the error but re-throw with a helpful message
+        this.logger.error(
+          `MakeBindingPayment failed for card ${cardId}. Error: ${error.message}`
+        );
+        
+        // Check if it's a binding-related error
+        if (error.message?.toLowerCase().includes('binding') || 
+            error.message?.toLowerCase().includes('invalid') ||
+            error.message?.toLowerCase().includes('expired')) {
+          throw new Error(
+            "The saved card binding appears to be invalid or expired. Please use 'New Card' option and check 'Save card for future payments' to create a new binding."
+          );
+        }
+        
+        // Re-throw the original error
+        throw error;
+      }
     }
     // Validate credentials and required environment variables
     if (
@@ -1170,11 +1211,24 @@ export class CreditService {
       "/MakeBindingPayment"
     );
 
+    // Validate required fields
+    if (!cardHolderId || cardHolderId.trim().length === 0) {
+      this.logger.error(
+        `CardHolderID is missing or empty. BindingID: ${bindingId}, OrderID: ${orderIdInt}`
+      );
+      throw new Error(
+        "Card holder ID is missing. Please save the card again during a payment."
+      );
+    }
+
+    // Ensure CardHolderID is a string (should match what was sent during InitPayment)
+    const cardHolderIdStr = String(cardHolderId).trim();
+    
     const payload = {
       ClientID: this.credentials.clientId,
       Username: this.credentials.username,
       Password: this.credentials.password,
-      CardHolderID: cardHolderId,
+      CardHolderID: cardHolderIdStr,
       Amount: Number(paymentAmount),
       OrderID: Number(orderIdInt),
       BackURL: backUrl,
@@ -1184,8 +1238,16 @@ export class CreditService {
     };
 
     this.logger.log(
-      `Making binding payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+      `Making binding payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, BindingID=${bindingId}, CardHolderID=${cardHolderIdStr}`
     );
+    this.logger.log(`MakeBindingPayment URL: ${makeBindingPaymentUrl}`);
+    this.logger.log(`MakeBindingPayment payload: ${JSON.stringify({ ...payload, Password: '***' })}`);
+    
+    // In test mode, log additional info for debugging
+    if (isTestMode) {
+      this.logger.log(`[TEST MODE] MakeBindingPayment - OrderID range check: ${orderIdInt} (should be 30164001-30165000)`);
+      this.logger.log(`[TEST MODE] MakeBindingPayment - Amount check: ${paymentAmount} (should be 10)`);
+    }
 
     try {
       const response = await axios.post(makeBindingPaymentUrl, payload, {
@@ -1275,8 +1337,48 @@ export class CreditService {
       }
     } catch (error: any) {
       this.logger.error(
-        `MakeBindingPayment error: ${error.message}. OrderID: ${orderId}, BindingID: ${bindingId}`
+        `MakeBindingPayment error: ${error.message}. OrderID: ${orderId}, BindingID: ${bindingId}, CardHolderID: ${cardHolderId}`
       );
+      
+      // Log more details about the error
+      if (error.response) {
+        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
+        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
+      }
+      
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+        throw new Error(
+          "Unable to connect to payment gateway. Please try again later."
+        );
+      }
+      
+      // Check if it's a 500 error from AmeriaBank
+      if (error.response?.status === 500) {
+        const errorData = error.response.data;
+        const errorMessage = errorData?.message || errorData?.error || errorData?.TrxnDescription || 
+          errorData?.Message || "Payment gateway returned an error.";
+        
+        this.logger.error(
+          `Binding payment failed with 500 error. BindingID: ${bindingId}, CardHolderID: ${cardHolderId}, Error: ${errorMessage}`
+        );
+        
+        // In test mode, 500 errors from MakeBindingPayment often indicate binding issues
+        const isTestMode = this.vposUrl.includes("servicestest");
+        if (isTestMode) {
+          this.logger.warn(
+            `[TEST MODE] MakeBindingPayment returned 500. This may indicate the binding is invalid or the test environment has limitations.`
+          );
+          throw new Error(
+            "The saved card binding appears to be invalid or expired. Please use 'New Card' option and check 'Save card for future payments' to create a new binding. Note: The test environment may have limitations with saved card payments."
+          );
+        }
+        
+        // For production, provide a more generic error
+        throw new Error(
+          "Payment gateway returned an error. Please try again or use 'New Card' option to create a new payment."
+        );
+      }
+      
       throw new Error(
         `Payment failed: ${error.message || "Unknown error"}`
       );
