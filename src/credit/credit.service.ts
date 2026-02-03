@@ -1,8 +1,9 @@
 import { Injectable, Logger } from "@nestjs/common";
-import axios from "axios";
-import { PrismaService } from "../prisma.service";
+
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
+import { PrismaService } from "../prisma.service";
+import axios from "axios";
 
 @Injectable()
 export class CreditService {
@@ -48,20 +49,29 @@ export class CreditService {
       );
     }
 
-    // Generate unique OrderID (integer, max 16 digits for JavaScript safe integer)
-    const timestamp = Date.now();
-    const timestampSuffix = timestamp.toString().slice(-10);
-    const randomSuffix = Math.floor(Math.random() * 100);
-    const userIdStr = userId.toString().padStart(5, "0").slice(-5);
-    const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
-    const orderIdInt = parseInt(
-      `${timestampSuffix}${userIdStr}${randomStr}`,
-      10
-    );
-    const orderId = `${userId}-${timestamp}-${randomSuffix}`;
+    const isTestMode = this.vposUrl.includes("servicestest");
 
-    if (orderIdInt > Number.MAX_SAFE_INTEGER) {
-      throw new Error("OrderID generation failed: number too large");
+    let orderIdInt: number;
+    let orderId: string;
+    if (isTestMode) {
+      // Ameriabank test requires OrderID in 30164001–30165000, amount 10 AMD
+      orderIdInt =
+        30164001 + Math.floor(Math.random() * (30165000 - 30164001 + 1));
+      orderId = String(orderIdInt);
+    } else {
+      const timestamp = Date.now();
+      const timestampSuffix = timestamp.toString().slice(-10);
+      const randomSuffix = Math.floor(Math.random() * 100);
+      const userIdStr = userId.toString().padStart(5, "0").slice(-5);
+      const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
+      orderIdInt = parseInt(
+        `${timestampSuffix}${userIdStr}${randomStr}`,
+        10
+      );
+      orderId = `${userId}-${timestamp}-${randomSuffix}`;
+      if (orderIdInt > Number.MAX_SAFE_INTEGER) {
+        throw new Error("OrderID generation failed: number too large");
+      }
     }
 
     // Get user's currency preference
@@ -77,8 +87,9 @@ export class CreditService {
     let exchangeRate: number | null = null;
     let originalAmount = amount;
     let convertedAmount = amount;
+    const paymentAmount = isTestMode ? 10 : amount;
 
-    if (normalizedCurrency !== this.BASE_CURRENCY) {
+    if (!isTestMode && normalizedCurrency !== this.BASE_CURRENCY) {
       try {
         exchangeRate = await this.exchangeRateService.getExchangeRate(
           normalizedCurrency,
@@ -97,29 +108,37 @@ export class CreditService {
         exchangeRate = 1;
       }
     } else {
-      exchangeRate = 1;
+      if (isTestMode) {
+        try {
+          exchangeRate = await this.exchangeRateService.getExchangeRate(
+            "AMD",
+            this.BASE_CURRENCY
+          );
+          originalAmount = 10;
+          convertedAmount = Math.round(10 * exchangeRate * 100) / 100;
+        } catch {
+          exchangeRate = 1;
+          originalAmount = 10;
+          convertedAmount = 10;
+        }
+      } else {
+        exchangeRate = 1;
+      }
     }
 
     // Build callback URL
-    // Use BACKEND_URL if set, otherwise construct from PORT (for local development)
     const port = process.env.PORT || "8080";
     const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
     const backUrl = `${backendUrl}/credit/refill/callback`;
 
-    // Store conversion metadata in orderId format for retrieval in callback
-    // Format: userId-timestamp-random|currency|originalAmount|convertedAmount|exchangeRate
-    const orderIdWithMetadata = `${orderId}|${normalizedCurrency}|${originalAmount}|${convertedAmount}|${exchangeRate}`;
-
-    // Build payment request payload
-    // Note: Payment gateway processes in its default currency (likely AMD for Ameriabank)
-    // We send the amount in user's currency, gateway will handle conversion
+    // Build payment request payload (test: amount 10 AMD, OrderID in 30164001–30165000)
     const payload = {
       ClientID: this.credentials.clientId,
       Username: this.credentials.username,
       Password: this.credentials.password,
-      Amount: amount, // Amount in user's currency
+      Amount: paymentAmount,
       OrderID: orderIdInt,
-      Description: `Credit refill - ${amount} ${normalizedCurrency}`,
+      Description: `Credit refill - ${paymentAmount} ${isTestMode ? "AMD" : normalizedCurrency}`,
       BackURL: backUrl,
     };
 
@@ -155,32 +174,32 @@ export class CreditService {
       await this.prisma.systemConfig.upsert({
         where: { key: `credit_refill_${orderId}` },
         update: {
-          value: JSON.stringify({
-            userId,
-            currency: normalizedCurrency,
-            originalAmount,
-            convertedAmount,
-            exchangeRate,
-            baseCurrency: this.BASE_CURRENCY,
-          }),
-        },
-        create: {
-          key: `credit_refill_${orderId}`,
-          value: JSON.stringify({
-            userId,
-            currency: normalizedCurrency,
-            originalAmount,
-            convertedAmount,
-            exchangeRate,
-            baseCurrency: this.BASE_CURRENCY,
-          }),
-          description: `Temporary storage for credit refill conversion metadata`,
-        },
-      });
+        value: JSON.stringify({
+          userId,
+          currency: isTestMode ? "AMD" : normalizedCurrency,
+          originalAmount,
+          convertedAmount,
+          exchangeRate: exchangeRate ?? 1,
+          baseCurrency: this.BASE_CURRENCY,
+        }),
+      },
+      create: {
+        key: `credit_refill_${orderId}`,
+        value: JSON.stringify({
+          userId,
+          currency: isTestMode ? "AMD" : normalizedCurrency,
+          originalAmount,
+          convertedAmount,
+          exchangeRate: exchangeRate ?? 1,
+          baseCurrency: this.BASE_CURRENCY,
+        }),
+        description: `Temporary storage for credit refill conversion metadata`,
+      },
+    });
 
-      return {
-        orderId,
-        paymentUrl,
+    return {
+      orderId,
+      paymentUrl,
         paymentHtml: null,
         paymentData: response.data,
         conversionInfo: {
@@ -208,8 +227,15 @@ export class CreditService {
     paymentID: string,
     opaque?: string
   ) {
+    this.logger.log(
+      `Payment callback received - OrderID: ${orderID}, PaymentID: ${paymentID}, ResponseCode: ${responseCode}`
+    );
+
     // Validate required parameters
     if (!orderID || !paymentID) {
+      this.logger.error(
+        `Payment callback missing required parameters - OrderID: ${orderID}, PaymentID: ${paymentID}`
+      );
       throw new Error("Payment callback missing required parameters");
     }
 
@@ -251,12 +277,38 @@ export class CreditService {
       throw new Error(errorMsg);
     }
 
-    // Extract userId from orderID (format: userId-timestamp-random)
+    // Retrieve conversion metadata first (needed for test mode where orderID is numeric)
+    const configKey = `credit_refill_${orderID}`;
+    let conversionMetadata: {
+      userId?: number;
+      currency: string;
+      originalAmount: number;
+      convertedAmount: number;
+      exchangeRate: number;
+      baseCurrency: string;
+    } | null = null;
+
+    try {
+      const config = await this.prisma.systemConfig.findUnique({
+        where: { key: configKey },
+      });
+      if (config) {
+        conversionMetadata = JSON.parse(config.value);
+        await this.prisma.systemConfig.delete({ where: { key: configKey } });
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to retrieve conversion metadata for ${orderID}: ${error}`
+      );
+    }
+
+    // Resolve userId: from metadata (test mode numeric orderID) or from orderID format userId-timestamp-random
     let userId: number;
-    if (orderID.includes("-")) {
+    if (conversionMetadata?.userId != null) {
+      userId = conversionMetadata.userId;
+    } else if (orderID.includes("-")) {
       userId = parseInt(orderID.split("-")[0]);
     } else {
-      // Fallback: try paymentDetails.OrderID
       const orderIdFromDetails = paymentDetails.OrderID?.toString() || "";
       if (orderIdFromDetails.includes("-")) {
         userId = parseInt(orderIdFromDetails.split("-")[0]);
@@ -269,32 +321,13 @@ export class CreditService {
       throw new Error(`Invalid userId extracted from orderID: ${orderID}`);
     }
 
-    // Retrieve conversion metadata from SystemConfig
-    let conversionMetadata: {
-      currency: string;
-      originalAmount: number;
-      convertedAmount: number;
-      exchangeRate: number;
-      baseCurrency: string;
-    } | null = null;
-
-    try {
-      const configKey = `credit_refill_${orderID}`;
-      const config = await this.prisma.systemConfig.findUnique({
-        where: { key: configKey },
-      });
-
-      if (config) {
-        conversionMetadata = JSON.parse(config.value);
-        // Clean up temporary storage
-        await this.prisma.systemConfig.delete({
-          where: { key: configKey },
-        });
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Failed to retrieve conversion metadata for ${orderID}: ${error}`
-      );
+    // Verify user exists
+    const userExists = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!userExists) {
+      throw new Error(`User with ID ${userId} not found`);
     }
 
     // Determine amount to add to credits
@@ -309,6 +342,9 @@ export class CreditService {
       paymentDetails.DepositedAmount || paymentDetails.Amount;
 
     if (!creditAmount || creditAmount <= 0) {
+      this.logger.error(
+        `Invalid credit amount: ${creditAmount}. PaymentDetails: ${JSON.stringify(paymentDetails)}`
+      );
       throw new Error(
         `Invalid credit amount: ${creditAmount}. Payment may not have been completed.`
       );
@@ -362,23 +398,36 @@ export class CreditService {
       Password: this.credentials.password,
     };
 
-    const response = await axios.post(this.vposStatusUrl, payload, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      timeout: 30000,
-    });
+    try {
+      const response = await axios.post(this.vposStatusUrl, payload, {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 30000,
+      });
 
-    // Log warning for non-success ResponseCode but still return data
-    // Caller will check PaymentState to determine actual status
-    if (response.data?.ResponseCode && response.data.ResponseCode !== "00") {
-      this.logger.warn(
-        `GetPaymentDetails ResponseCode: ${response.data.ResponseCode}`
+      // Log warning for non-success ResponseCode but still return data
+      // Caller will check PaymentState to determine actual status
+      if (response.data?.ResponseCode && response.data.ResponseCode !== "00") {
+        this.logger.warn(
+          `GetPaymentDetails ResponseCode: ${response.data.ResponseCode}`
+        );
+      }
+
+      return response.data;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to get payment details for PaymentID ${paymentID}: ${error.message}`
+      );
+      if (error.response?.data) {
+        // Return the error response data so caller can check it
+        return error.response.data;
+      }
+      throw new Error(
+        `Failed to retrieve payment details: ${error.message || "Unknown error"}`
       );
     }
-
-    return response.data;
   }
 
   /**
