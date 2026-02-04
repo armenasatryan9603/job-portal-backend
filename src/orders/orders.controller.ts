@@ -40,7 +40,7 @@ export class OrdersController {
       currency?: string;
       rateUnit?: string;
       availableDates?: string[];
-      location?: string;
+      location: string;
       skills?: string[];
       skillIds?: number[];
       useAIEnhancement?: boolean;
@@ -58,16 +58,23 @@ export class OrdersController {
       throw new Error("User not authenticated. Please log in and try again.");
     }
 
+    // Validate location is provided
+    if (!body.location || !body.location.trim()) {
+      throw new BadRequestException("Location is required");
+    }
+
+    const location = body.location.trim();
+
     return this.ordersService.createOrder(
       req.user.userId,
       body.categoryId,
       body.title,
       body.description,
       body.budget,
+      location,
       body.currency,
       body.rateUnit,
       body.availableDates,
-      body.location,
       body.skills,
       body.skillIds,
       body.useAIEnhancement ?? false,
@@ -94,7 +101,7 @@ export class OrdersController {
       currency?: string;
       rateUnit?: string;
       availableDates?: string[];
-      location?: string;
+      location: string;
       skills?: string[];
       skillIds?: number[];
       mediaFiles?: Array<{
@@ -114,16 +121,23 @@ export class OrdersController {
       requiredResourceCount?: number;
     }
   ) {
+    // Validate location is provided
+    if (!body.location || !body.location.trim()) {
+      throw new BadRequestException("Location is required");
+    }
+
+    const location = body.location.trim();
+
     return this.ordersService.createOrderWithMedia(
       req.user.userId,
       body.categoryId,
       body.title,
       body.description,
       body.budget,
+      location,
       body.currency,
       body.rateUnit,
       body.availableDates,
-      body.location,
       body.skills,
       body.skillIds,
       body.mediaFiles || [],

@@ -398,10 +398,10 @@ export class OrdersService {
     title: string,
     description: string,
     budget: number,
+    location: string,
     currency?: string,
     rateUnit?: string,
     availableDates?: string[],
-    location?: string,
     skills?: string[],
     skillIds?: number[],
     useAIEnhancement: boolean = false,
@@ -413,6 +413,10 @@ export class OrdersService {
     resourceBookingMode?: "select" | "auto" | "multi",
     requiredResourceCount?: number
   ) {
+    // Validate location is provided and not empty
+    if (!location || !location.trim()) {
+      throw new BadRequestException("Location is required");
+    }
     // Check if client exists
     const client = await this.prisma.user.findUnique({
       where: { id: clientId },
@@ -2090,10 +2094,10 @@ export class OrdersService {
     title: string,
     description: string,
     budget: number,
+    location: string,
     currency?: string,
     rateUnit?: string,
     availableDates?: string[],
-    location?: string,
     skills?: string[],
     skillIds?: number[],
     mediaFiles: Array<{
@@ -2112,6 +2116,11 @@ export class OrdersService {
     resourceBookingMode?: "select" | "auto" | "multi",
     requiredResourceCount?: number
   ) {
+    // Validate location is provided and not empty
+    if (!location || !location.trim()) {
+      throw new BadRequestException("Location is required");
+    }
+
     // Validate media files first (check if URLs are accessible)
     if (mediaFiles.length > 0) {
       await this.validateMediaFiles(mediaFiles);
