@@ -345,13 +345,24 @@ export class CreditController {
     try {
       return await this.creditService.cancelPayment(body.paymentID, body.orderID);
     } catch (error: any) {
-      this.logger.error(`Cancel payment error in controller: ${error.message}`);
+      this.logger.error(`Cancel payment error in controller: ${error.message || error}`);
+      this.logger.error(`Error stack: ${error.stack}`);
+      
       if (error instanceof HttpException) {
         throw error;
       }
+      
+      // Create HttpException with proper error message
+      const errorMessage = error?.message || error?.toString() || "Failed to cancel payment";
+      const statusCode = error?.status || error?.statusCode || 500;
+      
       throw new HttpException(
-        error.message || "Failed to cancel payment",
-        error.status || 500
+        {
+          statusCode,
+          message: errorMessage,
+          error: errorMessage,
+        },
+        statusCode
       );
     }
   }

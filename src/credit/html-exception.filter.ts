@@ -23,14 +23,21 @@ export class HtmlExceptionFilter implements ExceptionFilter {
           ? exception.getStatus()
           : HttpStatus.INTERNAL_SERVER_ERROR;
 
-      const message =
-        exception instanceof HttpException
-          ? exception.getResponse()
-          : 'Internal server error';
+      let message = 'Internal server error';
+      if (exception instanceof HttpException) {
+        const response = exception.getResponse();
+        if (typeof response === 'string') {
+          message = response;
+        } else if (typeof response === 'object' && response !== null) {
+          message = (response as any).message || (response as any).error || 'Internal server error';
+        }
+      } else if (exception instanceof Error) {
+        message = exception.message;
+      }
 
       response.status(status).json({
         statusCode: status,
-        message: typeof message === 'string' ? message : (message as any).message || 'Internal server error',
+        message: message,
       });
       return;
     }

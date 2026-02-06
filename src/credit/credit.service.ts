@@ -1548,13 +1548,24 @@ export class CreditService {
         this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
         this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
         const errorData = error.response.data;
-        throw new Error(
+        
+        // Extract error message from various possible fields
+        const errorMsg =
           errorData?.Message ||
           errorData?.TrxnDescription ||
           errorData?.Description ||
           errorData?.ResponseMessage ||
-          error.message
-        );
+          errorData?.message ||
+          (errorData?.ResponseCode ? `Cancel failed. ResponseCode: ${errorData.ResponseCode}` : null) ||
+          error.message ||
+          `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        throw new Error(errorMsg);
+      }
+      
+      // If it's an error thrown from above (ResponseCode check), re-throw it
+      if (error.message && error.message !== "Unknown error") {
+        throw error;
       }
       
       throw new Error(`Failed to cancel payment: ${error.message || "Unknown error"}`);
