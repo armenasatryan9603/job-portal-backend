@@ -1584,16 +1584,34 @@ export class CreditService {
       Password: this.credentials.password,
     };
 
-    // Add amount if partial refund is requested
+    // Determine refund amount - Ameriabank requires Amount field even for full refunds
+    let refundAmount: number;
     if (amount !== undefined && amount !== null) {
+      // Partial refund - use provided amount
       if (amount <= 0) {
         throw new Error("Refund amount must be greater than 0");
       }
-      payload.Amount = Number(amount);
+      refundAmount = Number(amount);
+    } else {
+      // Full refund - fetch original payment amount
+      try {
+        const paymentDetails = await this.getPaymentDetails(paymentID);
+        refundAmount = paymentDetails.DepositedAmount || paymentDetails.Amount;
+        if (!refundAmount || refundAmount <= 0) {
+          throw new Error("Could not determine original payment amount for full refund");
+        }
+        this.logger.log(`Full refund: Using original payment amount ${refundAmount} from payment details`);
+      } catch (error: any) {
+        this.logger.error(`Failed to fetch payment details for full refund: ${error.message}`);
+        throw new Error(`Failed to fetch original payment amount: ${error.message}`);
+      }
     }
+    
+    // Always include Amount field (required by Ameriabank)
+    payload.Amount = Number(refundAmount);
 
     this.logger.log(
-      `Refunding payment: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${amount !== undefined ? amount : "full"}`
+      `Refunding payment: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${refundAmount} (${amount !== undefined ? "partial" : "full"})`
     );
     this.logger.log(
       `RefundPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
@@ -1624,12 +1642,12 @@ export class CreditService {
       }
 
       this.logger.log(
-        `Payment refunded successfully: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${amount !== undefined ? amount : "full"}`
+        `Payment refunded successfully: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${refundAmount} (${amount !== undefined ? "partial" : "full"})`
       );
 
       return {
         success: true,
-        message: amount !== undefined ? `Payment refunded successfully (partial: ${amount})` : "Payment refunded successfully (full)",
+        message: amount !== undefined ? `Payment refunded successfully (partial: ${refundAmount})` : `Payment refunded successfully (full: ${refundAmount})`,
         response: responseData,
       };
     } catch (error: any) {
