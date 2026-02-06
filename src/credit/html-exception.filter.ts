@@ -25,15 +25,30 @@ export class HtmlExceptionFilter implements ExceptionFilter {
 
       let message = 'Internal server error';
       if (exception instanceof HttpException) {
-        const response = exception.getResponse();
-        if (typeof response === 'string') {
-          message = response;
-        } else if (typeof response === 'object' && response !== null) {
-          message = (response as any).message || (response as any).error || 'Internal server error';
+        const exceptionResponse = exception.getResponse();
+        if (typeof exceptionResponse === 'string') {
+          message = exceptionResponse;
+        } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+          const responseObj = exceptionResponse as any;
+          message = responseObj.message || responseObj.error || JSON.stringify(responseObj) || 'Internal server error';
         }
       } else if (exception instanceof Error) {
-        message = exception.message;
+        message = exception.message || exception.toString() || 'Internal server error';
+      } else {
+        // Log unknown exception type for debugging
+        console.error('Unknown exception type:', typeof exception, exception);
+        message = String(exception) || 'Internal server error';
       }
+      
+      // Log the error for debugging
+      console.error(`Exception caught in HtmlExceptionFilter:`, {
+        url: request.url,
+        method: request.method,
+        status,
+        message,
+        exceptionType: exception?.constructor?.name,
+        exceptionMessage: exception instanceof Error ? exception.message : 'N/A',
+      });
 
       response.status(status).json({
         statusCode: status,
