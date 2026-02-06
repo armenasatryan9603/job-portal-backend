@@ -1,9 +1,10 @@
-import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./app.module";
-import { NestExpressApplication } from "@nestjs/platform-express";
-import { ValidationPipe } from "@nestjs/common";
-import { join } from "path";
 import * as express from "express";
+
+import { AppModule } from "./app.module";
+import { HtmlExceptionFilter } from "./credit/html-exception.filter";
+import { NestExpressApplication } from "@nestjs/platform-express";
+import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   try {
@@ -14,6 +15,9 @@ async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule, {
       logger: ["error", "warn", "log", "debug"],
     });
+
+    // Register global exception filter
+    app.useGlobalFilters(new HtmlExceptionFilter());
 
     // Enable validation
     app.useGlobalPipes(

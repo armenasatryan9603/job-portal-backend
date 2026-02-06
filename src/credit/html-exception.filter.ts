@@ -30,7 +30,12 @@ export class HtmlExceptionFilter implements ExceptionFilter {
           message = exceptionResponse;
         } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
           const responseObj = exceptionResponse as any;
-          message = responseObj.message || responseObj.error || JSON.stringify(responseObj) || 'Internal server error';
+          // Try multiple possible message fields
+          message = responseObj.message || 
+                   responseObj.error || 
+                   responseObj.errorMessage ||
+                   (typeof responseObj === 'string' ? responseObj : JSON.stringify(responseObj)) || 
+                   'Internal server error';
         }
       } else if (exception instanceof Error) {
         message = exception.message || exception.toString() || 'Internal server error';
@@ -40,7 +45,7 @@ export class HtmlExceptionFilter implements ExceptionFilter {
         message = String(exception) || 'Internal server error';
       }
       
-      // Log the error for debugging
+      // Log the error for debugging (always log to help diagnose issues)
       console.error(`Exception caught in HtmlExceptionFilter:`, {
         url: request.url,
         method: request.method,
@@ -48,6 +53,7 @@ export class HtmlExceptionFilter implements ExceptionFilter {
         message,
         exceptionType: exception?.constructor?.name,
         exceptionMessage: exception instanceof Error ? exception.message : 'N/A',
+        fullException: exception instanceof Error ? exception.stack : String(exception),
       });
 
       response.status(status).json({
