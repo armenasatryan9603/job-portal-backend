@@ -1465,6 +1465,195 @@ export class CreditService {
     }
   }
 
+  /**
+   * Cancel a payment using Ameriabank VPOS CancelPayment API
+   */
+  async cancelPayment(paymentID: string, orderID: string) {
+    // Validate credentials
+    if (
+      !this.credentials.clientId ||
+      !this.credentials.username ||
+      !this.credentials.password
+    ) {
+      this.logger.error("AmeriaBank credentials not configured");
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
+      );
+    }
+
+    const cancelPaymentUrl = this.vposUrl.replace(
+      "/InitPayment",
+      "/CancelPayment"
+    );
+
+    const payload = {
+      PaymentID: paymentID,
+      OrderID: orderID,
+      Username: this.credentials.username,
+      Password: this.credentials.password,
+    };
+
+    this.logger.log(
+      `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID}`
+    );
+    this.logger.log(
+      `CancelPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
+    );
+
+    try {
+      const response = await axios.post(cancelPaymentUrl, payload, {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 30000,
+      });
+
+      const responseData = response.data;
+      this.logger.log(
+        `CancelPayment response: ${JSON.stringify(responseData)}`
+      );
+
+      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
+        const errorMsg =
+          responseData?.TrxnDescription ||
+          responseData?.Description ||
+          responseData?.ResponseMessage ||
+          `Cancel failed. ResponseCode: ${responseData.ResponseCode}`;
+        this.logger.error(`Cancel payment failed: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      this.logger.log(
+        `Payment canceled successfully: PaymentID=${paymentID}, OrderID=${orderID}`
+      );
+
+      return {
+        success: true,
+        message: "Payment canceled successfully",
+        response: responseData,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `CancelPayment error: ${error.message}. PaymentID: ${paymentID}, OrderID: ${orderID}`
+      );
+      
+      if (error.response) {
+        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
+        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
+        const errorData = error.response.data;
+        throw new Error(
+          errorData?.Message ||
+          errorData?.TrxnDescription ||
+          errorData?.Description ||
+          errorData?.ResponseMessage ||
+          error.message
+        );
+      }
+      
+      throw new Error(`Failed to cancel payment: ${error.message || "Unknown error"}`);
+    }
+  }
+
+  /**
+   * Refund a payment using Ameriabank VPOS RefundPayment API
+   * Supports both full refund (omit amount) and partial refund (provide amount)
+   */
+  async refundPayment(paymentID: string, orderID: string, amount?: number) {
+    // Validate credentials
+    if (
+      !this.credentials.clientId ||
+      !this.credentials.username ||
+      !this.credentials.password
+    ) {
+      this.logger.error("AmeriaBank credentials not configured");
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
+      );
+    }
+
+    const refundPaymentUrl = this.vposUrl.replace(
+      "/InitPayment",
+      "/RefundPayment"
+    );
+
+    const payload: any = {
+      PaymentID: paymentID,
+      OrderID: orderID,
+      Username: this.credentials.username,
+      Password: this.credentials.password,
+    };
+
+    // Add amount if partial refund is requested
+    if (amount !== undefined && amount !== null) {
+      if (amount <= 0) {
+        throw new Error("Refund amount must be greater than 0");
+      }
+      payload.Amount = Number(amount);
+    }
+
+    this.logger.log(
+      `Refunding payment: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${amount !== undefined ? amount : "full"}`
+    );
+    this.logger.log(
+      `RefundPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
+    );
+
+    try {
+      const response = await axios.post(refundPaymentUrl, payload, {
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        timeout: 30000,
+      });
+
+      const responseData = response.data;
+      this.logger.log(
+        `RefundPayment response: ${JSON.stringify(responseData)}`
+      );
+
+      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
+        const errorMsg =
+          responseData?.TrxnDescription ||
+          responseData?.Description ||
+          responseData?.ResponseMessage ||
+          `Refund failed. ResponseCode: ${responseData.ResponseCode}`;
+        this.logger.error(`Refund payment failed: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      this.logger.log(
+        `Payment refunded successfully: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${amount !== undefined ? amount : "full"}`
+      );
+
+      return {
+        success: true,
+        message: amount !== undefined ? `Payment refunded successfully (partial: ${amount})` : "Payment refunded successfully (full)",
+        response: responseData,
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `RefundPayment error: ${error.message}. PaymentID: ${paymentID}, OrderID: ${orderID}`
+      );
+      
+      if (error.response) {
+        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
+        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
+        const errorData = error.response.data;
+        throw new Error(
+          errorData?.Message ||
+          errorData?.TrxnDescription ||
+          errorData?.Description ||
+          errorData?.ResponseMessage ||
+          error.message
+        );
+      }
+      
+      throw new Error(`Failed to refund payment: ${error.message || "Unknown error"}`);
+    }
+  }
+
   // Legacy webhook handler (kept for backward compatibility)
   async handleWebhook(orderId: string, paidAmount: number) {
     const userId = parseInt(orderId.split("-")[0]);

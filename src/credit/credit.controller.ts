@@ -330,6 +330,32 @@ export class CreditController {
     }
   }
 
+  // Cancel payment endpoint
+  @UseGuards(JwtAuthGuard)
+  @Post('payment/cancel')
+  async cancelPayment(
+    @Request() req,
+    @Body() body: { paymentID: string; orderID: string }
+  ) {
+    if (!body.paymentID || !body.orderID) {
+      throw new Error("paymentID and orderID are required");
+    }
+    return this.creditService.cancelPayment(body.paymentID, body.orderID);
+  }
+
+  // Refund payment endpoint
+  @UseGuards(JwtAuthGuard)
+  @Post('payment/refund')
+  async refundPayment(
+    @Request() req,
+    @Body() body: { paymentID: string; orderID: string; amount?: number }
+  ) {
+    if (!body.paymentID || !body.orderID) {
+      throw new Error("paymentID and orderID are required");
+    }
+    return this.creditService.refundPayment(body.paymentID, body.orderID, body.amount);
+  }
+
   // Legacy webhook endpoint (kept for backward compatibility)
   @Post('refill/webhook')
   async webhook(@Body() body: { orderId: string; paidAmount: number }) {
