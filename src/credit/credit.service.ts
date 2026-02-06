@@ -1486,12 +1486,6 @@ export class CreditService {
       "/CancelPayment"
     );
 
-    // Convert OrderID to number (Ameriabank requires integer)
-    const orderIdInt = parseInt(orderID, 10);
-    if (isNaN(orderIdInt) || orderIdInt <= 0) {
-      throw new Error(`Invalid OrderID: ${orderID}. Must be a positive integer.`);
-    }
-
     // Check payment status before attempting cancellation
     try {
       this.logger.log(`Checking payment status before cancellation: PaymentID=${paymentID}`);
@@ -1520,15 +1514,16 @@ export class CreditService {
       this.logger.warn(`Could not verify payment status before cancellation: ${statusError.message}. Proceeding with cancellation attempt.`);
     }
 
+    // According to Ameriabank API documentation, CancelPayment only requires:
+    // PaymentID, Username, Password (OrderID is NOT required)
     const payload = {
       PaymentID: paymentID,
-      OrderID: orderIdInt, // Ensure it's an integer
       Username: this.credentials.username,
       Password: this.credentials.password,
     };
 
     this.logger.log(
-      `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID} (parsed as ${orderIdInt})`
+      `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID} (OrderID not sent in request per API docs)`
     );
     this.logger.log(
       `CancelPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
