@@ -1492,6 +1492,34 @@ export class CreditService {
       throw new Error(`Invalid OrderID: ${orderID}. Must be a positive integer.`);
     }
 
+    // Check payment status before attempting cancellation
+    try {
+      this.logger.log(`Checking payment status before cancellation: PaymentID=${paymentID}`);
+      const paymentDetails = await this.getPaymentDetails(paymentID);
+      this.logger.log(`Payment status: PaymentState=${paymentDetails.PaymentState}, OrderStatus=${paymentDetails.OrderStatus}, ResponseCode=${paymentDetails.ResponseCode}`);
+      
+      // Check if payment is already completed/settled
+      if (paymentDetails.PaymentState === "payment_approved" || paymentDetails.OrderStatus === "2") {
+        throw new Error(
+          `Payment cannot be canceled: Payment is already completed/settled (PaymentState: ${paymentDetails.PaymentState}, OrderStatus: ${paymentDetails.OrderStatus}). Use refund instead.`
+        );
+      }
+      
+      // Check if payment is already canceled
+      if (paymentDetails.OrderStatus === "3" || paymentDetails.PaymentState === "payment_canceled") {
+        throw new Error(
+          `Payment cannot be canceled: Payment is already canceled (OrderStatus: ${paymentDetails.OrderStatus}, PaymentState: ${paymentDetails.PaymentState}).`
+        );
+      }
+    } catch (statusError: any) {
+      // If status check fails with a meaningful error, throw it
+      if (statusError.message && !statusError.message.includes("Failed to retrieve payment details")) {
+        throw statusError;
+      }
+      // Otherwise, log warning but continue with cancellation attempt
+      this.logger.warn(`Could not verify payment status before cancellation: ${statusError.message}. Proceeding with cancellation attempt.`);
+    }
+
     const payload = {
       PaymentID: paymentID,
       OrderID: orderIdInt, // Ensure it's an integer
@@ -1550,15 +1578,24 @@ export class CreditService {
         const errorData = error.response.data;
         
         // Extract error message from various possible fields
-        const errorMsg =
+        let errorMsg =
           errorData?.Message ||
           errorData?.TrxnDescription ||
           errorData?.Description ||
           errorData?.ResponseMessage ||
           errorData?.message ||
-          (errorData?.ResponseCode ? `Cancel failed. ResponseCode: ${errorData.ResponseCode}` : null) ||
           error.message ||
           `HTTP ${error.response.status}: ${error.response.statusText}`;
+        
+        // If it's a generic error from Ameriabank, provide more context
+        if (error.response.status === 500 && (errorMsg === "An error has occurred." || errorMsg.includes("error has occurred"))) {
+          errorMsg = `Payment cannot be canceled. This usually means the payment is already completed/settled, already canceled, or in an invalid state. Original error: ${errorMsg}`;
+        }
+        
+        // Include ResponseCode if available
+        if (errorData?.ResponseCode) {
+          errorMsg = `${errorMsg} (ResponseCode: ${errorData.ResponseCode})`;
+        }
         
         throw new Error(errorMsg);
       }
