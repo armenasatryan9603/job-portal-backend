@@ -1469,40 +1469,39 @@ export class CreditService {
    * Cancel a payment using Ameriabank VPOS CancelPayment API
    */
   async cancelPayment(paymentID: string, orderID: string) {
-    try {
-      // Validate credentials
-      if (
-        !this.credentials.clientId ||
-        !this.credentials.username ||
-        !this.credentials.password
-      ) {
-        this.logger.error("AmeriaBank credentials not configured");
-        throw new Error(
-          "Payment gateway credentials not configured. Please contact support."
-        );
-      }
-
-      const cancelPaymentUrl = this.vposUrl.replace(
-        "/InitPayment",
-        "/CancelPayment"
+    // Validate credentials
+    if (
+      !this.credentials.clientId ||
+      !this.credentials.username ||
+      !this.credentials.password
+    ) {
+      this.logger.error("AmeriaBank credentials not configured");
+      throw new Error(
+        "Payment gateway credentials not configured. Please contact support."
       );
+    }
 
-      // Convert OrderID to number (Ameriabank requires integer)
-      const orderIdInt = parseInt(orderID, 10);
-      if (isNaN(orderIdInt) || orderIdInt <= 0) {
-        throw new Error(`Invalid OrderID: ${orderID}. Must be a positive integer.`);
-      }
+    const cancelPaymentUrl = this.vposUrl.replace(
+      "/InitPayment",
+      "/CancelPayment"
+    );
 
-      const payload = {
-        PaymentID: paymentID,
-        OrderID: orderIdInt, // Ensure it's an integer
-        Username: this.credentials.username,
-        Password: this.credentials.password,
-      };
+    // Convert OrderID to number (Ameriabank requires integer)
+    const orderIdInt = parseInt(orderID, 10);
+    if (isNaN(orderIdInt) || orderIdInt <= 0) {
+      throw new Error(`Invalid OrderID: ${orderID}. Must be a positive integer.`);
+    }
 
-      this.logger.log(
-        `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID} (parsed as ${orderIdInt})`
-      );
+    const payload = {
+      PaymentID: paymentID,
+      OrderID: orderIdInt, // Ensure it's an integer
+      Username: this.credentials.username,
+      Password: this.credentials.password,
+    };
+
+    this.logger.log(
+      `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID} (parsed as ${orderIdInt})`
+    );
     this.logger.log(
       `CancelPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
     );
@@ -1578,10 +1577,6 @@ export class CreditService {
       });
       
       throw new Error(`Failed to cancel payment: ${error.message || error.toString() || "Unknown error"}`);
-    } catch (outerError: any) {
-      // Catch any errors from the try block above (like OrderID parsing)
-      this.logger.error(`CancelPayment outer catch: ${outerError.message || outerError}`);
-      throw outerError;
     }
   }
 
