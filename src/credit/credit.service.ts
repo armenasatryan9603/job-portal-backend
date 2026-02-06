@@ -1486,9 +1486,15 @@ export class CreditService {
       "/CancelPayment"
     );
 
+    // Convert OrderID to number (Ameriabank requires integer)
+    const orderIdInt = parseInt(orderID, 10);
+    if (isNaN(orderIdInt) || orderIdInt <= 0) {
+      throw new Error(`Invalid OrderID: ${orderID}. Must be a positive integer.`);
+    }
+
     const payload = {
       PaymentID: paymentID,
-      OrderID: orderID,
+      OrderID: orderIdInt, // Ensure it's an integer
       Username: this.credentials.username,
       Password: this.credentials.password,
     };
