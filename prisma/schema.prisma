@@ -673,6 +673,7 @@ model SubscriptionPlan {
   descriptionRu       String?
   descriptionHy       String?
   price               Float
+  oldPrice            Float?
   currency            String               @default("AMD")
   durationDays        Int // Duration in days (30 for monthly, 365 for yearly)
   isRecurring         Boolean              @default(false) // Whether this plan supports auto-renewal

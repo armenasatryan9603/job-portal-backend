@@ -9,7 +9,6 @@ import {
   Logger,
   Res,
   BadRequestException,
-  HttpException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { CreditService } from './credit.service';
@@ -342,29 +341,7 @@ export class CreditController {
     if (!body.paymentID || !body.orderID) {
       throw new BadRequestException("paymentID and orderID are required");
     }
-    try {
-      return await this.creditService.cancelPayment(body.paymentID, body.orderID);
-    } catch (error: any) {
-      this.logger.error(`Cancel payment error in controller: ${error.message || error}`);
-      this.logger.error(`Error stack: ${error.stack}`);
-      
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      
-      // Create HttpException with proper error message
-      const errorMessage = error?.message || error?.toString() || "Failed to cancel payment";
-      const statusCode = error?.status || error?.statusCode || 500;
-      
-      throw new HttpException(
-        {
-          statusCode,
-          message: errorMessage,
-          error: errorMessage,
-        },
-        statusCode
-      );
-    }
+    return this.creditService.cancelPayment(body.paymentID, body.orderID);
   }
 
   // Refund payment endpoint
@@ -375,7 +352,7 @@ export class CreditController {
     @Body() body: { paymentID: string; orderID: string; amount?: number }
   ) {
     if (!body.paymentID || !body.orderID) {
-      throw new Error("paymentID and orderID are required");
+      throw new BadRequestException("paymentID and orderID are required");
     }
     return this.creditService.refundPayment(body.paymentID, body.orderID, body.amount);
   }

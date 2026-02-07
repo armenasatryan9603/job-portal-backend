@@ -179,6 +179,7 @@ export class SubscriptionsService {
         descriptionRu: createPlanDto.descriptionRu,
         descriptionHy: createPlanDto.descriptionHy,
         price: createPlanDto.price,
+        oldPrice: createPlanDto.oldPrice,
         currency: createPlanDto.currency || "AMD",
         durationDays: createPlanDto.durationDays,
         isRecurring: createPlanDto.isRecurring || false,
@@ -222,6 +223,9 @@ export class SubscriptionsService {
         }),
         ...(updatePlanDto.price !== undefined && {
           price: updatePlanDto.price,
+        }),
+        ...(updatePlanDto.oldPrice !== undefined && {
+          oldPrice: updatePlanDto.oldPrice,
         }),
         ...(updatePlanDto.currency !== undefined && {
           currency: updatePlanDto.currency,

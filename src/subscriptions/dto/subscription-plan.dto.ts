@@ -42,6 +42,10 @@ export class CreateSubscriptionPlanDto {
   price: number;
 
   @IsOptional()
+  @IsNumber()
+  oldPrice?: number;
+
+  @IsOptional()
   @IsString()
   currency?: string;
 
@@ -97,6 +101,10 @@ export class UpdateSubscriptionPlanDto {
   @IsOptional()
   @IsNumber()
   price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  oldPrice?: number;
 
   @IsOptional()
   @IsString()

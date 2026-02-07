@@ -1469,65 +1469,20 @@ export class CreditService {
    * Cancel a payment using Ameriabank VPOS CancelPayment API
    */
   async cancelPayment(paymentID: string, orderID: string) {
-    // Validate credentials
     if (
       !this.credentials.clientId ||
       !this.credentials.username ||
       !this.credentials.password
     ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
+      throw new Error("Payment gateway credentials not configured");
     }
 
-    const cancelPaymentUrl = this.vposUrl.replace(
-      "/InitPayment",
-      "/CancelPayment"
-    );
-
-    // Check payment status before attempting cancellation
-    try {
-      this.logger.log(`Checking payment status before cancellation: PaymentID=${paymentID}`);
-      const paymentDetails = await this.getPaymentDetails(paymentID);
-      this.logger.log(`Payment status: PaymentState=${paymentDetails.PaymentState}, OrderStatus=${paymentDetails.OrderStatus}, ResponseCode=${paymentDetails.ResponseCode}`);
-      
-      // Check if payment is already completed/settled
-      if (paymentDetails.PaymentState === "payment_approved" || paymentDetails.OrderStatus === "2") {
-        throw new Error(
-          `Payment cannot be canceled: Payment is already completed/settled (PaymentState: ${paymentDetails.PaymentState}, OrderStatus: ${paymentDetails.OrderStatus}). Use refund instead.`
-        );
-      }
-      
-      // Check if payment is already canceled
-      if (paymentDetails.OrderStatus === "3" || paymentDetails.PaymentState === "payment_canceled") {
-        throw new Error(
-          `Payment cannot be canceled: Payment is already canceled (OrderStatus: ${paymentDetails.OrderStatus}, PaymentState: ${paymentDetails.PaymentState}).`
-        );
-      }
-    } catch (statusError: any) {
-      // If status check fails with a meaningful error, throw it
-      if (statusError.message && !statusError.message.includes("Failed to retrieve payment details")) {
-        throw statusError;
-      }
-      // Otherwise, log warning but continue with cancellation attempt
-      this.logger.warn(`Could not verify payment status before cancellation: ${statusError.message}. Proceeding with cancellation attempt.`);
-    }
-
-    // According to Ameriabank API documentation, CancelPayment only requires:
-    // PaymentID, Username, Password (OrderID is NOT required)
+    const cancelPaymentUrl = this.vposUrl.replace("/InitPayment", "/CancelPayment");
     const payload = {
       PaymentID: paymentID,
       Username: this.credentials.username,
       Password: this.credentials.password,
     };
-
-    this.logger.log(
-      `Canceling payment: PaymentID=${paymentID}, OrderID=${orderID} (OrderID not sent in request per API docs)`
-    );
-    this.logger.log(
-      `CancelPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
-    );
 
     try {
       const response = await axios.post(cancelPaymentUrl, payload, {
@@ -1539,9 +1494,6 @@ export class CreditService {
       });
 
       const responseData = response.data;
-      this.logger.log(
-        `CancelPayment response: ${JSON.stringify(responseData)}`
-      );
 
       if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
         const errorMsg =
@@ -1549,13 +1501,8 @@ export class CreditService {
           responseData?.Description ||
           responseData?.ResponseMessage ||
           `Cancel failed. ResponseCode: ${responseData.ResponseCode}`;
-        this.logger.error(`Cancel payment failed: ${errorMsg}`);
         throw new Error(errorMsg);
       }
-
-      this.logger.log(
-        `Payment canceled successfully: PaymentID=${paymentID}, OrderID=${orderID}`
-      );
 
       return {
         success: true,
@@ -1563,52 +1510,17 @@ export class CreditService {
         response: responseData,
       };
     } catch (error: any) {
-      this.logger.error(
-        `CancelPayment error: ${error.message}. PaymentID: ${paymentID}, OrderID: ${orderID}`
-      );
-      
       if (error.response) {
-        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
-        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
         const errorData = error.response.data;
-        
-        // Extract error message from various possible fields
-        let errorMsg =
+        const errorMsg =
           errorData?.Message ||
           errorData?.TrxnDescription ||
           errorData?.Description ||
           errorData?.ResponseMessage ||
-          errorData?.message ||
-          error.message ||
-          `HTTP ${error.response.status}: ${error.response.statusText}`;
-        
-        // If it's a generic error from Ameriabank, provide more context
-        if (error.response.status === 500 && (errorMsg === "An error has occurred." || errorMsg.includes("error has occurred"))) {
-          errorMsg = `Payment cannot be canceled. This usually means the payment is already completed/settled, already canceled, or in an invalid state. Original error: ${errorMsg}`;
-        }
-        
-        // Include ResponseCode if available
-        if (errorData?.ResponseCode) {
-          errorMsg = `${errorMsg} (ResponseCode: ${errorData.ResponseCode})`;
-        }
-        
+          error.message;
         throw new Error(errorMsg);
       }
-      
-      // If it's an error thrown from above (ResponseCode check), re-throw it
-      if (error.message && error.message !== "Unknown error") {
-        throw error;
-      }
-      
-      // Log full error details for debugging
-      this.logger.error(`CancelPayment unexpected error:`, {
-        message: error.message,
-        stack: error.stack,
-        error: error.toString(),
-        type: error?.constructor?.name,
-      });
-      
-      throw new Error(`Failed to cancel payment: ${error.message || error.toString() || "Unknown error"}`);
+      throw error;
     }
   }
 
@@ -1617,23 +1529,15 @@ export class CreditService {
    * Supports both full refund (omit amount) and partial refund (provide amount)
    */
   async refundPayment(paymentID: string, orderID: string, amount?: number) {
-    // Validate credentials
     if (
       !this.credentials.clientId ||
       !this.credentials.username ||
       !this.credentials.password
     ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
+      throw new Error("Payment gateway credentials not configured");
     }
 
-    const refundPaymentUrl = this.vposUrl.replace(
-      "/InitPayment",
-      "/RefundPayment"
-    );
-
+    const refundPaymentUrl = this.vposUrl.replace("/InitPayment", "/RefundPayment");
     const payload: any = {
       PaymentID: paymentID,
       OrderID: orderID,
@@ -1641,38 +1545,21 @@ export class CreditService {
       Password: this.credentials.password,
     };
 
-    // Determine refund amount - Ameriabank requires Amount field even for full refunds
     let refundAmount: number;
     if (amount !== undefined && amount !== null) {
-      // Partial refund - use provided amount
       if (amount <= 0) {
         throw new Error("Refund amount must be greater than 0");
       }
       refundAmount = Number(amount);
     } else {
-      // Full refund - fetch original payment amount
-      try {
-        const paymentDetails = await this.getPaymentDetails(paymentID);
-        refundAmount = paymentDetails.DepositedAmount || paymentDetails.Amount;
-        if (!refundAmount || refundAmount <= 0) {
-          throw new Error("Could not determine original payment amount for full refund");
-        }
-        this.logger.log(`Full refund: Using original payment amount ${refundAmount} from payment details`);
-      } catch (error: any) {
-        this.logger.error(`Failed to fetch payment details for full refund: ${error.message}`);
-        throw new Error(`Failed to fetch original payment amount: ${error.message}`);
+      const paymentDetails = await this.getPaymentDetails(paymentID);
+      refundAmount = paymentDetails.DepositedAmount || paymentDetails.Amount;
+      if (!refundAmount || refundAmount <= 0) {
+        throw new Error("Could not determine original payment amount for full refund");
       }
     }
     
-    // Always include Amount field (required by Ameriabank)
     payload.Amount = Number(refundAmount);
-
-    this.logger.log(
-      `Refunding payment: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${refundAmount} (${amount !== undefined ? "partial" : "full"})`
-    );
-    this.logger.log(
-      `RefundPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
-    );
 
     try {
       const response = await axios.post(refundPaymentUrl, payload, {
@@ -1684,9 +1571,6 @@ export class CreditService {
       });
 
       const responseData = response.data;
-      this.logger.log(
-        `RefundPayment response: ${JSON.stringify(responseData)}`
-      );
 
       if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
         const errorMsg =
@@ -1694,13 +1578,8 @@ export class CreditService {
           responseData?.Description ||
           responseData?.ResponseMessage ||
           `Refund failed. ResponseCode: ${responseData.ResponseCode}`;
-        this.logger.error(`Refund payment failed: ${errorMsg}`);
         throw new Error(errorMsg);
       }
-
-      this.logger.log(
-        `Payment refunded successfully: PaymentID=${paymentID}, OrderID=${orderID}, Amount=${refundAmount} (${amount !== undefined ? "partial" : "full"})`
-      );
 
       return {
         success: true,
@@ -1708,13 +1587,7 @@ export class CreditService {
         response: responseData,
       };
     } catch (error: any) {
-      this.logger.error(
-        `RefundPayment error: ${error.message}. PaymentID: ${paymentID}, OrderID: ${orderID}`
-      );
-      
       if (error.response) {
-        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
-        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
         const errorData = error.response.data;
         throw new Error(
           errorData?.Message ||
@@ -1724,8 +1597,7 @@ export class CreditService {
           error.message
         );
       }
-      
-      throw new Error(`Failed to refund payment: ${error.message || "Unknown error"}`);
+      throw error;
     }
   }
 
