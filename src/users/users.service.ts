@@ -85,6 +85,8 @@ export class UsersService {
         priceMax: true,
         location: true,
         languages: true,
+        currency: true,
+        rateUnit: true,
         Orders: {
           take: 5,
           orderBy: { createdAt: "desc" },
@@ -96,6 +98,9 @@ export class UsersService {
           include: {
             Order: true,
           },
+        },
+        Portfolio: {
+          orderBy: { createdAt: "desc" },
         },
       },
     });

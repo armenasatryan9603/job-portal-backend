@@ -198,6 +198,11 @@ export class AuthService {
   async getUserById(userId: number) {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
+      include: {
+        Portfolio: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
     });
     if (!user) {
       throw new UnauthorizedException("User not found");

@@ -100,6 +100,7 @@ export class AuthController {
       location: user.location,
       currency: user.currency || "USD",
       rateUnit: user.rateUnit,
+      portfolio: user.Portfolio || [],
     };
   }
 
