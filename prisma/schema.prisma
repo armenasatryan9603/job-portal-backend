@@ -31,7 +31,7 @@ model User {
   experienceYears          Int?
   priceMin                 Float?
   priceMax                 Float?
-  location                 String?
+  location                 String?                   // Optional: "address__ISO" for country filtering
   currency                 String?
   rateUnit                 String?
   fcmToken                 String?

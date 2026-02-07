@@ -681,7 +681,8 @@ export class OrdersService {
     clientId?: number,
     isAdmin: boolean = false,
     userId?: number,
-    orderType?: string
+    orderType?: string,
+    country?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { deletedAt: null };
@@ -779,8 +780,17 @@ export class OrdersService {
       where.orderType = orderType;
     }
 
+    // Filter by country: location may be "address__ISO" or legacy text containing country
+    if (country) {
+      const code = country.trim();
+      where.OR = [
+        { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
+        { location: { contains: code, mode: "insensitive" } },
+      ];
+    }
+
     this.logger.debug(
-      `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, where: ${JSON.stringify(where)}`
+      `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, country: ${country}, where: ${JSON.stringify(where)}`
     );
 
     const [orders, total] = await Promise.all([
@@ -909,6 +919,8 @@ export class OrdersService {
     this.logger.debug(
       `📦 findAll result - orderType: ${orderType}, found: ${orders.length}, total: ${total}`
     );
+
+    console.log('oooooooooooooooooooooooooooooooooooooooooooooooooooo', ordersWithCreditCost.length, country);
 
     return {
       orders: ordersWithCreditCost,
@@ -1803,7 +1815,8 @@ export class OrdersService {
     page: number = 1,
     limit: number = 10,
     categoryIds?: number[],
-    orderType?: string
+    orderType?: string,
+    country?: string
   ) {
     const skip = (page - 1) * limit;
 
@@ -1850,6 +1863,15 @@ export class OrdersService {
     // Filter by orderType if provided
     if (orderType && (orderType === "one_time" || orderType === "permanent")) {
       where.orderType = orderType;
+    }
+
+    // Filter by country: location may be "address__ISO" or legacy text containing country
+    if (country) {
+      const code = country.trim();
+      where.OR = [
+        { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
+        { location: { contains: code, mode: "insensitive" } },
+      ];
     }
 
     const [orders, total] = await Promise.all([

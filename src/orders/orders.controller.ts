@@ -162,6 +162,7 @@ export class OrdersController {
     @Query("categoryIds") categoryIds?: string,
     @Query("clientId") clientId?: string,
     @Query("orderType") orderType?: string,
+    @Query("country") country?: string,
     @Request() req?: any
   ) {
     // Parse categoryIds from comma-separated string or single categoryId
@@ -189,7 +190,8 @@ export class OrdersController {
       clientId ? parseInt(clientId) : undefined,
       isAdmin,
       userId,
-      orderType
+      orderType,
+      country
     );
   }
 
@@ -199,7 +201,8 @@ export class OrdersController {
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
     @Query("categoryIds") categoryIds?: string,
-    @Query("orderType") orderType?: string
+    @Query("orderType") orderType?: string,
+    @Query("country") country?: string
   ) {
     if (!query) {
       return {
@@ -231,7 +234,8 @@ export class OrdersController {
       parsedCategoryIds && parsedCategoryIds.length > 0
         ? parsedCategoryIds
         : undefined,
-      orderType
+      orderType,
+      country
     );
   }
 
