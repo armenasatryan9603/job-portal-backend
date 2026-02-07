@@ -23,7 +23,7 @@
  *   node scripts/refund-payment.js 12345678 30164001 5
  * 
  *   # With custom token and backend URL
- *   node scripts/refund-payment.js 12345678 30164001 --token YOUR_TOKEN --backend-url https://job-portal-backend-eight-sand.vercel.app
+ *   node scripts/refund-payment.js 12345678 30164001 --token YOUR_TOKEN --backend-url https://job-portal-backend-psi-ruddy.vercel.app/
  */
 
 const fs = require('fs');

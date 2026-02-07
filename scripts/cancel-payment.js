@@ -12,7 +12,7 @@
  * 
  * Examples:
  *   node scripts/cancel-payment.js 12345678 30164001
- *   node scripts/cancel-payment.js 12345678 30164001 --backend-url https://job-portal-backend-eight-sand.vercel.app
+ *   node scripts/cancel-payment.js 12345678 30164001 --backend-url https://job-portal-backend-psi-ruddy.vercel.app/
  */
 
 const fs = require('fs');
@@ -32,7 +32,7 @@ if (!paymentID || !orderID) {
 // Parse options
 const options = {
   token: getArgValue('--token') || readTokenFromFile(),
-  backendUrl: getArgValue('--backend-url') || 'https://job-portal-backend-eight-sand.vercel.app',
+  backendUrl: getArgValue('--backend-url') || 'https://job-portal-backend-psi-ruddy.vercel.app/',
 };
 
 function getArgValue(flag) {

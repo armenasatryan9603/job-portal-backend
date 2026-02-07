@@ -14,7 +14,7 @@
  * 
  * Examples:
  *   node scripts/get-access-token.js 123456789 374 --simulator
- *   node scripts/get-access-token.js 123456789 374 --backend-url https://job-portal-backend-eight-sand.vercel.app
+ *   node scripts/get-access-token.js 123456789 374 --backend-url https://job-portal-backend-psi-ruddy.vercel.app/
  */
 
 const readline = require('readline');
@@ -33,7 +33,7 @@ if (!phone || !countryCode) {
 // Parse options
 const options = {
   simulator: args.includes('--simulator'),
-  backendUrl: getArgValue('--backend-url') || 'https://job-portal-backend-eight-sand.vercel.app',
+  backendUrl: getArgValue('--backend-url') || 'https://job-portal-backend-psi-ruddy.vercel.app/',
   name: getArgValue('--name'),
   referral: getArgValue('--referral'),
 };

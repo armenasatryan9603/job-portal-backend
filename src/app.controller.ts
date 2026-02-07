@@ -22,7 +22,7 @@ export class AppController {
 
   /**
    * Apple App Site Association file for iOS Universal Links
-   * Served at: https://job-portal-backend-eight-sand.vercel.app/.well-known/apple-app-site-association
+   * Served at: https://job-portal-backend-psi-ruddy.vercel.app//.well-known/apple-app-site-association
    */
   @Get('.well-known/apple-app-site-association')
   @Header('Content-Type', 'application/json')
@@ -49,7 +49,7 @@ export class AppController {
 
   /**
    * Android Asset Links file for Android App Links
-   * Served at: https://job-portal-backend-eight-sand.vercel.app/.well-known/assetlinks.json
+   * Served at: https://job-portal-backend-psi-ruddy.vercel.app//.well-known/assetlinks.json
    */
   @Get('.well-known/assetlinks.json')
   @Header('Content-Type', 'application/json')
@@ -75,7 +75,7 @@ export class AppController {
 
   /**
    * Payment callback redirect handler
-   * Served at: https://job-portal-backend-eight-sand.vercel.app/profile/refill-credits
+   * Served at: https://job-portal-backend-psi-ruddy.vercel.app//profile/refill-credits
    * Simple success page - user closes webview manually
    */
   @Get('profile/refill-credits')

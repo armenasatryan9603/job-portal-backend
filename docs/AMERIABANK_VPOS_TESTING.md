@@ -63,7 +63,7 @@ Refund and Cancel are now implemented! See sections below for how to use them.
 
 **Option B: Deploy to Vercel first**
 - Deploy your latest code to Vercel
-- Keep `BACKEND_URL=https://job-portal-backend-eight-sand.vercel.app` in `.env`
+- Keep `BACKEND_URL=https://job-portal-backend-psi-ruddy.vercel.app/` in `.env`
 - The callback will go to your deployed Vercel instance
 
 **Note:** The `BACKEND_URL` in `.env` is what gets sent to Ameriabank as the `BackURL`. Make sure it's publicly accessible!

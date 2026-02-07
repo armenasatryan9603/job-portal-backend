@@ -22,7 +22,7 @@ Make sure these are set in your Vercel project settings:
    - Value: `https://servicestest.ameriabank.am/VPOS/api/VPOS/GetPaymentDetails`
 
 6. **BACKEND_URL**
-   - Value: `https://job-portal-backend-eight-sand.vercel.app`
+   - Value: `https://job-portal-backend-psi-ruddy.vercel.app/`
 
 ## How to Set Environment Variables in Vercel
 
