@@ -1866,12 +1866,17 @@ export class OrdersService {
     }
 
     // Filter by country: location may be "address__ISO" or legacy text containing country
+    // Apply as AND with text search so we don't overwrite the search OR
     if (country) {
       const code = country.trim();
-      where.OR = [
-        { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
-        { location: { contains: code, mode: "insensitive" } },
-      ];
+      const locationCondition = {
+        OR: [
+          { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
+          { location: { contains: code, mode: "insensitive" } },
+        ],
+      };
+      where.AND = [{ OR: where.OR }, locationCondition];
+      delete where.OR;
     }
 
     const [orders, total] = await Promise.all([
