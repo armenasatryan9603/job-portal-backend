@@ -106,6 +106,7 @@ export class CategoriesService {
     descriptionEn?: string;
     descriptionRu?: string;
     descriptionHy?: string;
+    searchTag?: string;
     imageUrl?: string;
     parentId?: number;
     averagePrice?: number;
@@ -302,6 +303,7 @@ export class CategoriesService {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      searchTag?: string;
       imageUrl?: string;
       parentId?: number;
       averagePrice?: number;
@@ -498,36 +500,29 @@ export class CategoriesService {
     language: string = "en"
   ) {
     const skip = (page - 1) * limit;
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      return {
+        categories: [],
+        pagination: {
+          page: 1,
+          limit,
+          total: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
+      };
+    }
 
-    // Search across all language fields to find matches regardless of search language
+    // Search by searchTag only (case-insensitive contains)
     const searchConditions: Prisma.CategoryWhereInput = {
-      OR: [
-        { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        {
-          description: { contains: query, mode: Prisma.QueryMode.insensitive },
-        },
-        { nameEn: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        {
-          descriptionEn: {
-            contains: query,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-        { nameRu: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        {
-          descriptionRu: {
-            contains: query,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-        { nameHy: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        {
-          descriptionHy: {
-            contains: query,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-      ],
+      isActive: true,
+      searchTag: {
+        not: null,
+        contains: trimmedQuery,
+        mode: Prisma.QueryMode.insensitive,
+      },
     };
 
     const [categories, total] = await Promise.all([

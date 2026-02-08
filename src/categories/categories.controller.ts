@@ -29,6 +29,7 @@ export class CategoriesController {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      searchTag?: string;
       imageUrl?: string;
       parentId?: number;
       averagePrice?: number;
@@ -54,8 +55,18 @@ export class CategoriesController {
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
     @Query("parentId") parentId?: string,
-    @Query("language") language: string = "en"
+    @Query("language") language: string = "en",
+    @Query("q") searchQuery?: string
   ) {
+    const trimmedQ = searchQuery?.trim();
+    if (trimmedQ) {
+      return this.categoriesService.searchCategories(
+        trimmedQ,
+        parseInt(page),
+        parseInt(limit),
+        language
+      );
+    }
     return this.categoriesService.findAll(
       parseInt(page),
       parseInt(limit),
@@ -84,7 +95,8 @@ export class CategoriesController {
     @Query("limit") limit: string = "10",
     @Query("language") language: string = "en"
   ) {
-    if (!query) {
+    const trimmedQuery = typeof query === "string" ? query.trim() : "";
+    if (!trimmedQuery) {
       return {
         categories: [],
         pagination: {
@@ -99,7 +111,7 @@ export class CategoriesController {
     }
 
     return this.categoriesService.searchCategories(
-      query,
+      trimmedQuery,
       parseInt(page),
       parseInt(limit),
       language
@@ -128,6 +140,7 @@ export class CategoriesController {
       descriptionEn?: string;
       descriptionRu?: string;
       descriptionHy?: string;
+      searchTag?: string;
       imageUrl?: string;
       parentId?: number;
       averagePrice?: number;

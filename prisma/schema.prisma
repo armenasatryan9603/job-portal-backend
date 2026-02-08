@@ -87,6 +87,7 @@ model Category {
   descriptionEn        String?
   descriptionRu        String?
   descriptionHy        String?
+  searchTag            String?
   parentId             Int?
   averagePrice         Float?
   minPrice             Float?
@@ -107,6 +108,7 @@ model Category {
 
   @@index([parentId])
   @@index([isActive])
+  @@index([searchTag])
 }
 
 model Feature {

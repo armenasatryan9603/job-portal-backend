@@ -71,19 +71,6 @@ export class UsersController {
     );
   }
 
-  // @Get('role/:role')
-  // @UseGuards(JwtAuthGuard)
-  // async getUsersByRole(
-  //   @Param('role') role: string,
-  //   @Query('page') page: string = '1',
-  //   @Query('limit') limit: string = '10',
-  // ) {
-  //   return this.usersService.getUsersByRole(
-  //     role,
-  //     parseInt(page),
-  //     parseInt(limit),
-  //   );
-  // }
 
   @Patch(":id")
   // @UseGuards(JwtAuthGuard)
