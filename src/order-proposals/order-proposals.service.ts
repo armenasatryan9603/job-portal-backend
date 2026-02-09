@@ -600,7 +600,9 @@ export class OrderProposalsService {
     limit: number = 10,
     status?: string,
     orderId?: number,
-    userId?: number
+    userId?: number,
+    startDate?: string,
+    endDate?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = {};
@@ -616,6 +618,17 @@ export class OrderProposalsService {
     if (userId) {
       where.userId = userId;
     }
+
+    // Filter by date range (for createdAt - applied filter mode)
+    if (startDate && endDate) {
+      where.createdAt = {
+        gte: new Date(startDate),
+        lte: new Date(endDate + "T23:59:59.999Z"), // Include entire end date
+      };
+    }
+
+    // For scheduled filter mode, we need to filter by Order.availableDates
+    // This is handled separately in the frontend by filtering orders
 
     const [proposals, total] = await Promise.all([
       this.prisma.orderProposal.findMany({
@@ -854,9 +867,11 @@ export class OrderProposalsService {
   async getProposalsByUser(
     userId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    startDate?: string,
+    endDate?: string
   ) {
-    return this.findAll(page, limit, undefined, undefined, userId);
+    return this.findAll(page, limit, undefined, undefined, userId, startDate, endDate);
   }
 
   async getProposalsByStatus(

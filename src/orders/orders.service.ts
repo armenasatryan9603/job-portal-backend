@@ -682,7 +682,9 @@ export class OrdersService {
     isAdmin: boolean = false,
     userId?: number,
     orderType?: string,
-    country?: string
+    country?: string,
+    startDate?: string,
+    endDate?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { deletedAt: null };
@@ -793,11 +795,12 @@ export class OrdersService {
       `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, country: ${country}, where: ${JSON.stringify(where)}`
     );
 
-    const [orders, total] = await Promise.all([
+    // Fetch orders (we'll filter by date range after fetching if needed)
+    const [allOrders, totalBeforeFilter] = await Promise.all([
       this.prisma.order.findMany({
         where,
-        skip,
-        take: limit,
+        skip: 0, // Fetch all matching orders first
+        take: 1000, // Large limit to get all orders for filtering
         include: {
           Client: {
             select: {
@@ -839,6 +842,31 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where }),
     ]);
+
+    // Filter by date range if provided (for availableDates array)
+    let filteredOrders = allOrders;
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate + "T23:59:59.999Z");
+      filteredOrders = allOrders.filter((order) => {
+        if (!order.availableDates || order.availableDates.length === 0) {
+          return false; // No available dates, exclude
+        }
+        // Check if any date in availableDates falls within the range
+        return order.availableDates.some((dateStr: string) => {
+          const date = new Date(dateStr);
+          return date >= start && date <= end;
+        });
+      });
+    }
+
+    // Apply pagination after filtering
+    const orders = filteredOrders.slice(skip, skip + limit);
+    
+    // Recalculate total if date filtering was applied
+    const total = startDate && endDate 
+      ? filteredOrders.length
+      : totalBeforeFilter;
 
     // Check and update permanent orders with expired subscriptions
     // This ensures orders are hidden when subscription expires
@@ -919,8 +947,6 @@ export class OrdersService {
     this.logger.debug(
       `📦 findAll result - orderType: ${orderType}, found: ${orders.length}, total: ${total}`
     );
-
-    console.log('oooooooooooooooooooooooooooooooooooooooooooooooooooo', ordersWithCreditCost.length, country);
 
     return {
       orders: ordersWithCreditCost,
@@ -1697,9 +1723,11 @@ export class OrdersService {
   async getOrdersByClient(
     clientId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    startDate?: string,
+    endDate?: string
   ) {
-    return this.findAll(page, limit, undefined, undefined, undefined, clientId);
+    return this.findAll(page, limit, undefined, undefined, undefined, clientId, false, undefined, undefined, undefined, startDate, endDate);
   }
 
   async getOrdersBySpecialist(

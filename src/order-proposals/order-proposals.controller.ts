@@ -164,12 +164,16 @@ export class OrderProposalsController {
   async getProposalsByUser(
     @Param("userId") userId: string,
     @Query("page") page: string = "1",
-    @Query("limit") limit: string = "10"
+    @Query("limit") limit: string = "10",
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string
   ) {
     return this.orderProposalsService.getProposalsByUser(
       +userId,
       parseInt(page),
-      parseInt(limit)
+      parseInt(limit),
+      startDate,
+      endDate
     );
   }
 

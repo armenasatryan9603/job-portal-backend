@@ -543,10 +543,25 @@ export class BookingsService {
   /**
    * Get all bookings for a client (both bookings made by user and bookings on user's orders)
    */
-  async getClientBookings(clientId: number) {
+  async getClientBookings(
+    clientId: number,
+    startDate?: string,
+    endDate?: string
+  ) {
+    // Build where clause for date filtering
+    const dateWhere: any = {};
+    if (startDate && endDate) {
+      // scheduledDate is stored as String (ISO format), so we filter by string comparison
+      // Format: YYYY-MM-DD, so we can compare directly
+      dateWhere.scheduledDate = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
     // Fetch bookings where user is the client (checked into someone else's order)
     const myBookings = await this.prisma.booking.findMany({
-      where: { clientId },
+      where: { clientId, ...dateWhere },
       include: {
         Order: {
           select: {
@@ -604,6 +619,7 @@ export class BookingsService {
         Order: {
           clientId: clientId,
         },
+        ...dateWhere,
       },
       include: {
         Order: {

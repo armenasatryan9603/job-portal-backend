@@ -5,6 +5,7 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
   HttpCode,
@@ -77,9 +78,13 @@ export class BookingsController {
    * Get user's bookings
    */
   @Get("my")
-  async getMyBookings(@Request() req) {
+  async getMyBookings(
+    @Request() req,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string
+  ) {
     const userId = req.user.userId;
-    return this.bookingsService.getClientBookings(userId);
+    return this.bookingsService.getClientBookings(userId, startDate, endDate);
   }
 
   /**

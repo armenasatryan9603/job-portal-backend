@@ -300,8 +300,18 @@ export class OrdersController {
 
   @UseGuards(JwtAuthGuard)
   @Get("my-orders")
-  async getMyOrders(@Request() req) {
-    return this.ordersService.getOrdersByClient(req.user.userId, 1, 50);
+  async getMyOrders(
+    @Request() req,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string
+  ) {
+    return this.ordersService.getOrdersByClient(
+      req.user.userId,
+      1,
+      50,
+      startDate,
+      endDate
+    );
   }
 
   @UseGuards(JwtAuthGuard)
