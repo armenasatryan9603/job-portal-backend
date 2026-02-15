@@ -6,6 +6,10 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
+
+/** Base currency for credits (referral amounts are in USD, same as creditBalance). */
+const CREDIT_BASE_CURRENCY = "USD";
 
 @Injectable()
 export class ReferralsService {
@@ -13,7 +17,8 @@ export class ReferralsService {
 
   constructor(
     private prisma: PrismaService,
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    private creditTransactionsService: CreditTransactionsService
   ) {}
 
   /**
@@ -88,13 +93,17 @@ export class ReferralsService {
         throw new BadRequestException("User has already been referred");
       }
 
-      // Define reward amounts (configurable via environment variables)
+      // Reward amounts in USD (credits are stored in USD; same as creditBalance / refills)
       const referrerReward = parseFloat(
         process.env.REFERRAL_REWARD_AMOUNT || "10.0"
-      ); // Credits for referrer
+      );
       const referredBonus = parseFloat(
         process.env.REFERRAL_BONUS_AMOUNT || "5.0"
-      ); // Credits for referred user
+      );
+      if (!Number.isFinite(referrerReward) || referrerReward < 0)
+        throw new BadRequestException("Invalid REFERRAL_REWARD_AMOUNT");
+      if (!Number.isFinite(referredBonus) || referredBonus < 0)
+        throw new BadRequestException("Invalid REFERRAL_BONUS_AMOUNT");
 
       // Create referral reward record
       const referralReward = await this.prisma.referralReward.create({
@@ -139,6 +148,54 @@ export class ReferralsService {
         // Notifications will be sent after transaction completes
       });
 
+      // Log referral rewards as credit transactions (USD base, consistent with refills)
+      const [referrerUser, referredUser] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: referrer.id },
+          select: { creditBalance: true },
+        }),
+        this.prisma.user.findUnique({
+          where: { id: newUserId },
+          select: { creditBalance: true },
+        }),
+      ]);
+      if (referrerUser) {
+        await this.creditTransactionsService.logTransaction({
+          userId: referrer.id,
+          amount: referrerReward,
+          balanceAfter: referrerUser.creditBalance,
+          type: "referral_reward",
+          status: "completed",
+          description: `Referral reward (${CREDIT_BASE_CURRENCY})`,
+          referenceId: referralReward.id.toString(),
+          referenceType: "referral_reward",
+          baseCurrency: CREDIT_BASE_CURRENCY,
+          currency: CREDIT_BASE_CURRENCY,
+          exchangeRate: 1,
+          originalAmount: referrerReward,
+          convertedAmount: referrerReward,
+          metadata: { referralCode, referredUserId: newUserId },
+        });
+      }
+      if (referredUser) {
+        await this.creditTransactionsService.logTransaction({
+          userId: newUserId,
+          amount: referredBonus,
+          balanceAfter: referredUser.creditBalance,
+          type: "referral_bonus",
+          status: "completed",
+          description: `Referral signup bonus (${CREDIT_BASE_CURRENCY})`,
+          referenceId: referralReward.id.toString(),
+          referenceType: "referral_reward",
+          baseCurrency: CREDIT_BASE_CURRENCY,
+          currency: CREDIT_BASE_CURRENCY,
+          exchangeRate: 1,
+          originalAmount: referredBonus,
+          convertedAmount: referredBonus,
+          metadata: { referralCode, referrerId: referrer.id },
+        });
+      }
+
       // Send push notifications after transaction
       try {
         // Notification for referrer
@@ -177,7 +234,7 @@ export class ReferralsService {
       }
 
       this.logger.log(
-        `Applied referral code ${referralCode}: Referrer ${referrer.id} got ${referrerReward} credits, User ${newUserId} got ${referredBonus} credits`
+        `Applied referral code ${referralCode}: Referrer ${referrer.id} got ${referrerReward} ${CREDIT_BASE_CURRENCY}, User ${newUserId} got ${referredBonus} ${CREDIT_BASE_CURRENCY}`
       );
 
       return {

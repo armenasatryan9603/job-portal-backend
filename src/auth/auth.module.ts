@@ -5,7 +5,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { JwtStrategy } from "./jwt.strategy";
 import { PhoneVerificationModule } from "../phone-verification/phone-verification.module";
-import { ReferralsService } from "../referrals/referrals.service";
+import { ReferralsModule } from "../referrals/referrals.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PrismaService } from "../prisma.service";
 
@@ -18,9 +18,10 @@ import { PrismaService } from "../prisma.service";
     }),
     PhoneVerificationModule,
     NotificationsModule,
+    ReferralsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, ReferralsService, PrismaService],
+  providers: [AuthService, JwtStrategy, PrismaService],
   exports: [AuthService],
 })
 export class AuthModule {}

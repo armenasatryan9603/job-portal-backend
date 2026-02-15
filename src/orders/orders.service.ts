@@ -8,6 +8,7 @@ import {
 
 import { AIService } from "../ai/ai.service";
 import { CreditTransactionsService } from "../credit/credit-transactions.service";
+import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { Prisma } from "@prisma/client";
@@ -16,21 +17,26 @@ import { PusherService } from "../pusher/pusher.service";
 import { SkillsService } from "../skills/skills.service";
 import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
-interface SubscriptionFeatures {
-  unlimitedApplications?: boolean;
-  publishPermanentOrders?: boolean;
-  publishMarkets?: boolean;
-  prioritySupport?: boolean;
-  advancedFilters?: boolean;
-  featuredProfile?: boolean;
-}
-
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private readonly AI_ENHANCEMENT_CREDIT_COST = parseFloat(
     process.env.AI_ENHANCEMENT_CREDIT_COST || "2"
   );
+
+  /** Convert amount from given currency to USD using exchange-rate API. */
+  private async amountToUsd(amount: number, currency: string): Promise<number> {
+    const code = (currency || "USD").toUpperCase();
+    try {
+      const rate = await this.exchangeRateService.getExchangeRate(code, "USD");
+      return amount * rate;
+    } catch (error) {
+      this.logger.warn(
+        `Exchange rate ${code}->USD failed, assuming 1:1. ${error instanceof Error ? error.message : String(error)}`
+      );
+      return amount;
+    }
+  }
 
   constructor(
     private prisma: PrismaService,
@@ -41,6 +47,7 @@ export class OrdersService {
     private skillsService: SkillsService,
     private subscriptionsService: SubscriptionsService,
     private pusherService: PusherService,
+    private exchangeRateService: ExchangeRateService,
   ) {}
 
   /**
@@ -684,7 +691,10 @@ export class OrdersService {
     orderType?: string,
     country?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    budgetMin?: number,
+    budgetMax?: number,
+    budgetCurrency?: string
   ) {
     const skip = (page - 1) * limit;
     const where: any = { deletedAt: null };
@@ -745,11 +755,11 @@ export class OrdersService {
       };
 
       // "not_applied" should only show "open" orders
-      where.status = "open";
+      // where.status = "open";
     } else if (status && status !== "all") {
       // Apply specific status filter (skip if status is "all")
       where.status = status;
-    } else if (!isAdmin && !clientId && status !== "all") {
+    } else if (!isAdmin && !clientId && status !== "all" && orderType === 'permanent') {
       // For public queries (non-admin, not viewing own orders), exclude draft, pending_review and rejected
       // But only if status is not explicitly "all"
       where.status = {
@@ -794,6 +804,9 @@ export class OrdersService {
     this.logger.debug(
       `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, country: ${country}, where: ${JSON.stringify(where)}`
     );
+
+    this.logger.debug('fffffffffffffffffffffffff', JSON.stringify(where, null, 2));
+    
 
     // Fetch orders (we'll filter by date range after fetching if needed)
     const [allOrders, totalBeforeFilter] = await Promise.all([
@@ -860,13 +873,43 @@ export class OrdersService {
       });
     }
 
+    // Filter by budget range (with currency conversion to USD for comparison)
+    if (
+      budgetMin != null &&
+      budgetMax != null &&
+      budgetCurrency &&
+      Number.isFinite(budgetMin) &&
+      Number.isFinite(budgetMax)
+    ) {
+      const [minUsd, maxUsd] = await Promise.all([
+        this.amountToUsd(budgetMin, budgetCurrency),
+        this.amountToUsd(budgetMax, budgetCurrency),
+      ]);
+      const orderBudgetsUsd = await Promise.all(
+        filteredOrders.map((order) =>
+          this.amountToUsd(
+            order.budget ?? 0,
+            (order as any).currency ?? "USD",
+          )
+        )
+      );
+      filteredOrders = filteredOrders.filter((_, i) => {
+        const order = filteredOrders[i];
+        if (order.budget == null || order.budget === undefined) return true;
+        return orderBudgetsUsd[i] >= minUsd && orderBudgetsUsd[i] <= maxUsd;
+      });
+    }
+
     // Apply pagination after filtering
     const orders = filteredOrders.slice(skip, skip + limit);
     
-    // Recalculate total if date filtering was applied
-    const total = startDate && endDate 
-      ? filteredOrders.length
-      : totalBeforeFilter;
+    // Recalculate total if date or budget filtering was applied
+    const total =
+      startDate && endDate
+        ? filteredOrders.length
+        : budgetMin != null && budgetMax != null && budgetCurrency
+          ? filteredOrders.length
+          : totalBeforeFilter;
 
     // Check and update permanent orders with expired subscriptions
     // This ensures orders are hidden when subscription expires
@@ -1844,7 +1887,10 @@ export class OrdersService {
     limit: number = 10,
     categoryIds?: number[],
     orderType?: string,
-    country?: string
+    country?: string,
+    budgetMin?: number,
+    budgetMax?: number,
+    budgetCurrency?: string,
   ) {
     const skip = (page - 1) * limit;
 
@@ -1907,52 +1953,87 @@ export class OrdersService {
       delete where.OR;
     }
 
-    const [orders, total] = await Promise.all([
-      this.prisma.order.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          Client: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-            },
+    // Fetch more rows when budget filter is used so we can filter in memory then paginate
+    const needsBudgetFilter =
+      budgetMin != null &&
+      budgetMax != null &&
+      budgetCurrency &&
+      Number.isFinite(budgetMin) &&
+      Number.isFinite(budgetMax);
+    const fetchLimit = needsBudgetFilter ? 2000 : limit;
+    const fetchSkip = needsBudgetFilter ? 0 : skip;
+
+    const allFetched = await this.prisma.order.findMany({
+      where,
+      skip: fetchSkip,
+      take: fetchLimit,
+      include: {
+        Client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
           },
-          Category: true,
-          BannerImage: {
-            select: {
-              id: true,
-              fileUrl: true,
-              fileType: true,
-            },
+        },
+        Category: true,
+        BannerImage: {
+          select: {
+            id: true,
+            fileUrl: true,
+            fileType: true,
           },
-          OrderSkills: {
-            include: {
-              Skill: true,
-            },
+        },
+        OrderSkills: {
+          include: {
+            Skill: true,
           },
-          Proposals: {
-            take: 3,
-            orderBy: { createdAt: "desc" },
-            include: {},
+        },
+        Proposals: {
+          take: 3,
+          orderBy: { createdAt: "desc" },
+          include: {},
+        },
+        questions: {
+          orderBy: { order: "asc" },
+        },
+        _count: {
+          select: {
+            Proposals: true,
+            Reviews: true,
           },
-          questions: {
-            orderBy: { order: "asc" },
-          },
-          _count: {
-            select: {
-              Proposals: true,
-              Reviews: true,
-            },
-          },
-        } as any,
-        orderBy: { createdAt: "desc" },
-      }),
-      this.prisma.order.count({ where }),
-    ]);
+        },
+      } as any,
+      orderBy: { createdAt: "desc" },
+    });
+
+    let orders: typeof allFetched;
+    let total: number;
+
+    if (needsBudgetFilter) {
+      const [minUsd, maxUsd] = await Promise.all([
+        this.amountToUsd(budgetMin!, budgetCurrency!),
+        this.amountToUsd(budgetMax!, budgetCurrency!),
+      ]);
+      const orderBudgetsUsd = await Promise.all(
+        allFetched.map((order) =>
+          this.amountToUsd(
+            order.budget ?? 0,
+            (order as any).currency ?? "USD",
+          )
+        )
+      );
+      const filtered = allFetched.filter((_, i) => {
+        const order = allFetched[i];
+        if (order.budget == null || order.budget === undefined) return true;
+        return orderBudgetsUsd[i] >= minUsd && orderBudgetsUsd[i] <= maxUsd;
+      });
+      total = filtered.length;
+      orders = filtered.slice(skip, skip + limit);
+    } else {
+      total = await this.prisma.order.count({ where });
+      orders = allFetched;
+    }
 
     // Calculate credit cost and refund percentage for each order and transform OrderSkills to skills array
     const ordersWithCreditCost = await Promise.all(
@@ -2075,68 +2156,6 @@ export class OrdersService {
     });
 
     return history;
-  }
-
-  async getAvailableOrders(
-    page: number = 1,
-    limit: number = 10,
-    categoryId?: number,
-    location?: string,
-    budgetMin?: number,
-    budgetMax?: number
-  ) {
-    const skip = (page - 1) * limit;
-    const where: any = {
-      deletedAt: null,
-      // Show only open orders (exclude pending_review and rejected)
-      status: "open",
-    };
-
-    if (categoryId) {
-      where.categoryId = categoryId;
-    }
-
-    const [orders, total] = await Promise.all([
-      this.prisma.order.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          Client: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarUrl: true,
-              verified: true,
-            },
-          },
-          questions: {
-            orderBy: { order: "asc" },
-          },
-          _count: {
-            select: {
-              Proposals: true,
-              Reviews: true,
-            },
-          },
-        } as any,
-        orderBy: { createdAt: "desc" },
-      }),
-      this.prisma.order.count({ where }),
-    ]);
-
-    return {
-      orders,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page < Math.ceil(total / limit),
-        hasPrevPage: page > 1,
-      },
-    };
   }
 
   /**

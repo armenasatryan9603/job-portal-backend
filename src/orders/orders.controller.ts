@@ -163,6 +163,9 @@ export class OrdersController {
     @Query("clientId") clientId?: string,
     @Query("orderType") orderType?: string,
     @Query("country") country?: string,
+    @Query("budgetMin") budgetMin?: string,
+    @Query("budgetMax") budgetMax?: string,
+    @Query("budgetCurrency") budgetCurrency?: string,
     @Request() req?: any
   ) {
     // Parse categoryIds from comma-separated string or single categoryId
@@ -179,6 +182,15 @@ export class OrdersController {
     // Get authenticated user ID (optional - endpoint is public but can have authenticated users)
     const userId = req?.user?.userId;
 
+    const budgetMinNum =
+      budgetMin != null && budgetMin !== ""
+        ? parseFloat(budgetMin)
+        : undefined;
+    const budgetMaxNum =
+      budgetMax != null && budgetMax !== ""
+        ? parseFloat(budgetMax)
+        : undefined;
+
     return this.ordersService.findAll(
       parseInt(page),
       parseInt(limit),
@@ -191,7 +203,12 @@ export class OrdersController {
       isAdmin,
       userId,
       orderType,
-      country
+      country,
+      undefined,
+      undefined,
+      budgetMinNum,
+      budgetMaxNum,
+      budgetCurrency?.trim() || undefined
     );
   }
 
@@ -202,7 +219,10 @@ export class OrdersController {
     @Query("limit") limit: string = "10",
     @Query("categoryIds") categoryIds?: string,
     @Query("orderType") orderType?: string,
-    @Query("country") country?: string
+    @Query("country") country?: string,
+    @Query("budgetMin") budgetMin?: string,
+    @Query("budgetMax") budgetMax?: string,
+    @Query("budgetCurrency") budgetCurrency?: string
   ) {
     if (!query) {
       return {
@@ -227,6 +247,15 @@ export class OrdersController {
         .filter((id) => !isNaN(id));
     }
 
+    const budgetMinNum =
+      budgetMin != null && budgetMin !== ""
+        ? parseFloat(budgetMin)
+        : undefined;
+    const budgetMaxNum =
+      budgetMax != null && budgetMax !== ""
+        ? parseFloat(budgetMax)
+        : undefined;
+
     return this.ordersService.searchOrders(
       query,
       parseInt(page),
@@ -235,7 +264,10 @@ export class OrdersController {
         ? parsedCategoryIds
         : undefined,
       orderType,
-      country
+      country,
+      budgetMinNum,
+      budgetMaxNum,
+      budgetCurrency?.trim() || undefined
     );
   }
 
@@ -275,26 +307,6 @@ export class OrdersController {
       status,
       parseInt(page),
       parseInt(limit)
-    );
-  }
-
-  // @UseGuards(JwtAuthGuard)
-  @Get("available")
-  async getAvailableOrders(
-    @Query("page") page: string = "1",
-    @Query("limit") limit: string = "10",
-    @Query("categoryId") categoryId?: string,
-    @Query("location") location?: string,
-    @Query("budgetMin") budgetMin?: string,
-    @Query("budgetMax") budgetMax?: string
-  ) {
-    return this.ordersService.getAvailableOrders(
-      parseInt(page),
-      parseInt(limit),
-      categoryId ? parseInt(categoryId) : undefined,
-      location,
-      budgetMin ? parseFloat(budgetMin) : undefined,
-      budgetMax ? parseFloat(budgetMax) : undefined
     );
   }
 

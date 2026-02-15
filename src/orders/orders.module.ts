@@ -10,9 +10,10 @@ import { AIModule } from "../ai/ai.module";
 import { CreditModule } from "../credit/credit.module";
 import { SkillsModule } from "../skills/skills.module";
 import { SubscriptionsModule } from "../subscriptions/subscriptions.module";
+import { ExchangeRateModule } from "../exchange-rate/exchange-rate.module";
 
 @Module({
-  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule, SubscriptionsModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, NotificationsService, AIService, CreditTransactionsService, SkillsService, and SubscriptionsService
+  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule, SubscriptionsModule, ExchangeRateModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, NotificationsService, AIService, CreditTransactionsService, SkillsService, and SubscriptionsService
   controllers: [OrdersController],
   providers: [OrdersService, PrismaService],
 })
