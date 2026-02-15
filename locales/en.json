@@ -1333,6 +1333,7 @@
   "setWeeklySchedule": "Set Weekly Schedule",
   "setWeeklyScheduleDesc": "Define when you're available each week",
   "subscribeAheadDays": "How Long Can Users Subscribe Ahead",
+  "chatCreationFailed": "Chat creation failed",
   "subscribeAheadDaysDesc": "Set how many days in advance users can book appointments",
   "tapDateToSeeAvailableSlots": "Tap a date to see available time slots. Marked dates have availability.",
   "available": "Available",

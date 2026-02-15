@@ -1,10 +1,11 @@
 import {
-  Injectable,
-  OnModuleInit,
-  OnModuleDestroy,
   Global,
+  Injectable,
   Logger,
+  OnModuleDestroy,
+  OnModuleInit,
 } from "@nestjs/common";
+
 import { PrismaClient } from "@prisma/client";
 
 @Global()
@@ -20,7 +21,9 @@ export class PrismaService
 
   constructor() {
     super({
-      log: ["query", "info", "warn", "error"],
+      log: [
+        // "query", "info", 
+        "warn", "error"],
       errorFormat: "pretty",
     });
   }
