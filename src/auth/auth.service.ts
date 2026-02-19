@@ -740,6 +740,10 @@ export class AuthService {
     // Format phone number: ensure E.164 format with country code
     const cleanPhone = this.formatPhoneNumber(phone, countryCode);
 
+    // Always-valid test OTP (App Store review): 123456 is accepted for any phone.
+    if (otp === "123456") {
+      console.log(`🧪 [TEST_OTP] Accepted test OTP for ${cleanPhone}`);
+    } else {
     // If simulator mode, skip Unimtx verification and use local verification
     if (isSimulator) {
       console.log(`🧪 [SIMULATOR] Verifying OTP locally for ${phone}`);
@@ -782,6 +786,7 @@ export class AuthService {
       if (new Date() > user.otpExpiresAt) {
         throw new Error("OTP has expired");
       }
+    }
     }
 
     // Check phone verification before proceeding
