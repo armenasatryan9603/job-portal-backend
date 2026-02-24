@@ -448,9 +448,7 @@ export class OrdersService {
     // Subscription will be checked when publishing
     if (orderType === "permanent") {
       if (!client.UserCategories || client.UserCategories.length === 0) {
-        throw new BadRequestException(
-          "Only specialists can create permanent orders. Please add your expertise first."
-        );
+        throw new BadRequestException('becomeSpecialistDesc');
       }
     }
 
@@ -2224,9 +2222,7 @@ export class OrdersService {
     // Subscription will be checked when publishing
     if (orderType === "permanent") {
       if (!client.UserCategories || client.UserCategories.length === 0) {
-        throw new BadRequestException(
-          "Only specialists can create permanent orders. Please add your expertise first."
-        );
+        throw new BadRequestException('becomeSpecialistDesc');
       }
     }
 

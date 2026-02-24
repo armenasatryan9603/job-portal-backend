@@ -1270,6 +1270,7 @@
   "changeToBookableOrderDesc": "Switching to Bookable order will enable clients to book time slots and schedule appointments. You'll need to set up your weekly schedule and work duration per client. An active subscription is required to publish bookable orders. This change cannot be undone after publishing.",
   "becomeSpecialistDesc": "Only specialists can create permanent orders. Please add your expertise first.",
   "addExpertise": "Add Expertise",
+  "becomeMarketCreatorDesc": "Only specialists can create markets. Please add your expertise first.",
   "getSubscription": "Get Subscription",
   "subscriptionRequiredForPermanent": "Subscription Required",
   "subscriptionRequiredForPermanentDesc": "An active subscription is required to publish permanent orders.",

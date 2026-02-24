@@ -45,9 +45,7 @@ export class MarketsService {
     }
 
     if (!user.UserCategories || user.UserCategories.length === 0) {
-      throw new BadRequestException(
-        "Only specialists can create markets. Please add your expertise first."
-      );
+      throw new BadRequestException('becomeMarketCreatorDesc');
     }
 
     return user;
