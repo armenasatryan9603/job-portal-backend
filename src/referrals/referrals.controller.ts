@@ -139,9 +139,15 @@ export class ReferralsController {
       }
       const code = await this.referralsService.generateReferralCode(userId);
 
-      // Generate shareable link (you can customize the domain)
-      const baseUrl = process.env.FRONTEND_URL || 'https://yourapp.com';
-      const shareLink = `${baseUrl}/signup?ref=${code}`;
+      // Generate shareable link using the public frontend / universal link domain
+      // FRONTEND_URL should be set to the same domain you use for deep links (e.g. your Vercel backend URL or web app URL)
+      const baseUrl =
+        process.env.FRONTEND_URL ||
+        process.env.APP_URL ||
+        "https://job-portal-backend-psi-ruddy.vercel.app";
+      const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+      // This route should render a landing / signup page for new users
+      const shareLink = `${normalizedBaseUrl}/signup?ref=${code}`;
 
       const message = `Join me on this amazing platform! Use my referral code: ${code} and we both get credits!`;
 

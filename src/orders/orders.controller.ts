@@ -402,13 +402,24 @@ export class OrdersController {
     if (isNaN(orderId)) {
       throw new Error(`Invalid order ID: ${id}`);
     }
-    
-    // Check if this is a web browser request (for Universal Links)
-    const acceptHeader = req.headers['accept'] || '';
+    // Check if this is a web browser or social crawler request (for Universal Links / previews)
+    const acceptHeader = (req.headers["accept"] || "").toString();
+    const userAgentHeader = (req.headers["user-agent"] || "").toString();
+    const ua = userAgentHeader.toLowerCase();
+
+    const isSocialCrawler =
+      ua.includes("instagram") ||
+      ua.includes("facebook") ||
+      ua.includes("whatsapp") ||
+      ua.includes("twitterbot") ||
+      ua.includes("telegram");
+
     const isWebRequest =
-    acceptHeader.includes("text/html") ||
-    req.headers["user-agent"]?.includes("Mozilla");
-    
+      acceptHeader.includes("text/html") ||
+      acceptHeader === "*/*" ||
+      ua.includes("mozilla") ||
+      isSocialCrawler;
+
     if (isWebRequest) {
       // Serve HTML page for Universal Links
       const order = await this.ordersService.findOne(orderId);
@@ -419,6 +430,16 @@ export class OrdersController {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
 
+      // Build canonical URL for this order (used in Open Graph tags)
+      const baseUrl =
+        process.env.FRONTEND_URL ||
+        process.env.APP_URL ||
+        "https://job-portal-backend-psi-ruddy.vercel.app";
+      const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+      const orderUrl = `${normalizedBaseUrl}/orders/${orderId}`;
+      const ogDescription =
+        safeDescription || safeTitle || "Order on HotWork";
+
       const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -426,6 +447,12 @@ export class OrdersController {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Order #${orderId} - HotWork</title>
   <meta name="description" content="${safeTitle}">
+
+  <!-- Open Graph meta tags for rich link previews (Instagram, Facebook, etc.) -->
+  <meta property="og:title" content="Order #${orderId} - HotWork">
+  <meta property="og:description" content="${ogDescription}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${orderUrl}">
   
   <!-- Universal Links / App Links meta tags -->
   <meta property="al:ios:url" content="jobportalmobile://orders/${orderId}">
