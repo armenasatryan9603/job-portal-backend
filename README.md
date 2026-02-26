@@ -1,6 +1,6 @@
-# Job Portal Backend
+# HotWork Backend
 
-NestJS backend application for the job portal platform.
+NestJS backend application for the HotWork platform.
 
 ## 🚀 Quick Start
 

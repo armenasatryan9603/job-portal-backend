@@ -3,7 +3,7 @@
 -- ============================================
 -- Description: Adds weeklySchedule field to Market table for business hours
 -- Date: 2026-01-XX
--- Author: Job Portal Team
+-- Author: HotWork Team
 --
 -- This migration adds:
 -- 1. weeklySchedule JSONB field to Market table for storing business hours

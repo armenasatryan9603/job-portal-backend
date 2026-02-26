@@ -3,7 +3,7 @@
 -- ============================================
 -- Description: Adds Markets feature with members, roles, reviews, orders, media, and subscriptions
 -- Date: 2026-01-XX
--- Author: Job Portal Team
+-- Author: HotWork Team
 --
 -- This migration adds:
 -- 1. Market model

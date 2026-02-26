@@ -402,11 +402,15 @@ export class OrdersController {
     if (isNaN(orderId)) {
       throw new Error(`Invalid order ID: ${id}`);
     }
-    // Check if this is a web browser or social crawler request (for Universal Links / previews)
-    const acceptHeader = (req.headers["accept"] || "").toString();
+    // Prefer JSON for API clients: explicit JSON accept or Bearer token (mobile/app)
+    const acceptHeader = (req.headers["accept"] || "").toString().toLowerCase();
+    const authHeader = (req.headers["authorization"] || "").toString();
+    const wantsJson =
+      acceptHeader.includes("application/json") || authHeader.startsWith("Bearer ");
+
+    // Only serve HTML for actual browsers/crawlers that want HTML (e.g. Universal Links / previews)
     const userAgentHeader = (req.headers["user-agent"] || "").toString();
     const ua = userAgentHeader.toLowerCase();
-
     const isSocialCrawler =
       ua.includes("instagram") ||
       ua.includes("facebook") ||
@@ -415,10 +419,10 @@ export class OrdersController {
       ua.includes("telegram");
 
     const isWebRequest =
-      acceptHeader.includes("text/html") ||
-      acceptHeader === "*/*" ||
-      ua.includes("mozilla") ||
-      isSocialCrawler;
+      !wantsJson &&
+      (acceptHeader.includes("text/html") ||
+        isSocialCrawler ||
+        (ua.includes("mozilla") && acceptHeader.includes("text/html")));
 
     if (isWebRequest) {
       // Serve HTML page for Universal Links

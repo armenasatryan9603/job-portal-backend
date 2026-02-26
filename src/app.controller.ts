@@ -15,7 +15,7 @@ export class AppController {
   @Get()
   root() {
     return {
-      message: 'Job Portal API is running',
+      message: 'HotWork API is running',
       version: '1.0.0',
     };
   }

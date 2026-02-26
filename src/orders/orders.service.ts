@@ -803,9 +803,6 @@ export class OrdersService {
       `🔍 findAll query - orderType: ${orderType}, userId: ${userId}, country: ${country}, where: ${JSON.stringify(where)}`
     );
 
-    this.logger.debug('fffffffffffffffffffffffff', JSON.stringify(where, null, 2));
-    
-
     // Fetch orders (we'll filter by date range after fetching if needed)
     const [allOrders, totalBeforeFilter] = await Promise.all([
       this.prisma.order.findMany({

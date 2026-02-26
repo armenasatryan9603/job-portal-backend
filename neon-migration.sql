@@ -3,7 +3,7 @@
 -- ============================================
 -- Description: Adds support for permanent/recurring orders with booking system
 -- Date: 2026-01-15
--- Author: Job Portal Team
+-- Author: HotWork Team
 --
 -- This migration adds:
 -- 1. orderType field to Order table (one_time/permanent)
