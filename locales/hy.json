@@ -838,6 +838,8 @@
   "orderShared": "Պատվերը հաջողությամբ կիսվեց",
   "failedToShareOrder": "Չհաջողվեց կիսվել պատվերով",
   "share": "Կիսվել",
+  "currency": "Արժույթ",
+  "currencyPreferenceDescription": "Ընտրեք ձեր նախընտրած արժույթը գործարքների և գների համար։",
   "chooseShareOption": "Ընտրեք, թե ինչպես ցանկանում եք կիսվել",
   "details": "Մանրամասներ",
   "preview": "Դիտում",
