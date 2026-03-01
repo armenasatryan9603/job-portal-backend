@@ -661,7 +661,24 @@ export class UsersService {
         };
       }
 
-      if (location) {
+      // Filter by user's country (same as orders): specialist location must match __{countryCode}
+      if (currentUserId && !location) {
+        const currentUser = await this.prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { location: true },
+        });
+        const loc = currentUser?.location;
+        const code =
+          loc && typeof loc === "string" && loc.includes("__")
+            ? loc.slice(loc.indexOf("__") + 2).trim()
+            : null;
+        if (code) {
+          whereClause.OR = [
+            { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
+            { location: { contains: code, mode: "insensitive" } },
+          ];
+        }
+      } else if (location) {
         whereClause.location = {
           contains: location,
           mode: "insensitive",
