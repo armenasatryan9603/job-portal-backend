@@ -724,7 +724,7 @@ export class OrdersService {
     budgetCurrency?: string
   ) {
 
-    console.log("findAll with params:", {
+    console.log("findAll orders with params:", {
       page,
       limit,
       status,

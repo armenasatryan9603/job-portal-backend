@@ -186,7 +186,6 @@ export class UsersController {
         parseInt(limit),
         categoryId ? parseInt(categoryId) : undefined,
         location,
-        userId,
         country
       );
 

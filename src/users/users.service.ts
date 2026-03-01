@@ -1,14 +1,16 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from "@nestjs/common";
-import { PrismaService } from "../prisma.service";
-import { NotificationsService } from "../notifications/notifications.service";
-import { PusherService } from "../pusher/pusher.service";
 import * as bcrypt from "bcrypt";
+
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
+
+import { NotificationsService } from "../notifications/notifications.service";
+import { PrismaService } from "../prisma.service";
+import { PusherService } from "../pusher/pusher.service";
 
 @Injectable()
 export class UsersService {
@@ -640,7 +642,6 @@ export class UsersService {
     limit: number = 10,
     categoryId?: number,
     location?: string,
-    currentUserId?: number,
     country?: string
   ) {
     try {
