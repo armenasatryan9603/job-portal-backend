@@ -17,6 +17,29 @@ import { PusherService } from "../pusher/pusher.service";
 import { SkillsService } from "../skills/skills.service";
 import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
+const LOCATION_COUNTRY_SEP = "__";
+
+/** Parse "address__ISO" into address-only and ISO code. */
+function parseLocationAndCountry(
+  location: string
+): { addressOnly: string; countryIso: string | null } {
+  const t = (location || "").trim();
+  const idx = t.indexOf(LOCATION_COUNTRY_SEP);
+  if (idx >= 0) {
+    const addressOnly = t.slice(0, idx).trim();
+    const suffix = t.slice(idx + LOCATION_COUNTRY_SEP.length).trim();
+    const iso = suffix.length === 2 ? suffix.toUpperCase() : null;
+    return { addressOnly: addressOnly || t, countryIso: iso };
+  }
+  return { addressOnly: t, countryIso: null };
+}
+
+function normalizeCountryCode(code: string | null | undefined): string | null {
+  if (!code || typeof code !== "string") return null;
+  const c = code.trim().toUpperCase().slice(0, 2);
+  return c.length === 2 ? c : null;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -418,7 +441,8 @@ export class OrdersService {
     weeklySchedule?: any,
     checkinRequiresApproval: boolean = false,
     resourceBookingMode?: "select" | "auto" | "multi",
-    requiredResourceCount?: number
+    requiredResourceCount?: number,
+    country?: string
   ) {
     // Validate location is provided and not empty
     if (!location || !location.trim()) {
@@ -588,6 +612,10 @@ export class OrdersService {
       }
     }
 
+    const { addressOnly, countryIso: parsedCountry } = parseLocationAndCountry(location);
+    const orderCountry =
+      normalizeCountryCode(country) ?? parsedCountry ?? (client as any).country ?? null;
+
     const order = await this.prisma.order.create({
       data: {
         clientId,
@@ -604,7 +632,8 @@ export class OrdersService {
         currency: currency || undefined,
         rateUnit: rateUnit || undefined,
         availableDates: formattedAvailableDates,
-        location,
+        location: addressOnly || location,
+        country: orderCountry,
         status: orderType === "permanent" ? "draft" : "pending_review",
         orderType: orderType || "one_time",
         workDurationPerClient: workDurationPerClient || undefined,
@@ -694,6 +723,25 @@ export class OrdersService {
     budgetMax?: number,
     budgetCurrency?: string
   ) {
+
+    console.log("findAll with params:", {
+      page,
+      limit,
+      status,
+      categoryId,
+      categoryIds,
+      clientId,
+      isAdmin,
+      userId,
+      orderType,
+      country,
+      startDate,
+      endDate,
+      budgetMin,
+      budgetMax,
+      budgetCurrency
+    });
+    
     const skip = (page - 1) * limit;
     const where: any = { deletedAt: null };
 
@@ -764,7 +812,6 @@ export class OrdersService {
         notIn: ["draft", "pending_review", "rejected"],
       };
     }
-    // If status is "all", don't filter by status (show all statuses)
 
     // Support both single categoryId (backward compatibility) and multiple categoryIds
     if (categoryIds && categoryIds.length > 0) {
@@ -790,13 +837,10 @@ export class OrdersService {
       where.orderType = orderType;
     }
 
-    // Filter by country: location may be "address__ISO" or legacy text containing country
+    // Filter by country (from frontend query param only)
     if (country) {
-      const code = country.trim();
-      where.OR = [
-        { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
-        { location: { contains: code, mode: "insensitive" } },
-      ];
+      const code = normalizeCountryCode(country);
+      if (code) where.country = code;
     }
 
     this.logger.debug(
@@ -1204,6 +1248,8 @@ export class OrdersService {
       checkinRequiresApproval?: boolean;
       resourceBookingMode?: "select" | "auto" | "multi";
       requiredResourceCount?: number;
+      location?: string;
+      country?: string;
     },
     userId: number,
     useAIEnhancement: boolean = false
@@ -1431,6 +1477,16 @@ export class OrdersService {
       categoryId,
       ...updateData
     } = updateOrderDto as any;
+
+    if (updateData.country !== undefined) {
+      updateData.country = normalizeCountryCode(updateData.country) || null;
+    }
+    if (updateData.location !== undefined) {
+      const parsed = parseLocationAndCountry(updateData.location);
+      updateData.location = parsed.addressOnly || updateData.location;
+      if (updateData.country === undefined && parsed.countryIso)
+        updateData.country = parsed.countryIso;
+    }
 
     // Add multilingual fields if AI enhancement was used
     // Check both: fields from AI service call OR fields already in updateOrderDto (from modal accept)
@@ -1934,18 +1990,10 @@ export class OrdersService {
       where.orderType = orderType;
     }
 
-    // Filter by country: location may be "address__ISO" or legacy text containing country
-    // Apply as AND with text search so we don't overwrite the search OR
+    // Filter by country (from frontend query param only)
     if (country) {
-      const code = country.trim();
-      const locationCondition = {
-        OR: [
-          { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
-          { location: { contains: code, mode: "insensitive" } },
-        ],
-      };
-      where.AND = [{ OR: where.OR }, locationCondition];
-      delete where.OR;
+      const code = normalizeCountryCode(country);
+      if (code) where.country = code;
     }
 
     // Fetch more rows when budget filter is used so we can filter in memory then paginate
@@ -2183,7 +2231,8 @@ export class OrdersService {
     weeklySchedule?: any,
     checkinRequiresApproval: boolean = false,
     resourceBookingMode?: "select" | "auto" | "multi",
-    requiredResourceCount?: number
+    requiredResourceCount?: number,
+    country?: string
   ) {
     // Validate location is provided and not empty
     if (!location || !location.trim()) {
@@ -2326,6 +2375,14 @@ export class OrdersService {
         });
       }
 
+      const { addressOnly: addressOnlyMedia, countryIso: parsedCountryMedia } =
+        parseLocationAndCountry(location);
+      const orderCountryMedia =
+        normalizeCountryCode(country) ??
+        parsedCountryMedia ??
+        (client as any).country ??
+        null;
+
       // Create the order first
       const order = await tx.order.create({
         data: {
@@ -2343,7 +2400,8 @@ export class OrdersService {
           currency: currency || undefined,
           rateUnit: rateUnit || undefined,
           availableDates: availableDates || [],
-          location,
+          location: addressOnlyMedia || location,
+          country: orderCountryMedia,
           status: orderType === "permanent" ? "draft" : "open",
           orderType: orderType || "one_time",
           workDurationPerClient: workDurationPerClient || undefined,

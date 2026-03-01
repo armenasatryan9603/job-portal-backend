@@ -241,12 +241,16 @@ export class FirebaseNotificationService {
     fcmToken: string
   ): Promise<{ success: boolean }> {
     try {
-      await this.prisma.user.update({
-        where: { id: userId },
+      const result = await this.prisma.user.updateMany({
+        where: { id: userId, deletedAt: null },
         data: { fcmToken },
       });
-      this.logger.log(`✅ FCM token updated for user ${userId}`);
-      return { success: true };
+      if (result.count > 0) {
+        this.logger.log(`✅ FCM token updated for user ${userId}`);
+        return { success: true };
+      }
+      this.logger.warn(`User ${userId} not found or deleted, skipped FCM token update`);
+      return { success: false };
     } catch (error) {
       this.logger.error(
         `❌ Failed to update FCM token for user ${userId}:`,

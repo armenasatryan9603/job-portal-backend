@@ -147,7 +147,8 @@ export class UsersController {
     @Query("page") page: string = "1",
     @Query("limit") limit: string = "10",
     @Query("categoryId") categoryId?: string,
-    @Query("location") location?: string
+    @Query("location") location?: string,
+    @Query("country") country?: string
   ) {
     try {
       // Extract userId from JWT token if available
@@ -176,6 +177,7 @@ export class UsersController {
         limit,
         categoryId,
         location,
+        country,
         userId,
       });
 
@@ -184,7 +186,8 @@ export class UsersController {
         parseInt(limit),
         categoryId ? parseInt(categoryId) : undefined,
         location,
-        userId
+        userId,
+        country
       );
 
       return result;
@@ -370,6 +373,7 @@ export class UsersController {
       priceMin?: number;
       priceMax?: number;
       location?: string;
+      country?: string;
     }
   ) {
     return this.usersService.updateSpecialistProfile(+id, specialistData);

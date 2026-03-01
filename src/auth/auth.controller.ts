@@ -98,6 +98,7 @@ export class AuthController {
       priceMin: user.priceMin,
       priceMax: user.priceMax,
       location: user.location,
+      country: user.country ?? undefined,
       currency: user.currency || "USD",
       rateUnit: user.rateUnit,
       portfolio: user.Portfolio || [],
@@ -117,6 +118,7 @@ export class AuthController {
       bio?: string;
       avatarUrl?: string;
       location?: string;
+      country?: string;
       role?: string;
       languages?: UserLanguage[];
       experienceYears?: number;

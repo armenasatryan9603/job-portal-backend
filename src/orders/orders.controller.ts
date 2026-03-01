@@ -41,6 +41,7 @@ export class OrdersController {
       rateUnit?: string;
       availableDates?: string[];
       location: string;
+      country?: string;
       skills?: string[];
       skillIds?: number[];
       useAIEnhancement?: boolean;
@@ -84,7 +85,8 @@ export class OrdersController {
       body.weeklySchedule,
       body.checkinRequiresApproval ?? false,
       body.resourceBookingMode,
-      body.requiredResourceCount
+      body.requiredResourceCount,
+      body.country
     );
   }
 
@@ -102,6 +104,7 @@ export class OrdersController {
       rateUnit?: string;
       availableDates?: string[];
       location: string;
+      country?: string;
       skills?: string[];
       skillIds?: number[];
       mediaFiles?: Array<{
@@ -148,7 +151,8 @@ export class OrdersController {
       body.weeklySchedule,
       body.checkinRequiresApproval ?? false,
       body.resourceBookingMode,
-      body.requiredResourceCount
+      body.requiredResourceCount,
+      body.country
     );
   }
 
@@ -563,6 +567,8 @@ export class OrdersController {
       availableDates?: string[];
       resourceBookingMode?: "select" | "auto" | "multi";
       requiredResourceCount?: number;
+      location?: string;
+      country?: string;
     },
     @Request() req
   ) {

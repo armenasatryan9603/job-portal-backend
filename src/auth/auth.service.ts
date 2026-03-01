@@ -437,6 +437,7 @@ export class AuthService {
       avatarUrl?: string;
       bannerUrl?: string;
       location?: string;
+      country?: string;
       role?: string;
       languages?: UserLanguage[];
       experienceYears?: number;
@@ -474,10 +475,25 @@ export class AuthService {
       }
     }
 
-    // Prepare update data
+    // Prepare update data; handle location/country: prefer explicit country, else parse from location for backward compat
     const dataToUpdate: any = { ...updateData };
     if (updateData.languages !== undefined) {
       dataToUpdate.languages = updateData.languages;
+    }
+    if (updateData.country !== undefined) {
+      dataToUpdate.country = updateData.country.trim().toUpperCase().slice(0, 2) || null;
+    }
+    if (updateData.location !== undefined) {
+      const loc = updateData.location.trim();
+      if (loc.includes(LOCATION_COUNTRY_SEPARATOR)) {
+        dataToUpdate.location = getDisplayPartFromLocation(loc);
+        if (!dataToUpdate.country) {
+          const after = loc.slice(loc.indexOf(LOCATION_COUNTRY_SEPARATOR) + LOCATION_COUNTRY_SEPARATOR.length).trim();
+          if (after.length === 2) dataToUpdate.country = after.toUpperCase();
+        }
+      } else {
+        dataToUpdate.location = loc || null;
+      }
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -485,6 +501,7 @@ export class AuthService {
       data: dataToUpdate,
     });
 
+    const u = updatedUser as { country?: string | null };
     return {
       id: updatedUser.id,
       email: updatedUser.email,
@@ -494,6 +511,7 @@ export class AuthService {
       avatarUrl: updatedUser.avatarUrl,
       bannerUrl: updatedUser.bannerUrl,
       location: updatedUser.location ?? undefined,
+      country: u.country ?? undefined,
       role: updatedUser.role,
       languages: (updatedUser.languages as unknown as UserLanguage[]) || [],
       createdAt: updatedUser.createdAt,
@@ -874,16 +892,13 @@ export class AuthService {
       }
     }
 
-    // Set/refresh user location country from login phone country code (address part unchanged)
+    // Set/refresh user country from login phone country code (address part unchanged)
     const loginIso = countryCodeToIso(countryCode);
     if (loginIso) {
       const displayPart = getDisplayPartFromLocation(user.location);
-      const newLocation = displayPart
-        ? `${displayPart}${LOCATION_COUNTRY_SEPARATOR}${loginIso}`
-        : `${LOCATION_COUNTRY_SEPARATOR}${loginIso}`;
       user = await this.prisma.user.update({
         where: { id: user.id },
-        data: { location: newLocation },
+        data: { country: loginIso, location: displayPart || undefined } as Record<string, unknown>,
       });
     }
 
@@ -906,6 +921,7 @@ export class AuthService {
         role: user.role,
         creditBalance: user.creditBalance,
         location: user.location ?? undefined,
+        country: user.country ?? undefined,
       },
     };
   }

@@ -31,7 +31,8 @@ model User {
   experienceYears          Int?
   priceMin                 Float?
   priceMax                 Float?
-  location                 String?                   // Optional: "address__ISO" for country filtering
+  location                 String?                   // Address/display text only
+  country                  String?                   // ISO 3166-1 alpha-2 (e.g. AM, US)
   currency                 String?
   rateUnit                 String?
   fcmToken                 String?
@@ -75,6 +76,7 @@ model User {
   deletedAt                DateTime?
 
   @@index([deletedAt])
+  @@index([country])
 }
 
 model Category {
@@ -198,7 +200,8 @@ model Order {
   currency                String               @default("AMD")
   rateUnit                String               @default("per_project")
   availableDates          String[]             @default([])
-  location                String?
+  location                String?              // Address/display text only
+  country                 String?              // ISO 3166-1 alpha-2 (e.g. AM, US)
   status                  String               @default("open")
   createdAt               DateTime             @default(now())
   bannerImageId           Int?
@@ -233,6 +236,7 @@ model Order {
   @@index([status])
   @@index([orderType])
   @@index([deletedAt])
+  @@index([country])
 }
 
 model OrderProposal {

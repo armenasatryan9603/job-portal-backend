@@ -640,7 +640,8 @@ export class UsersService {
     limit: number = 10,
     categoryId?: number,
     location?: string,
-    currentUserId?: number
+    currentUserId?: number,
+    country?: string
   ) {
     try {
       console.log("getSpecialists called with:", {
@@ -648,6 +649,7 @@ export class UsersService {
         limit,
         categoryId,
         location,
+        country,
       });
 
       // Build where clause
@@ -661,24 +663,12 @@ export class UsersService {
         };
       }
 
-      // Filter by user's country (same as orders): specialist location must match __{countryCode}
-      if (currentUserId && !location) {
-        const currentUser = await this.prisma.user.findUnique({
-          where: { id: currentUserId },
-          select: { location: true },
-        });
-        const loc = currentUser?.location;
-        const code =
-          loc && typeof loc === "string" && loc.includes("__")
-            ? loc.slice(loc.indexOf("__") + 2).trim()
-            : null;
-        if (code) {
-          whereClause.OR = [
-            { location: { endsWith: `__${code}`, mode: "insensitive" as const } },
-            { location: { contains: code, mode: "insensitive" } },
-          ];
-        }
-      } else if (location) {
+      // Filter by country (from frontend query param only)
+      if (country) {
+        const code = country.trim().toUpperCase().slice(0, 2);
+        if (code) whereClause.country = code;
+      }
+      if (location) {
         whereClause.location = {
           contains: location,
           mode: "insensitive",
@@ -690,80 +680,82 @@ export class UsersService {
         where: whereClause,
       });
 
-      // Get specialists with proper structure
+      // Get specialists with proper structure (country is on User model)
+      const specialistSelect = {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        bio: true,
+        verified: true,
+        experienceYears: true,
+        priceMin: true,
+        priceMax: true,
+        location: true,
+        country: true,
+        currency: true,
+        rateUnit: true,
+        createdAt: true,
+        UserCategories: {
+          select: {
+            Category: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                imageUrl: true,
+                parentId: true,
+                averagePrice: true,
+                minPrice: true,
+                maxPrice: true,
+                currency: true,
+                rateUnit: true,
+                completionRate: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
+          },
+        },
+        Reviews: {
+          take: 5,
+          orderBy: {
+            createdAt: "desc",
+          },
+          select: {
+            id: true,
+            orderId: true,
+            reviewerId: true,
+            specialistId: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+            Order: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            Reviews: true,
+          },
+        },
+      };
       const specialists = await this.prisma.user.findMany({
         where: whereClause,
         take: limit,
         skip: (page - 1) * limit,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          avatarUrl: true,
-          bio: true,
-          verified: true,
-          experienceYears: true,
-          priceMin: true,
-          priceMax: true,
-          location: true,
-          currency: true,
-          rateUnit: true,
-          createdAt: true,
-          UserCategories: {
-            select: {
-              Category: {
-                select: {
-                  id: true,
-                  name: true,
-                  description: true,
-                  imageUrl: true,
-                  parentId: true,
-                  averagePrice: true,
-                  minPrice: true,
-                  maxPrice: true,
-                  currency: true,
-                  rateUnit: true,
-                  completionRate: true,
-                  isActive: true,
-                  createdAt: true,
-                  updatedAt: true,
-                },
-              },
-            },
-          },
-          Reviews: {
-            take: 5,
-            orderBy: {
-              createdAt: "desc",
-            },
-            select: {
-              id: true,
-              orderId: true,
-              reviewerId: true,
-              specialistId: true,
-              rating: true,
-              comment: true,
-              createdAt: true,
-              Order: {
-                select: {
-                  id: true,
-                  title: true,
-                  description: true,
-                },
-              },
-            },
-          },
-          _count: {
-            select: {
-              Reviews: true,
-            },
-          },
-        },
+        select: specialistSelect as any,
         orderBy: {
           createdAt: "desc",
         },
-      });
+      }) as any[];
 
       console.log("Found specialists:", specialists.length);
 
@@ -817,6 +809,7 @@ export class UsersService {
           priceMin: specialist.priceMin,
           priceMax: specialist.priceMax,
           location: specialist.location,
+          country: specialist.country ?? undefined,
           currency: specialist.currency,
           rateUnit: specialist.rateUnit,
           User: {
@@ -983,6 +976,7 @@ export class UsersService {
       priceMin: user.priceMin,
       priceMax: user.priceMax,
       location: user.location,
+      country: (user as any).country ?? undefined,
       currency: user.currency,
       rateUnit: user.rateUnit,
       averageRating: roundedAverageRating,
@@ -1001,6 +995,7 @@ export class UsersService {
         priceMin: user.priceMin,
         priceMax: user.priceMax,
         location: user.location,
+        country: (user as any).country ?? undefined,
         createdAt: user.createdAt,
       },
       Category: category
@@ -1030,6 +1025,7 @@ export class UsersService {
       priceMin?: number;
       priceMax?: number;
       location?: string;
+      country?: string;
     }
   ) {
     // Check if user exists and is a specialist
@@ -1066,9 +1062,14 @@ export class UsersService {
       );
     }
 
+    const data: any = { ...specialistData };
+    if (specialistData.country !== undefined) {
+      data.country = specialistData.country.trim().toUpperCase().slice(0, 2) || null;
+    }
+
     return this.prisma.user.update({
       where: { id },
-      data: specialistData,
+      data,
       include: {
         _count: {
           select: {

@@ -19,6 +19,8 @@
   "settings": "Settings",
   "help": "Help & Support",
   "home": "Home",
+  "setLocationToSeeRelevant": "Set your location to see relevant specialists",
+  "openSettings": "Open settings",
   "findSpecialists": "Find specialists for your projects",
   "postJob": "Post a Job",
   "postJobDesc": "Create a new job posting",
