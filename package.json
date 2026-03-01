@@ -21,6 +21,8 @@
     "seed:reasons": "ts-node prisma/seed-reasons.ts",
     "seed:skills": "ts-node prisma/seed-skills.ts",
     "seed:subscriptions": "ts-node prisma/seed-subscription-plans.ts",
+    "seed:demo": "ts-node prisma/seed-demo-data.ts",
+    "seed:all": "npm run seed:reasons && npm run seed:skills && npm run seed:subscriptions && npm run seed:demo",
     "create-admin": "ts-node scripts/create-admin.ts"
   },
   "dependencies": {

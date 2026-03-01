@@ -1,6 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -29,7 +30,7 @@ function escapeSql(str: string): string {
 }
 
 async function seedSkills() {
-  const csvPath = path.join(__dirname, '..', 'Skill.csv');
+  const csvPath = path.join(__dirname, '..', '/prisma/Skill.csv');
   const content = fs.readFileSync(csvPath, 'utf-8');
   const lines = content.split(/\r?\n/).filter((line) => line.trim());
 
