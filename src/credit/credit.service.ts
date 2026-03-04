@@ -3,27 +3,24 @@ import { Injectable, Logger } from "@nestjs/common";
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
-import axios from "axios";
+import {
+  FastBankPaymentProvider,
+  PaymentProvider,
+} from "../payments/payment.provider";
 
 @Injectable()
 export class CreditService {
   private readonly logger = new Logger(CreditService.name);
   private readonly BASE_CURRENCY = "USD"; // Credits are always stored in USD
+  private readonly paymentProvider: PaymentProvider;
 
   constructor(
     private prisma: PrismaService,
     private creditTransactionsService: CreditTransactionsService,
     private exchangeRateService: ExchangeRateService,
-  ) {}
-
-  private readonly vposUrl = process.env.AMERIABANK_VPOS_URL!;
-  private readonly vposStatusUrl = process.env.AMERIABANK_VPOS_STATUS_URL!;
-
-  private readonly credentials = {
-    clientId: process.env.AMERIABANK_CLIENT_ID,
-    username: process.env.AMERIABANK_USERNAME,
-    password: process.env.AMERIABANK_PASSWORD,
-  };
+  ) {
+    this.paymentProvider = new FastBankPaymentProvider();
+  }
 
   async initiatePayment(
     userId: number,
@@ -35,12 +32,13 @@ export class CreditService {
   ) {
     // If cardId is provided, use saved card payment (no webview)
     if (cardId && !isFallback) {
-      // Get card with binding info using raw SQL to access bindingId and cardHolderId
-      const cards = await this.prisma.$queryRaw<Array<{
-        id: number;
-        binding_id: string | null;
-        card_holder_id: string | null;
-      }>>`
+      const cards = await this.prisma.$queryRaw<
+        Array<{
+          id: number;
+          binding_id: string | null;
+          card_holder_id: string | null;
+        }>
+      >`
         SELECT id, "binding_id", "card_holder_id" 
         FROM "Card" 
         WHERE id = ${parseInt(cardId, 10)} 
@@ -58,107 +56,24 @@ export class CreditService {
         );
       }
 
-      this.logger.log(
-        `Card found: id=${card.id}, binding_id=${card.binding_id}, card_holder_id=${card.card_holder_id}`
-      );
-
       if (!card.binding_id) {
-        this.logger.error(`Card ${cardId} missing binding_id`);
+        this.logger.error(`Card ${cardId} missing binding token`);
         throw new Error(
-          "Card does not have a binding ID. Please save the card during a payment first."
+          "Card does not have a saved payment token. Please save the card during a payment first."
         );
       }
 
-      if (!card.card_holder_id || card.card_holder_id.trim().length === 0) {
-        this.logger.error(
-          `Card ${cardId} has bindingId (${card.binding_id}) but missing cardHolderId`
-        );
-        throw new Error(
-          "Card is missing required payment information. Please save the card again during a payment."
-        );
-      }
-
-      // Use MakeBindingPayment for saved card payment (direct payment without redirect)
-      // Note: MakeBindingPayment API uses CardHolderID to identify the binding
-      // BindingID is stored in DB for reference but is NOT sent in the API request
-      const isTestMode = this.vposUrl.includes("servicestest");
-      
-      try {
-        return await this.makeBindingPayment(
-          userId,
-          amount,
-          currency,
-          card.binding_id, // Stored for reference/logging only
-          card.card_holder_id // Used by API to identify the binding
-        );
-      } catch (error: any) {
-        this.logger.error(
-          `MakeBindingPayment failed: ${error.message}. Status: ${error.response?.status}`
-        );
-        
-        // Provide clear error message for test environment limitations
-        if (error.response?.status === 500 && isTestMode) {
-          throw new Error(
-            "The AmeriaBank test environment does not support MakeBindingPayment API. " +
-            "Please use 'New Card' option for testing, or use production credentials for saved card payments."
-          );
-        }
-        
-        throw error;
-      }
-    }
-    // Validate credentials and required environment variables
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
+      this.logger.log(
+        `Using saved card for payment: id=${card.id}, binding_token=${card.binding_id}`
       );
-    }
 
-    if (!this.vposUrl || !this.vposStatusUrl) {
-      this.logger.error("AmeriaBank vPOS URLs not configured");
-      throw new Error(
-        "Payment gateway URLs not configured. Please contact support."
+      return this.makeBindingPayment(
+        userId,
+        amount,
+        currency,
+        card.binding_id,
+        card.card_holder_id || ""
       );
-    }
-
-    const isTestMode = this.vposUrl.includes("servicestest");
-
-    let orderIdInt: number;
-    let orderId: string;
-    if (isTestMode) {
-      // Ameriabank test requires OrderID in 30164001–30165000, amount 10 AMD
-      orderIdInt =
-        30164001 + Math.floor(Math.random() * (30165000 - 30164001 + 1));
-      orderId = String(orderIdInt);
-      
-      // Validate OrderID is in correct range
-      if (orderIdInt < 30164001 || orderIdInt > 30165000) {
-        this.logger.error(
-          `Generated OrderID ${orderIdInt} is outside test range 30164001-30165000`
-        );
-        throw new Error("OrderID generation failed: outside test range");
-      }
-      
-      this.logger.log(`Test mode: Generated OrderID ${orderIdInt} in range 30164001-30165000`);
-    } else {
-      const timestamp = Date.now();
-      const timestampSuffix = timestamp.toString().slice(-10);
-      const randomSuffix = Math.floor(Math.random() * 100);
-      const userIdStr = userId.toString().padStart(5, "0").slice(-5);
-      const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
-      orderIdInt = parseInt(
-        `${timestampSuffix}${userIdStr}${randomStr}`,
-        10
-      );
-      orderId = `${userId}-${timestamp}-${randomSuffix}`;
-      if (orderIdInt > Number.MAX_SAFE_INTEGER) {
-        throw new Error("OrderID generation failed: number too large");
-      }
     }
 
     // Get user's currency preference
@@ -166,24 +81,21 @@ export class CreditService {
       where: { id: userId },
       select: { currency: true },
     });
-    const userCurrency = (user?.currency || currency || "USD").toUpperCase();
-    const normalizedCurrency = currency.toUpperCase();
+    const normalizedCurrency = (currency || user?.currency || "USD").toUpperCase();
 
     // Convert amount to base currency (USD) for credits
-    let amountInBaseCurrency = amount;
     let exchangeRate: number | null = null;
     let originalAmount = amount;
     let convertedAmount = amount;
-    const paymentAmount = isTestMode ? 10 : amount;
 
-    if (!isTestMode && normalizedCurrency !== this.BASE_CURRENCY) {
+    if (normalizedCurrency !== this.BASE_CURRENCY) {
       try {
         exchangeRate = await this.exchangeRateService.getExchangeRate(
           normalizedCurrency,
           this.BASE_CURRENCY
         );
-        amountInBaseCurrency = amount * exchangeRate;
-        convertedAmount = Math.round(amountInBaseCurrency * 100) / 100; // Round to 2 decimals
+        convertedAmount =
+          Math.round(amount * exchangeRate * 100) / 100;
         this.logger.log(
           `Currency conversion: ${amount} ${normalizedCurrency} = ${convertedAmount} ${this.BASE_CURRENCY} (rate: ${exchangeRate})`
         );
@@ -191,164 +103,76 @@ export class CreditService {
         this.logger.error(
           `Failed to convert currency: ${error.message}. Using amount as-is.`
         );
-        // If conversion fails, use amount as-is (assume it's already in base currency)
         exchangeRate = 1;
       }
     } else {
-      if (isTestMode) {
-        try {
-          exchangeRate = await this.exchangeRateService.getExchangeRate(
-            "AMD",
-            this.BASE_CURRENCY
-          );
-          originalAmount = 10;
-          convertedAmount = Math.round(10 * exchangeRate * 100) / 100;
-        } catch (error: any) {
-          this.logger.warn(
-            `Failed to get exchange rate for AMD->USD in test mode: ${error.message}. Using default rate 1.`
-          );
-          exchangeRate = 1;
-          originalAmount = 10;
-          convertedAmount = 10;
-        }
-      } else {
-        exchangeRate = 1;
-      }
+      exchangeRate = 1;
     }
 
     // Build callback URL
     const port = process.env.PORT || "8080";
     const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-    const backUrl = `${backendUrl}/credit/refill/callback`;
+    const callbackUrl = `${backendUrl}/credit/refill/callback`;
 
-    // Build payment request payload (test: amount 10 AMD, OrderID in 30164001–30165000)
-    // Ensure Amount is a number (not string) and OrderID is integer
-    // Note: AmeriaBank automatically creates binding when payment succeeds, no special flag needed
-    const payload: any = {
-      ClientID: this.credentials.clientId,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
-      Amount: Number(paymentAmount), // Ensure it's a number
-      OrderID: Number(orderIdInt), // Ensure it's an integer
-      Description: `Credit refill - ${paymentAmount} ${isTestMode ? "AMD" : normalizedCurrency}`,
-      BackURL: backUrl,
-    };
-
-    // Add CardHolderID if saveCard is true (helps with binding)
-    // CardHolderID is typically the user identifier - using userId as string
-    if (saveCard) {
-      payload.CardHolderID = userId.toString();
-      this.logger.log(
-        `saveCard is true - adding CardHolderID=${payload.CardHolderID} to InitPayment request`
-      );
-    } else {
-      this.logger.log(
-        `saveCard is false - CardHolderID will not be sent (binding will not be created)`
-      );
-    }
-    
-    // Validate payload before sending
-    if (isNaN(payload.Amount) || payload.Amount <= 0) {
-      throw new Error(`Invalid payment amount: ${paymentAmount}`);
-    }
-    if (isNaN(payload.OrderID) || payload.OrderID <= 0) {
-      throw new Error(`Invalid OrderID: ${orderIdInt}`);
-    }
-    if (isTestMode && (payload.OrderID < 30164001 || payload.OrderID > 30165000)) {
-      throw new Error(`OrderID ${payload.OrderID} is outside test range 30164001-30165000`);
-    }
+    // Generate unique order ID (string) for mapping and provider usage
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 1000);
+    const orderId = `${userId}-${timestamp}-${randomSuffix}`;
 
     this.logger.log(
-      `Initiating payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, URL=${this.vposUrl}, BackURL=${backUrl}, saveCard=${saveCard}, CardHolderID=${payload.CardHolderID || "not set"}`
-    );
-    this.logger.log(
-      `InitPayment payload: ${JSON.stringify({ ...payload, Password: "***" })}`
+      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, callbackUrl=${callbackUrl}, saveCard=${saveCard}`
     );
 
-    // Initiate payment
-    let response;
+    const initResult = await this.paymentProvider.initCreditRefill({
+      userId,
+      amount,
+      currency: normalizedCurrency,
+      saveCard,
+      orderId,
+      callbackUrl,
+    });
+
+    // Store conversion metadata temporarily in SystemConfig for callback retrieval
+    const configKey = `credit_refill_${orderId}`;
     try {
-      response = await axios.post(this.vposUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
+      await this.prisma.systemConfig.upsert({
+        where: { key: configKey },
+        update: {
+          value: JSON.stringify({
+            userId,
+            currency: normalizedCurrency,
+            originalAmount,
+            convertedAmount,
+            exchangeRate: exchangeRate ?? 1,
+            baseCurrency: this.BASE_CURRENCY,
+            saveCard,
+          }),
         },
-        timeout: 30000,
+        create: {
+          key: configKey,
+          value: JSON.stringify({
+            userId,
+            currency: normalizedCurrency,
+            originalAmount,
+            convertedAmount,
+            exchangeRate: exchangeRate ?? 1,
+            baseCurrency: this.BASE_CURRENCY,
+            saveCard,
+          }),
+          description: `Temporary storage for credit refill conversion metadata`,
+        },
       });
-    } catch (error: any) {
+    } catch (dbError: any) {
       this.logger.error(
-        `Axios error calling Ameriabank InitPayment: ${error.message}. URL: ${this.vposUrl}. Response: ${JSON.stringify(error.response?.data)}`
-      );
-      throw new Error(
-        `Failed to initiate payment: ${error.message || "Network error"}`
+        `Failed to store payment metadata: ${dbError.message}. Payment will still proceed but callback may have issues.`
       );
     }
-
-    const responseData = response.data;
-    this.logger.log(
-      `Ameriabank InitPayment response: ${JSON.stringify(responseData)}`
-    );
-
-    // Check for errors
-    if (responseData?.ResponseCode && responseData.ResponseCode !== 1) {
-      const errorMessage =
-        responseData.ResponseMessage ||
-        `Payment gateway error: ${responseData.ResponseCode}`;
-      this.logger.error(
-        `Payment initiation failed. ResponseCode: ${responseData.ResponseCode}, ResponseMessage: ${errorMessage}, Full response: ${JSON.stringify(responseData)}`
-      );
-      throw new Error(errorMessage);
-    }
-
-    // Extract PaymentID and construct payment URL
-    if (responseData?.ResponseCode === 1 && responseData?.PaymentID) {
-      const baseDomain = this.vposUrl.includes("servicestest")
-        ? "https://servicestest.ameriabank.am"
-        : "https://services.ameriabank.am";
-      const paymentUrl = `${baseDomain}/VPOS/Payments/Pay?id=${responseData.PaymentID}&lang=en`;
-
-      // Store conversion metadata temporarily in SystemConfig for callback retrieval
-      // We'll use a key format: credit_refill_{orderId}
-      try {
-        await this.prisma.systemConfig.upsert({
-          where: { key: `credit_refill_${orderId}` },
-          update: {
-            value: JSON.stringify({
-              userId,
-              currency: isTestMode ? "AMD" : normalizedCurrency,
-              originalAmount,
-              convertedAmount,
-              exchangeRate: exchangeRate ?? 1,
-              baseCurrency: this.BASE_CURRENCY,
-              saveCard, // Store saveCard flag for callback
-            }),
-          },
-          create: {
-            key: `credit_refill_${orderId}`,
-            value: JSON.stringify({
-              userId,
-              currency: isTestMode ? "AMD" : normalizedCurrency,
-              originalAmount,
-              convertedAmount,
-              exchangeRate: exchangeRate ?? 1,
-              baseCurrency: this.BASE_CURRENCY,
-              saveCard, // Store saveCard flag for callback
-            }),
-            description: `Temporary storage for credit refill conversion metadata`,
-          },
-        });
-      } catch (dbError: any) {
-        this.logger.error(
-          `Failed to store payment metadata: ${dbError.message}. Payment will still proceed but callback may have issues.`
-        );
-        // Don't throw - payment was successful, metadata storage is secondary
-      }
 
     return {
       orderId,
-      paymentUrl,
+      paymentUrl: initResult.paymentUrl,
       paymentHtml: null,
-      paymentData: response.data,
+      paymentData: initResult.raw,
       conversionInfo: {
         currency: normalizedCurrency,
         originalAmount,
@@ -356,17 +180,8 @@ export class CreditService {
         exchangeRate,
         baseCurrency: this.BASE_CURRENCY,
       },
-      saveCard, // Return saveCard flag for client
+      saveCard,
     };
-    }
-
-    // Fallback error
-    this.logger.error(
-      `Payment initiated but PaymentID not found. ResponseCode: ${responseData?.ResponseCode}`
-    );
-    throw new Error(
-      "Payment initiated but payment URL could not be generated. Please contact support."
-    );
   }
 
   async handlePaymentCallback(
@@ -387,41 +202,14 @@ export class CreditService {
       throw new Error("Payment callback missing required parameters");
     }
 
-    // Handle responseCode "01" (duplicate order) - still verify via GetPaymentDetails
-    if (responseCode && responseCode !== "00" && responseCode !== "01") {
-      throw new Error(`Payment failed with code: ${responseCode}`);
-    }
-
-    // Get payment details to finalize transaction
+    // Always verify payment result with provider status
     const paymentDetails = await this.getPaymentDetails(paymentID);
 
-    // Check payment status
-    if (paymentDetails.PaymentState === "payment_approved") {
-      // Payment approved - proceed
-    } else if (
-      paymentDetails.PaymentState === "payment_declined" ||
-      paymentDetails.OrderStatus === "6"
-    ) {
+    if (paymentDetails.PaymentState !== "payment_approved") {
       const errorMsg =
         paymentDetails.Description ||
         paymentDetails.TrxnDescription ||
-        `Payment declined. ResponseCode: ${paymentDetails.ResponseCode}`;
-
-      const isTestMode = this.vposUrl.includes("servicestest");
-      const fullErrorMsg = isTestMode
-        ? `${errorMsg} (Test mode: Use an approved test card for successful payments.)`
-        : errorMsg;
-
-      throw new Error(fullErrorMsg);
-    } else if (
-      paymentDetails.ResponseCode &&
-      paymentDetails.ResponseCode !== "00" &&
-      paymentDetails.ResponseCode !== "0125"
-    ) {
-      const errorMsg =
-        paymentDetails.Description ||
-        paymentDetails.TrxnDescription ||
-        `Payment error. ResponseCode: ${paymentDetails.ResponseCode}`;
+        `Payment failed or is not approved. State: ${paymentDetails.PaymentState}`;
       throw new Error(errorMsg);
     }
 
@@ -551,95 +339,41 @@ export class CreditService {
     let cardNumber = "";
     let expDate = "";
 
-    // First, check if binding info is in the initial payment details response
-    if (paymentDetails.BindingID && paymentDetails.CardHolderID) {
-      bindingId = paymentDetails.BindingID;
-      cardHolderId = paymentDetails.CardHolderID;
-      cardNumber = paymentDetails.CardNumber || "";
-      expDate = paymentDetails.ExpDate || "";
-      this.logger.log(
-        `✅ Binding info found in payment details: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
-      );
-    } else if (saveCard && paymentID) {
-      // If saveCard was true but binding info not in initial response, try fetching again
-      this.logger.log(
-        `saveCard was true (${saveCard}) but binding info not in initial response. PaymentDetails: ${JSON.stringify({
-          BindingID: paymentDetails.BindingID,
-          CardHolderID: paymentDetails.CardHolderID,
-          CardNumber: paymentDetails.CardNumber ? "***" + paymentDetails.CardNumber.slice(-4) : null,
-          ResponseCode: paymentDetails.ResponseCode,
-          PaymentState: paymentDetails.PaymentState,
-        })}`
-      );
-      
-      // Try multiple times with delays - AmeriaBank might need time to process binding
-      let attempts = 0;
-      const maxAttempts = 3;
-      while (attempts < maxAttempts && !bindingId) {
-        attempts++;
-        try {
-          // Wait progressively longer: 2s, 4s, 6s
-          const delay = attempts * 2000;
-          this.logger.log(
-            `Attempt ${attempts}/${maxAttempts}: Waiting ${delay}ms before fetching payment details...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          
-          const paymentDetailsResponse = await this.getPaymentDetails(paymentID);
-          this.logger.log(
-            `GetPaymentDetails attempt ${attempts} response keys: ${Object.keys(paymentDetailsResponse || {}).join(", ")}`
-          );
-          this.logger.log(
-            `GetPaymentDetails attempt ${attempts} BindingID: ${paymentDetailsResponse?.BindingID}, CardHolderID: ${paymentDetailsResponse?.CardHolderID}`
-          );
-          
-          if (paymentDetailsResponse?.BindingID && paymentDetailsResponse?.CardHolderID) {
-            bindingId = paymentDetailsResponse.BindingID;
-            cardHolderId = paymentDetailsResponse.CardHolderID;
-            cardNumber = paymentDetailsResponse.CardNumber || "";
-            expDate = paymentDetailsResponse.ExpDate || "";
-            this.logger.log(
-              `✅ Binding info retrieved from GetPaymentDetails (attempt ${attempts}): BindingID=${bindingId}, CardHolderID=${cardHolderId}`
-            );
-            break;
-          } else {
-            this.logger.warn(
-              `Attempt ${attempts}: GetPaymentDetails did not return binding info. Full response: ${JSON.stringify(paymentDetailsResponse)}`
-            );
-          }
-        } catch (error: any) {
-          this.logger.error(
-            `Attempt ${attempts}: Failed to fetch payment details for binding: ${error.message}`
-          );
-        }
-      }
-      
-      // If still no binding, try GetBindings API as fallback
-      if (!bindingId && saveCard) {
+    // Try to infer binding information from payment details when saveCard was requested
+    if (saveCard) {
+      const rawDetails: any = paymentDetails;
+
+      bindingId =
+        rawDetails.bindingId ||
+        rawDetails.BindingID ||
+        rawDetails.cardToken ||
+        rawDetails.card_token ||
+        null;
+
+      cardHolderId =
+        rawDetails.cardHolderId ||
+        rawDetails.CardHolderID ||
+        null;
+
+      cardNumber =
+        rawDetails.cardNumber ||
+        rawDetails.CardNumber ||
+        "";
+
+      expDate =
+        rawDetails.expiryDate ||
+        rawDetails.expirationDate ||
+        rawDetails.ExpDate ||
+        "";
+
+      if (bindingId && cardHolderId) {
         this.logger.log(
-          `GetPaymentDetails didn't return binding. Trying GetBindings API as fallback...`
+          `✅ Binding info found in payment details: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
         );
-        try {
-          const bindings = await this.getBindings(userId);
-          this.logger.log(`GetBindings returned ${bindings.length} bindings`);
-          if (bindings.length > 0) {
-            // Use the most recent binding (assuming it's the one we just created)
-            const latestBinding = bindings[0];
-            if (latestBinding.bindingId && latestBinding.cardHolderId) {
-              bindingId = latestBinding.bindingId;
-              cardHolderId = latestBinding.cardHolderId;
-              cardNumber = latestBinding.cardNumber || "";
-              expDate = latestBinding.expDate || "";
-              this.logger.log(
-                `✅ Binding info retrieved from GetBindings: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
-              );
-            }
-          }
-        } catch (error: any) {
-          this.logger.error(
-            `Failed to fetch bindings: ${error.message}. Payment still succeeded.`
-          );
-        }
+      } else {
+        this.logger.warn(
+          `saveCard was true but no binding info could be inferred from payment details.`
+        );
       }
     }
 
@@ -758,7 +492,7 @@ export class CreditService {
           const isDefault = existingCount === 0;
 
             // Create new card record with binding info using raw SQL
-            const paymentMethodId = `pm_ameriabank_${userId}_${Date.now()}`;
+            const paymentMethodId = `pm_fastbank_${userId}_${Date.now()}`;
             const finalExpMonth = expMonth || 12;
             const finalExpYear = expYear || new Date().getFullYear() + 1;
             
@@ -835,7 +569,7 @@ export class CreditService {
             const isDefault = existingCount === 0;
 
             // Create minimal card record with binding info using raw SQL
-            const paymentMethodId = `pm_ameriabank_${userId}_${Date.now()}`;
+            const paymentMethodId = `pm_fastbank_${userId}_${Date.now()}`;
             const expYearValue = new Date().getFullYear() + 1;
             
             this.logger.log(
@@ -929,192 +663,27 @@ export class CreditService {
   }
 
   async getPaymentDetails(paymentID: string) {
-    // Validate credentials are not placeholders
-    if (
-      !this.credentials.username ||
-      !this.credentials.password ||
-      this.credentials.username.includes("your-ameriabank") ||
-      this.credentials.password.includes("your-ameriabank")
-    ) {
-      this.logger.error(
-        "Ameriabank credentials are not properly configured. Please check environment variables."
-      );
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
-    }
+    this.logger.log(`Getting payment details for PaymentID: ${paymentID}`);
 
-    // Validate URL is correct (should be test URL for test environment)
-    if (
-      this.vposUrl.includes("servicestest") &&
-      !this.vposStatusUrl.includes("servicestest")
-    ) {
-      this.logger.error(
-        `Mismatch: InitPayment URL is test (${this.vposUrl}) but Status URL is production (${this.vposStatusUrl})`
-      );
-      throw new Error(
-        "Payment gateway URL configuration mismatch. Please check environment variables."
-      );
-    }
+    const result = await this.paymentProvider.getPaymentDetails(paymentID);
+    const raw = result.raw || {};
 
-    this.logger.log(
-      `Getting payment details for PaymentID: ${paymentID}, using URL: ${this.vposStatusUrl}`
-    );
+    const paymentState =
+      result.status === "approved"
+        ? "payment_approved"
+        : result.status === "declined"
+        ? "payment_declined"
+        : result.status === "pending"
+        ? "payment_pending"
+        : "payment_error";
 
-    const payload = {
-      PaymentID: paymentID,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
+    return {
+      ...raw,
+      PaymentState: raw.PaymentState || paymentState,
+      Amount: raw.Amount ?? result.amount,
+      DepositedAmount: raw.DepositedAmount ?? result.amount,
+      Currency: raw.Currency ?? result.currency,
     };
-
-    try {
-      const response = await axios.post(this.vposStatusUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 30000,
-      });
-
-      // Log warning for non-success ResponseCode but still return data
-      // Caller will check PaymentState to determine actual status
-      if (response.data?.ResponseCode && response.data.ResponseCode !== "00") {
-        this.logger.warn(
-          `GetPaymentDetails ResponseCode: ${response.data.ResponseCode}`
-        );
-      }
-
-      return response.data;
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to get payment details for PaymentID ${paymentID}: ${error.message}`
-      );
-      if (error.response?.data) {
-        // Return the error response data so caller can check it
-        return error.response.data;
-      }
-      throw new Error(
-        `Failed to retrieve payment details: ${error.message || "Unknown error"}`
-      );
-    }
-  }
-
-  /**
-   * Initiate subscription payment
-   * Similar to initiatePayment but for subscriptions with different callback URL
-   */
-  async initiateSubscriptionPayment(
-    userId: number,
-    amount: number,
-    planId: number,
-  ) {
-    // Validate credentials and required environment variables
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
-    }
-
-    if (!this.vposUrl || !this.vposStatusUrl) {
-      this.logger.error("AmeriaBank vPOS URLs not configured");
-      throw new Error(
-        "Payment gateway URLs not configured. Please contact support."
-      );
-    }
-
-    // Check if in test mode and adjust amount if needed
-    const isTestMode = this.vposUrl.includes("servicestest");
-    let paymentAmount = amount;
-    if (isTestMode && amount !== 10) {
-      this.logger.warn(
-        `Test mode detected: Overriding amount from ${amount} to 10 AMD (test mode requirement)`
-      );
-      paymentAmount = 10;
-    }
-
-    // Generate unique OrderID (integer, max 15 digits to stay within JavaScript safe integer)
-    // Format: 6 (timestamp) + 5 (userId) + 3 (planId) + 1 (random) = 15 digits (safe)
-    const timestamp = Date.now();
-    const timestampSuffix = timestamp.toString().slice(-6); // Reduced to 6 to ensure safe integer range
-    const randomSuffix = Math.floor(Math.random() * 100);
-    const userIdStr = userId.toString().padStart(5, "0").slice(-5);
-    const planIdStr = planId.toString().padStart(3, "0").slice(-3);
-    const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
-    const orderIdInt = parseInt(
-      `${timestampSuffix}${userIdStr}${planIdStr}${randomStr}`,
-      10
-    );
-    // Format: userId-planId-timestamp-random (for callback parsing)
-    const orderId = `${userId}-${planId}-${timestamp}-${randomSuffix}`;
-
-    if (orderIdInt > Number.MAX_SAFE_INTEGER) {
-      throw new Error("OrderID generation failed: number too large");
-    }
-
-    // Build callback URL for subscriptions
-    const port = process.env.PORT || "8080";
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-    const backUrl = `${backendUrl}/subscriptions/callback`;
-
-    // Build payment request payload
-    const payload = {
-      ClientID: this.credentials.clientId,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
-      Amount: paymentAmount, // Use adjusted amount for test mode
-      OrderID: orderIdInt,
-      Description: `Subscription purchase - ${paymentAmount} ${process.env.CURRENCY || "AMD"}`,
-      BackURL: backUrl,
-    };
-
-    // Initiate payment
-    const response = await axios.post(this.vposUrl, payload, {
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      timeout: 30000,
-    });
-
-    const responseData = response.data;
-
-    // Check for errors
-    if (responseData?.ResponseCode && responseData.ResponseCode !== 1) {
-      const errorMessage =
-        responseData.ResponseMessage ||
-        `Payment gateway error: ${responseData.ResponseCode}`;
-      this.logger.error(`Payment initiation failed: ${errorMessage}`);
-      throw new Error(errorMessage);
-    }
-
-    // Extract PaymentID and construct payment URL
-    if (responseData?.ResponseCode === 1 && responseData?.PaymentID) {
-      const baseDomain = this.vposUrl.includes("servicestest")
-        ? "https://servicestest.ameriabank.am"
-        : "https://services.ameriabank.am";
-      const paymentUrl = `${baseDomain}/VPOS/Payments/Pay?id=${responseData.PaymentID}&lang=en`;
-
-      return {
-        orderId,
-        paymentId: responseData.PaymentID,
-        paymentUrl,
-        paymentHtml: null,
-        paymentData: response.data,
-      };
-    }
-
-    // Fallback error
-    this.logger.error(
-      `Payment initiated but PaymentID not found. ResponseCode: ${responseData?.ResponseCode}`
-    );
-    throw new Error(
-      "Payment initiated but payment URL could not be generated. Please contact support."
-    );
   }
 
   /**
@@ -1128,47 +697,6 @@ export class CreditService {
     bindingId: string, // Stored for reference/logging only, not sent in API request
     cardHolderId: string // Used by API to identify the binding
   ) {
-    // Validate credentials
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
-    }
-
-    if (!this.vposUrl || !this.vposStatusUrl) {
-      this.logger.error("AmeriaBank vPOS URLs not configured");
-      throw new Error(
-        "Payment gateway URLs not configured. Please contact support."
-      );
-    }
-
-    const isTestMode = this.vposUrl.includes("servicestest");
-
-    // Generate OrderID
-    let orderIdInt: number;
-    let orderId: string;
-    if (isTestMode) {
-      orderIdInt =
-        30164001 + Math.floor(Math.random() * (30165000 - 30164001 + 1));
-      orderId = String(orderIdInt);
-    } else {
-      const timestamp = Date.now();
-      const timestampSuffix = timestamp.toString().slice(-10);
-      const randomSuffix = Math.floor(Math.random() * 100);
-      const userIdStr = userId.toString().padStart(5, "0").slice(-5);
-      const randomStr = randomSuffix.toString().padStart(1, "0").slice(-1);
-      orderIdInt = parseInt(
-        `${timestampSuffix}${userIdStr}${randomStr}`,
-        10
-      );
-      orderId = `${userId}-${timestamp}-${randomSuffix}`;
-    }
-
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1177,20 +705,18 @@ export class CreditService {
     const normalizedCurrency = (currency || user?.currency || "USD").toUpperCase();
 
     // Convert amount to base currency (USD) for credits
-    let amountInBaseCurrency = amount;
     let exchangeRate: number | null = null;
     let originalAmount = amount;
     let convertedAmount = amount;
-    const paymentAmount = isTestMode ? 10 : amount;
 
-    if (!isTestMode && normalizedCurrency !== this.BASE_CURRENCY) {
+    if (normalizedCurrency !== this.BASE_CURRENCY) {
       try {
         exchangeRate = await this.exchangeRateService.getExchangeRate(
           normalizedCurrency,
           this.BASE_CURRENCY
         );
-        amountInBaseCurrency = amount * exchangeRate;
-        convertedAmount = Math.round(amountInBaseCurrency * 100) / 100;
+        convertedAmount =
+          Math.round(amount * exchangeRate * 100) / 100;
       } catch (error: any) {
         this.logger.error(
           `Failed to convert currency: ${error.message}. Using amount as-is.`
@@ -1201,404 +727,140 @@ export class CreditService {
       exchangeRate = 1;
     }
 
-    // Build callback URL
+    // Build callback URL (for completeness, though binding payments are usually server-side)
     const port = process.env.PORT || "8080";
     const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
     const backUrl = `${backendUrl}/credit/refill/callback`;
 
-    // Build MakeBindingPayment request payload
-    const makeBindingPaymentUrl = this.vposUrl.replace(
-      "/InitPayment",
-      "/MakeBindingPayment"
+    this.logger.log(
+      `Making binding payment via Fast Bank: userId=${userId}, amount=${amount}, currency=${normalizedCurrency}, bindingToken=${bindingId}, backUrl=${backUrl}`
     );
 
-    // Validate required fields
-    if (!cardHolderId || cardHolderId.trim().length === 0) {
-      this.logger.error(
-        `CardHolderID is missing or empty. BindingID: ${bindingId}, OrderID: ${orderIdInt}`
-      );
-      throw new Error(
-        "Card holder ID is missing. Please save the card again during a payment."
-      );
+    const providerResult = await this.paymentProvider.makeBindingPayment({
+      userId,
+      amount,
+      currency: normalizedCurrency,
+      bindingToken: bindingId,
+    });
+
+    if (!providerResult.success) {
+      throw new Error(providerResult.message || "Payment failed");
     }
 
-    // Ensure CardHolderID is a string (should match what was sent during InitPayment)
-    const cardHolderIdStr = String(cardHolderId).trim();
-    
-    // Build MakeBindingPayment payload
-    // Note: BindingID is NOT a request parameter - API uses CardHolderID to identify the binding
-    const payload = {
-      ClientID: this.credentials.clientId,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
-      CardHolderID: cardHolderIdStr,
-      Amount: Number(paymentAmount),
-      OrderID: Number(orderIdInt),
-      BackURL: backUrl,
-      PaymentType: "1",
-      Description: `Credit refill - ${paymentAmount} ${isTestMode ? "AMD" : normalizedCurrency}`,
-      Currency: isTestMode ? "AMD" : normalizedCurrency,
-    };
+    const creditAmount = exchangeRate
+      ? convertedAmount
+      : providerResult.amountCharged;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { creditBalance: { increment: creditAmount } },
+      select: { creditBalance: true },
+    });
+
+    await this.creditTransactionsService.logTransaction({
+      userId,
+      amount: creditAmount,
+      balanceAfter: updatedUser.creditBalance,
+      type: "refill",
+      status: "completed",
+      description: exchangeRate
+        ? `Credit refill: ${originalAmount} ${normalizedCurrency} = ${creditAmount} ${this.BASE_CURRENCY} (saved card)`
+        : `Credit refill of ${creditAmount} ${this.BASE_CURRENCY} (saved card)`,
+      referenceId: providerResult.providerPaymentId || undefined,
+      referenceType: "payment",
+      currency: normalizedCurrency,
+      baseCurrency: this.BASE_CURRENCY,
+      exchangeRate: exchangeRate || 1,
+      originalAmount,
+      convertedAmount: creditAmount,
+      metadata: {
+        bindingID: bindingId,
+        paymentAmount: amount,
+        providerResponse: providerResult.raw,
+        callbackUrl: backUrl,
+        cardHolderId,
+      },
+    });
 
     this.logger.log(
-      `Making binding payment: OrderID=${orderIdInt}, Amount=${paymentAmount}, CardHolderID=${cardHolderIdStr}`
-    );
-    this.logger.log(`MakeBindingPayment URL: ${makeBindingPaymentUrl}`);
-    this.logger.log(`MakeBindingPayment payload: ${JSON.stringify({ ...payload, Password: '***' })}`);
-
-    try {
-      const response = await axios.post(makeBindingPaymentUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 30000,
-      });
-
-      const responseData = response.data;
-      this.logger.log(
-        `MakeBindingPayment response: ${JSON.stringify(responseData)}`
-      );
-
-      // Check for errors first
-      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
-        const errorMsg =
-          responseData?.TrxnDescription ||
-          responseData?.Description ||
-          responseData?.ResponseMessage ||
-          `Payment failed. ResponseCode: ${responseData.ResponseCode}`;
-        this.logger.error(`Binding payment failed: ${errorMsg}`);
-        throw new Error(errorMsg);
-      }
-
-      // Check payment status - accept multiple success indicators
-      const isSuccess = 
-        (responseData?.ResponseCode === "00" || responseData?.ResponseCode === 1) &&
-        (responseData?.PaymentState === "payment_approved" || 
-         responseData?.PaymentState === "approved" ||
-         responseData?.Status === "approved" ||
-         responseData?.Success === true);
-
-      if (isSuccess) {
-        // Payment approved - add credits
-        const creditAmount = exchangeRate
-          ? convertedAmount
-          : responseData.DepositedAmount || responseData.Amount;
-
-        // Update user credits
-        const updatedUser = await this.prisma.user.update({
-          where: { id: userId },
-          data: { creditBalance: { increment: creditAmount } },
-          select: { creditBalance: true },
-        });
-
-        // Log transaction
-        await this.creditTransactionsService.logTransaction({
-          userId,
-          amount: creditAmount,
-          balanceAfter: updatedUser.creditBalance,
-          type: "refill",
-          status: "completed",
-          description: exchangeRate
-            ? `Credit refill: ${originalAmount} ${normalizedCurrency} = ${creditAmount} ${this.BASE_CURRENCY} (saved card)`
-            : `Credit refill of ${creditAmount} ${this.BASE_CURRENCY} (saved card)`,
-          referenceId: responseData.PaymentID,
-          referenceType: "payment",
-          currency: normalizedCurrency,
-          baseCurrency: this.BASE_CURRENCY,
-          exchangeRate: exchangeRate || 1,
-          originalAmount: originalAmount,
-          convertedAmount: creditAmount,
-          metadata: {
-            orderID: orderId,
-            paymentID: responseData.PaymentID,
-            bindingID: bindingId,
-            paymentState: responseData.PaymentState,
-            paymentAmount,
-          },
-        });
-
-        this.logger.log(
-          `Binding payment successful: user ${userId}, amount ${creditAmount} ${this.BASE_CURRENCY}`
-        );
-
-        return {
-          success: true,
-          message: "Payment successful",
-          orderId,
-          paymentId: responseData.PaymentID,
-          amount: creditAmount,
-          conversionInfo: exchangeRate
-            ? {
-                currency: normalizedCurrency,
-                originalAmount,
-                convertedAmount: creditAmount,
-                exchangeRate,
-                baseCurrency: this.BASE_CURRENCY,
-              }
-            : null,
-        };
-      } else {
-        // Payment failed or pending
-        const responseCode = responseData?.ResponseCode;
-        const paymentState = responseData?.PaymentState || responseData?.Status;
-        
-        // Check if payment is pending (might need to check status later)
-        if (paymentState === "pending" || paymentState === "processing") {
-          this.logger.warn(
-            `Binding payment is pending. OrderID: ${orderId}, PaymentID: ${responseData?.PaymentID}`
-          );
-          // For pending payments, we might need to poll GetPaymentDetails
-          // For now, treat as failure and let user retry
-          throw new Error(
-            "Payment is pending. Please try again in a moment or use 'New Card' option."
-          );
-        }
-        
-        // Payment failed
-        const errorMsg =
-          responseData?.TrxnDescription ||
-          responseData?.Description ||
-          responseData?.ResponseMessage ||
-          responseData?.Message ||
-          `Payment failed. ResponseCode: ${responseCode}, PaymentState: ${paymentState}`;
-        this.logger.error(`Binding payment failed: ${errorMsg}. Full response: ${JSON.stringify(responseData)}`);
-        throw new Error(errorMsg);
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `MakeBindingPayment error: ${error.message}. OrderID: ${orderId}, CardHolderID: ${cardHolderId}`
-      );
-      
-      if (error.response) {
-        this.logger.error(`AmeriaBank API response status: ${error.response.status}`);
-        this.logger.error(`AmeriaBank API response data: ${JSON.stringify(error.response.data)}`);
-      }
-      
-      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-        throw new Error("Unable to connect to payment gateway. Please try again later.");
-      }
-      
-      // Handle 500 errors (common in test environment)
-      if (error.response?.status === 500) {
-        const errorData = error.response.data;
-        const errorMessage = errorData?.Message || errorData?.message || errorData?.TrxnDescription || 
-          errorData?.error || "Payment gateway returned an error.";
-        
-        this.logger.error(
-          `Binding payment failed with 500 error. CardHolderID: ${cardHolderId}, Error: ${errorMessage}`
-        );
-        
-        throw new Error(errorMessage);
-      }
-      
-      throw new Error(`Payment failed: ${error.message || "Unknown error"}`);
-    }
-  }
-
-  /**
-   * Get card bindings from AmeriaBank
-   * Note: This API is not available in test environment (returns 500)
-   */
-  async getBindings(userId: number) {
-    // Validate credentials
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      this.logger.error("AmeriaBank credentials not configured");
-      throw new Error(
-        "Payment gateway credentials not configured. Please contact support."
-      );
-    }
-
-    const getBindingsUrl = this.vposUrl.replace(
-      "/InitPayment",
-      "/GetBindings"
+      `Binding payment successful: user ${userId}, amount ${creditAmount} ${this.BASE_CURRENCY}`
     );
 
-    const payload = {
-      ClientID: this.credentials.clientId,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
-      PaymentType: "1", // Standard payment type
+    return {
+      success: true,
+      message: providerResult.message || "Payment successful",
+      orderId: undefined,
+      paymentId: providerResult.providerPaymentId,
+      amount: creditAmount,
+      conversionInfo: exchangeRate
+        ? {
+            currency: normalizedCurrency,
+            originalAmount,
+            convertedAmount: creditAmount,
+            exchangeRate,
+            baseCurrency: this.BASE_CURRENCY,
+          }
+        : null,
     };
-
-    this.logger.log(`Getting bindings for user ${userId}`);
-
-    try {
-      const response = await axios.post(getBindingsUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 30000,
-      });
-
-      const responseData = response.data;
-      this.logger.log(
-        `GetBindings response: ${JSON.stringify(responseData)}`
-      );
-
-      if (responseData?.ResponseCode === "00" && responseData?.CardBindingFileds) {
-        return responseData.CardBindingFileds.map((binding: any) => ({
-          bindingId: binding.BindingID,
-          cardHolderId: binding.CardHolderID,
-          cardNumber: binding.CardNumber || "****",
-          expDate: binding.ExpDate,
-          maskedCardNumber: binding.CardNumber
-            ? `****${binding.CardNumber.slice(-4)}`
-            : "****",
-        }));
-      } else {
-        this.logger.warn(
-          `GetBindings returned non-success code: ${responseData?.ResponseCode}`
-        );
-        return [];
-      }
-    } catch (error: any) {
-      this.logger.error(`GetBindings error: ${error.message}`);
-      throw new Error(
-        `Failed to retrieve bindings: ${error.message || "Unknown error"}`
-      );
-    }
   }
 
   /**
-   * Cancel a payment using Ameriabank VPOS CancelPayment API
+   * Cancel a payment using Fast Bank
    */
   async cancelPayment(paymentID: string, orderID: string) {
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      throw new Error("Payment gateway credentials not configured");
+    const result = await this.paymentProvider.cancelPayment(paymentID, orderID);
+
+    if (!result.success) {
+      throw new Error(result.message || "Payment cancel failed");
     }
 
-    const cancelPaymentUrl = this.vposUrl.replace("/InitPayment", "/CancelPayment");
-    const payload = {
-      PaymentID: paymentID,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
+    return {
+      success: true,
+      message: result.message || "Payment canceled successfully",
+      response: result.raw,
     };
-
-    try {
-      const response = await axios.post(cancelPaymentUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 30000,
-      });
-
-      const responseData = response.data;
-
-      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
-        const errorMsg =
-          responseData?.TrxnDescription ||
-          responseData?.Description ||
-          responseData?.ResponseMessage ||
-          `Cancel failed. ResponseCode: ${responseData.ResponseCode}`;
-        throw new Error(errorMsg);
-      }
-
-      return {
-        success: true,
-        message: "Payment canceled successfully",
-        response: responseData,
-      };
-    } catch (error: any) {
-      if (error.response) {
-        const errorData = error.response.data;
-        const errorMsg =
-          errorData?.Message ||
-          errorData?.TrxnDescription ||
-          errorData?.Description ||
-          errorData?.ResponseMessage ||
-          error.message;
-        throw new Error(errorMsg);
-      }
-      throw error;
-    }
   }
 
   /**
-   * Refund a payment using Ameriabank VPOS RefundPayment API
+   * Refund a payment using Fast Bank
    * Supports both full refund (omit amount) and partial refund (provide amount)
    */
   async refundPayment(paymentID: string, orderID: string, amount?: number) {
-    if (
-      !this.credentials.clientId ||
-      !this.credentials.username ||
-      !this.credentials.password
-    ) {
-      throw new Error("Payment gateway credentials not configured");
-    }
+    let refundAmount: number | undefined = amount;
 
-    const refundPaymentUrl = this.vposUrl.replace("/InitPayment", "/RefundPayment");
-    const payload: any = {
-      PaymentID: paymentID,
-      OrderID: orderID,
-      Username: this.credentials.username,
-      Password: this.credentials.password,
-    };
-
-    let refundAmount: number;
-    if (amount !== undefined && amount !== null) {
-      if (amount <= 0) {
+    if (refundAmount !== undefined && refundAmount !== null) {
+      if (refundAmount <= 0) {
         throw new Error("Refund amount must be greater than 0");
       }
-      refundAmount = Number(amount);
     } else {
       const paymentDetails = await this.getPaymentDetails(paymentID);
-      refundAmount = paymentDetails.DepositedAmount || paymentDetails.Amount;
+      refundAmount =
+        paymentDetails.DepositedAmount || paymentDetails.Amount;
       if (!refundAmount || refundAmount <= 0) {
-        throw new Error("Could not determine original payment amount for full refund");
-      }
-    }
-    
-    payload.Amount = Number(refundAmount);
-
-    try {
-      const response = await axios.post(refundPaymentUrl, payload, {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        timeout: 30000,
-      });
-
-      const responseData = response.data;
-
-      if (responseData?.ResponseCode && responseData.ResponseCode !== "00" && responseData.ResponseCode !== 1) {
-        const errorMsg =
-          responseData?.TrxnDescription ||
-          responseData?.Description ||
-          responseData?.ResponseMessage ||
-          `Refund failed. ResponseCode: ${responseData.ResponseCode}`;
-        throw new Error(errorMsg);
-      }
-
-      return {
-        success: true,
-        message: amount !== undefined ? `Payment refunded successfully (partial: ${refundAmount})` : `Payment refunded successfully (full: ${refundAmount})`,
-        response: responseData,
-      };
-    } catch (error: any) {
-      if (error.response) {
-        const errorData = error.response.data;
         throw new Error(
-          errorData?.Message ||
-          errorData?.TrxnDescription ||
-          errorData?.Description ||
-          errorData?.ResponseMessage ||
-          error.message
+          "Could not determine original payment amount for full refund"
         );
       }
-      throw error;
     }
+
+    const result = await this.paymentProvider.refundPayment(
+      paymentID,
+      orderID,
+      refundAmount
+    );
+
+    if (!result.success) {
+      throw new Error(result.message || "Payment refund failed");
+    }
+
+    return {
+      success: true,
+      message:
+        refundAmount !== undefined
+          ? `Payment refunded successfully (amount: ${refundAmount})`
+          : "Payment refunded successfully",
+      response: result.raw,
+    };
   }
 
   // Legacy webhook handler (kept for backward compatibility)

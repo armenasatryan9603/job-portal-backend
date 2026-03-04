@@ -1,4 +1,4 @@
--- AlterTable: Add bindingId and cardHolderId fields to Card table for AmeriaBank card tokenization
+-- AlterTable: Add bindingId and cardHolderId fields to Card table for card tokenization
 ALTER TABLE "Card" 
 ADD COLUMN IF NOT EXISTS "binding_id" TEXT,
 ADD COLUMN IF NOT EXISTS "card_holder_id" TEXT;

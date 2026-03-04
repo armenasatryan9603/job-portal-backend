@@ -1,28 +1,37 @@
 # Vercel Environment Variables Setup
 
-## Required Environment Variables for Ameriabank vPOS
+## Required Environment Variables for Fast Bank
 
 Make sure these are set in your Vercel project settings:
 
 ### Payment Gateway Configuration
 
-1. **AMERIABANK_CLIENT_ID**
-   - Value: `c771a553-1b4e-450e-bda2-032ac9c9be77`
+1. **FASTBANK_API_KEY**
+   - Value: API key issued by Fast Bank for this project.
 
-2. **AMERIABANK_USERNAME**
-   - Value: `3d19541048`
+2. **FASTBANK_API_SECRET**
+   - Value: Secret/token used to authenticate/sign Fast Bank API requests.
 
-3. **AMERIABANK_PASSWORD**
-   - Value: `lazY2k`
+3. **FASTBANK_MERCHANT_ID**
+   - Value: Merchant identifier configured on the Fast Bank side.
 
-4. **AMERIABANK_VPOS_URL** (InitPayment endpoint)
-   - Value: `https://servicestest.ameriabank.am/VPOS/api/VPOS/InitPayment`
+4. **FASTBANK_PAYMENT_INIT_URL** (payment/checkout initiation endpoint)
+   - Example: `https://sandbox.fastbank.example.com/api/payments/init`
 
-5. **AMERIABANK_VPOS_STATUS_URL** (GetPaymentDetails endpoint)
-   - Value: `https://servicestest.ameriabank.am/VPOS/api/VPOS/GetPaymentDetails`
+5. **FASTBANK_PAYMENT_STATUS_URL** (payment status endpoint)
+   - Example: `https://sandbox.fastbank.example.com/api/payments/status`
 
-6. **BACKEND_URL**
-   - Value: `https://job-portal-backend-psi-ruddy.vercel.app/`
+6. **FASTBANK_BINDING_PAYMENT_URL** (saved-card / binding payment endpoint)
+   - Example: `https://sandbox.fastbank.example.com/api/payments/binding`
+
+7. **FASTBANK_CANCEL_URL** (payment cancel/void endpoint)
+   - Example: `https://sandbox.fastbank.example.com/api/payments/cancel`
+
+8. **FASTBANK_REFUND_URL** (payment refund endpoint)
+   - Example: `https://sandbox.fastbank.example.com/api/payments/refund`
+
+9. **BACKEND_URL**
+   - Value: Public HTTPS URL of your backend (e.g. the Vercel deployment URL). This is used as the callback/redirect base for Fast Bank.
 
 ## How to Set Environment Variables in Vercel
 
@@ -36,9 +45,9 @@ Make sure these are set in your Vercel project settings:
 ## Verify Environment Variables
 
 After setting the variables and redeploying, check the logs. You should see:
-- ✅ No errors about "credentials not configured"
-- ✅ URLs should contain `servicestest` (not `services`)
-- ✅ Username should be `3d19541048` (not placeholder values)
+- ✅ No errors about payment gateway credentials not being configured
+- ✅ Fast Bank endpoints are reachable (no connection/timeout errors)
+- ✅ Status / cancel / refund requests return expected responses
 
 ## Common Issues
 
@@ -46,7 +55,7 @@ After setting the variables and redeploying, check the logs. You should see:
 **Solution:** Make sure you redeployed after setting the environment variables. Vercel doesn't automatically apply new env vars to running deployments.
 
 ### Issue: Wrong URL being used (production instead of test)
-**Solution:** Check that `AMERIABANK_VPOS_STATUS_URL` is set to the test URL (`servicestest.ameriabank.am`), not production (`services.ameriabank.am`).
+**Solution:** Point all `FASTBANK_*_URL` values to the sandbox environment while testing, and to production endpoints only when you are ready to go live.
 
-### Issue: 500 errors from Ameriabank API
-**Solution:** Verify all credentials are correct and match exactly what was provided by Ameriabank (no extra spaces, correct case).
+### Issue: 4xx/5xx errors from Fast Bank API
+**Solution:** Verify all credentials and endpoint URLs are correct and match exactly what was provided by Fast Bank (no extra spaces, correct case). Check Fast Bank logs/portal if available.

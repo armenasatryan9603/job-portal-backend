@@ -69,7 +69,7 @@ export class CreditController {
     );
   }
 
-  // BackURL callback endpoint (called by AmeriaBank vPOS after payment)
+  // BackURL callback endpoint (called by the payment gateway after payment)
   // Handles both GET (redirect) and POST requests
   @Get('refill/callback')
   async paymentCallback(@Query() query: any, @Res() res: Response) {

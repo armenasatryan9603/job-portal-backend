@@ -1,11 +1,11 @@
 # Migration: Add Card Binding Fields
 
-This migration adds support for AmeriaBank card tokenization by adding `bindingId` and `cardHolderId` fields to the `card` table.
+This migration adds support for storing card binding/token information by adding `bindingId` and `cardHolderId` fields to the `card` table.
 
 ## Changes
 
-- Adds `binding_id` column (TEXT, nullable, unique) to store AmeriaBank BindingID
-- Adds `card_holder_id` column (TEXT, nullable) to store AmeriaBank CardHolderID
+- Adds `binding_id` column (TEXT, nullable, unique) to store the binding/token ID
+- Adds `card_holder_id` column (TEXT, nullable) to store the provider-specific card holder identifier
 - Creates unique index on `binding_id` for fast lookups
 - Creates regular index on `binding_id` for querying cards with bindings
 
@@ -25,7 +25,7 @@ This will apply all pending migrations to your NeonDB database.
 If you need to apply this migration manually, you can run the SQL directly in your NeonDB console:
 
 ```sql
--- AlterTable: Add bindingId and cardHolderId fields to card table for AmeriaBank card tokenization
+-- AlterTable: Add bindingId and cardHolderId fields to card table for card tokenization
 ALTER TABLE "card" 
 ADD COLUMN IF NOT EXISTS "binding_id" TEXT,
 ADD COLUMN IF NOT EXISTS "card_holder_id" TEXT;
