@@ -29,6 +29,7 @@ import { ReviewsModule } from "./reviews/reviews.module";
 import { SkillsModule } from "./skills/skills.module";
 import { StatsModule } from "./stats/stats.module";
 import { StorageModule } from "./storage/storage.module";
+import { TopDataModule } from "./top-data/top-data.module";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
 import { TranslationsModule } from "./translations/translations.module";
 import { UsersModule } from "./users/users.module";
@@ -65,6 +66,7 @@ import { UsersModule } from "./users/users.module";
     MarketsModule,
     MarketReviewsModule,
     MarketRolesModule,
+    TopDataModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
