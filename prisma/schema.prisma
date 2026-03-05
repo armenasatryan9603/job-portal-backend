@@ -911,7 +911,7 @@ model TopData {
   name        String
   image       String?
   country     String?
-  action      TopDataAction @default(open)
+  action      TopDataAction? @default(open)
   url         String?
   sortOrder   Int           @default(0)
   createdAt   DateTime      @default(now())
