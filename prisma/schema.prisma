@@ -899,15 +899,25 @@ model MarketSubscription {
   @@index([marketId, status])
 }
 
+enum TopDataAction {
+  open
+  external
+  apply
+  book
+}
+
 model TopData {
-  id          Int      @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   name        String
   image       String?
-  activeTimes String?
+  country     String?
+  action      TopDataAction @default(open)
   url         String?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([sortOrder])
+  @@index([country])
+  @@index([action])
 }
