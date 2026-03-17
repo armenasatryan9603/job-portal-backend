@@ -8,7 +8,8 @@ export interface InitCreditRefillParams {
   currency: string;
   saveCard: boolean;
   orderId: string;
-  callbackUrl: string;
+  returnUrl: string;
+  failUrl: string;
 }
 
 export interface InitCreditRefillResult {
@@ -81,6 +82,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
 
   private readonly initUrl: string;
   private readonly statusUrl: string;
+  private readonly bindingInitUrl: string;
   private readonly bindingPaymentUrl: string;
   private readonly cancelUrl: string;
   private readonly refundUrl: string;
@@ -92,6 +94,8 @@ export class FastBankPaymentProvider implements PaymentProvider {
   constructor() {
     this.initUrl = process.env.FASTBANK_PAYMENT_INIT_URL || "";
     this.statusUrl = process.env.FASTBANK_PAYMENT_STATUS_URL || "";
+    this.bindingInitUrl =
+      process.env.FASTBANK_BINDING_INIT_URL || this.initUrl;
     this.bindingPaymentUrl =
       process.env.FASTBANK_BINDING_PAYMENT_URL || this.initUrl;
     this.cancelUrl = process.env.FASTBANK_CANCEL_URL || "";
@@ -160,28 +164,26 @@ export class FastBankPaymentProvider implements PaymentProvider {
       );
     }
 
-    const body: Record<string, any> = {
+    const body: Record<string, string | number> = {
       amount: params.amount,
-      currency: params.currency,
-      orderId: params.orderId,
-      callbackUrl: params.callbackUrl,
-      customerId: params.userId.toString(),
-      saveCard: params.saveCard,
+      currency: '051',
+      orderNumber: params.orderId + Math.random().toString(36).substring(2, 15),
+      returnUrl: params.returnUrl,
+      failUrl: params.failUrl,
+      userName: this.apiKey || '',
+      password: this.apiSecret || '',
     };
 
     const response = await this.http.post(this.initUrl, body, {
-      headers: this.getAuthHeaders(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
     });
+    console.log('333333333333333333333', body, this.initUrl, response.data);
 
     const data = response.data || {};
 
-    const paymentUrl =
-      data.redirectUrl ||
-      data.paymentUrl ||
-      data.url ||
-      data.checkoutUrl;
-
-    if (!paymentUrl || typeof paymentUrl !== "string") {
+    if (!data.formUrl || typeof data.formUrl !== "string") {
       throw new Error(
         "Fast Bank init response did not contain a redirect URL (expected one of redirectUrl, paymentUrl, url, checkoutUrl)."
       );
@@ -192,7 +194,86 @@ export class FastBankPaymentProvider implements PaymentProvider {
       providerOrderId: data.orderId || data.OrderId || data.id,
       providerPaymentId:
         data.paymentId || data.PaymentId || data.paymentID || data.PaymentID,
-      paymentUrl,
+      paymentUrl: data.formUrl,
+      raw: data,
+    };
+  }
+
+  /**
+   * Create a FastBank binding using full card details (PAN, expiry, CVV).
+   * NOTE: This requires the backend to handle PCI-sensitive data and must be
+   * aligned with the actual FastBank / EPG binding API specification.
+   */
+  async createCardBindingFromDetails(params: {
+    userId: number;
+    cardNumber: string;
+    expMonth: number;
+    expYear: number;
+    cvv: string;
+  }): Promise<{
+    bindingId: string;
+    cardHolderId?: string;
+    maskedPan?: string;
+    expDate?: string;
+    raw: any;
+  }> {
+    if (!this.bindingInitUrl) {
+      throw new Error(
+        "FASTBANK_BINDING_INIT_URL is not configured. Please set it in the environment."
+      );
+    }
+
+    const body: Record<string, any> = {
+      // These field names are placeholders; update them to match
+      // the FastBank binding API you have from the acquirer.
+      pan: params.cardNumber,
+      expMonth: params.expMonth,
+      expYear: params.expYear,
+      cvv: params.cvv,
+      customerId: params.userId.toString(),
+      mode: "bind_only",
+    };
+
+    const response = await this.http.post(this.bindingInitUrl, body, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+    });
+
+    const data = response.data || {};
+
+    const bindingId =
+      data.bindingId ||
+      data.BindingID ||
+      data.cardToken ||
+      data.card_token;
+
+    if (!bindingId || typeof bindingId !== "string") {
+      throw new Error(
+        "Fast Bank binding response did not contain a binding identifier (expected one of bindingId, BindingID, cardToken, card_token)."
+      );
+    }
+
+    const cardHolderId =
+      data.cardHolderId ||
+      data.CardHolderID ||
+      data.card_holder_id;
+
+    const maskedPan =
+      data.cardNumber ||
+      data.CardNumber ||
+      data.maskedPan;
+
+    const expDate =
+      data.expiryDate ||
+      data.expirationDate ||
+      data.ExpDate;
+
+    return {
+      bindingId,
+      cardHolderId,
+      maskedPan,
+      expDate,
       raw: data,
     };
   }
@@ -200,11 +281,14 @@ export class FastBankPaymentProvider implements PaymentProvider {
   async makeBindingPayment(
     params: BindingPaymentParams
   ): Promise<BindingPaymentResult> {
+    console.log('3333333333333333333333333333333333333333333333333333333333333333333333333');
     if (!this.bindingPaymentUrl) {
       throw new Error(
         "FASTBANK_BINDING_PAYMENT_URL is not configured. Please set it in the environment."
       );
     }
+
+    
 
     const body: Record<string, any> = {
       amount: params.amount,
@@ -252,6 +336,9 @@ export class FastBankPaymentProvider implements PaymentProvider {
         "FASTBANK_PAYMENT_STATUS_URL is not configured. Please set it in the environment."
       );
     }
+
+    console.log('444444444444444444444444444444444444444444444444444444444444444');
+    
 
     const body: Record<string, any> = {
       paymentId,

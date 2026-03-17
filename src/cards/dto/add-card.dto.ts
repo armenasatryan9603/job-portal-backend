@@ -30,4 +30,17 @@ export class AddCardDto {
   @IsString()
   @Length(0, 200)
   holderName?: string;
+
+  // Optional full PAN and CVV for binding with FastBank.
+  // If provided, the backend can initiate a binding operation before
+  // creating the card record.
+  @IsOptional()
+  @IsString()
+  @Length(12, 19)
+  cardNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(3, 4)
+  cvv?: string;
 }

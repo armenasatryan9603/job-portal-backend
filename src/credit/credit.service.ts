@@ -1,12 +1,13 @@
+import {
+  FastBankPaymentProvider,
+  PaymentProvider,
+} from "../payments/payment.provider";
 import { Injectable, Logger } from "@nestjs/common";
 
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
-import {
-  FastBankPaymentProvider,
-  PaymentProvider,
-} from "../payments/payment.provider";
+import { log } from "console";
 
 @Injectable()
 export class CreditService {
@@ -109,18 +110,19 @@ export class CreditService {
       exchangeRate = 1;
     }
 
-    // Build callback URL
-    const port = process.env.PORT || "8080";
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-    const callbackUrl = `${backendUrl}/credit/refill/callback`;
-
-    // Generate unique order ID (string) for mapping and provider usage
+    // Generate unique order ID
     const timestamp = Date.now();
     const randomSuffix = Math.floor(Math.random() * 1000);
     const orderId = `${userId}-${timestamp}-${randomSuffix}`;
 
+    // Build separate return/fail callback URLs
+    const port = process.env.PORT || "8080";
+    const backendUrl = (process.env.BACKEND_URL || `http://localhost:${port}`).replace(/\/$/, '');
+    const returnUrl = `${backendUrl}/credit/refill/callback/success?internalOrderId=${encodeURIComponent(orderId)}`;
+    const failUrl = `${backendUrl}/credit/refill/callback/failure?internalOrderId=${encodeURIComponent(orderId)}`;
+
     this.logger.log(
-      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, callbackUrl=${callbackUrl}, saveCard=${saveCard}`
+      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}, saveCard=${saveCard}`
     );
 
     const initResult = await this.paymentProvider.initCreditRefill({
@@ -129,8 +131,12 @@ export class CreditService {
       currency: normalizedCurrency,
       saveCard,
       orderId,
-      callbackUrl,
+      returnUrl,
+      failUrl,
     });
+
+    console.log('initResultinitResultinitResultinitResultinitResult', initResult);
+    
 
     // Store conversion metadata temporarily in SystemConfig for callback retrieval
     const configKey = `credit_refill_${orderId}`;
@@ -730,7 +736,7 @@ export class CreditService {
     // Build callback URL (for completeness, though binding payments are usually server-side)
     const port = process.env.PORT || "8080";
     const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-    const backUrl = `${backendUrl}/credit/refill/callback`;
+    const backUrl = `${backendUrl}credit/refill/callback`;
 
     this.logger.log(
       `Making binding payment via Fast Bank: userId=${userId}, amount=${amount}, currency=${normalizedCurrency}, bindingToken=${bindingId}, backUrl=${backUrl}`

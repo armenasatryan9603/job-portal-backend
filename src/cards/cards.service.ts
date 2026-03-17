@@ -1,11 +1,16 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { AddCardDto } from './dto/add-card.dto';
 import { PrismaService } from '../prisma.service';
+import { FastBankPaymentProvider } from '../payments/payment.provider';
 
 @Injectable()
 export class CardsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly paymentProvider: FastBankPaymentProvider;
+
+  constructor(private prisma: PrismaService) {
+    this.paymentProvider = new FastBankPaymentProvider();
+  }
 
   async addCard(userId: number, dto: AddCardDto) {
     const paymentMethodId = `pm_local_${userId}_${Date.now()}`;
@@ -14,18 +19,80 @@ export class CardsService {
     });
     const isDefault = existingCount === 0;
 
+    // Default values from DTO
+    let last4 = dto.last4;
+    let expMonth = dto.expMonth;
+    let expYear = dto.expYear;
+    let bindingId: string | undefined;
+    let cardHolderId: string | undefined;
+
+    // If full card details are provided, attempt to create a binding with FastBank first.
+    if (dto.cardNumber && dto.cvv) {
+      const cleanNumber = dto.cardNumber.replace(/\s/g, '');
+      if (cleanNumber.length >= 4) {
+        last4 = cleanNumber.slice(-4);
+      }
+
+      try {
+        const bindingResult =
+          await this.paymentProvider.createCardBindingFromDetails({
+            userId,
+            cardNumber: cleanNumber,
+            expMonth: dto.expMonth,
+            expYear: dto.expYear,
+            cvv: dto.cvv,
+          });
+
+        bindingId = bindingResult.bindingId;
+        cardHolderId = bindingResult.cardHolderId;
+
+        if (bindingResult.maskedPan && bindingResult.maskedPan.length >= 4) {
+          last4 = bindingResult.maskedPan.slice(-4);
+        }
+
+        if (bindingResult.expDate) {
+          const clean = bindingResult.expDate.replace(/\//g, '');
+          if (clean.length >= 4) {
+            const month = parseInt(clean.slice(0, 2), 10);
+            const yearPart = parseInt(clean.slice(2, 4), 10);
+            const currentYear = new Date().getFullYear();
+            const currentCentury = Math.floor(currentYear / 100) * 100;
+            let fullYear = yearPart + currentCentury;
+            if (fullYear < currentYear) fullYear += 100;
+            if (!Number.isNaN(month)) {
+              expMonth = month;
+            }
+            if (!Number.isNaN(fullYear)) {
+              expYear = fullYear;
+            }
+          }
+        }
+      } catch (error: any) {
+        // If binding fails when full card details are supplied, do NOT
+        // create the card in DB. Surface an error to the caller instead.
+        console.error(
+          '[CardsService] Failed to create FastBank binding:',
+          error?.message || error,
+        );
+        throw new Error(
+          'Failed to bind card with FastBank. Card was not saved.',
+        );
+      }
+    }
+
     const card = await this.prisma.card.create({
       data: {
         userId,
         paymentMethodId,
         brand: dto.brand,
-        last4: dto.last4,
-        expMonth: dto.expMonth,
-        expYear: dto.expYear,
+        last4,
+        expMonth,
+        expYear,
         holderName: dto.holderName ?? null,
         isDefault,
         isActive: true,
-        // bindingId and cardHolderId will be null by default (nullable fields)
+        bindingId,
+        cardHolderId,
       },
     });
 
