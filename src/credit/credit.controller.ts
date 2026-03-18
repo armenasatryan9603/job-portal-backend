@@ -27,10 +27,6 @@ export class CreditController {
     private prisma: PrismaService,
   ) {}
 
-  private get appScheme(): string {
-    return process.env.APP_DEEPLINK_SCHEME || 'jobportalmobile';
-  }
-
   // ── Initiate payment ────────────────────────────────────────────────────────
 
   @UseGuards(JwtAuthGuard)
@@ -54,35 +50,39 @@ export class CreditController {
     );
   }
 
-  // ── Callbacks (called by FastBank after payment) ─────────────────────────────
-  // FastBank redirects the user's browser to these URLs.
-  // We process the result and immediately deep-link back into the app.
+  // ── Payment callbacks ────────────────────────────────────────────────────────
+  // FastBank redirects the user's browser here after payment.
+  // We process the result then open the app via custom URL scheme.
 
   @Get('refill/callback/success')
   async paymentCallbackSuccess(@Query() query: any, @Res() res: Response) {
-    // internalOrderId is our own ID embedded in the returnUrl.
-    // orderId / orderID is FastBank's mdOrder UUID appended automatically.
     const internalOrderId = query.internalOrderId;
-    const bankOrderId = Array.isArray(query.orderId) ? query.orderId[query.orderId.length - 1] : (query.orderId || query.orderID || query.order_id);
+    const bankOrderId = Array.isArray(query.orderId)
+      ? query.orderId[query.orderId.length - 1]
+      : (query.orderId || query.orderID || query.order_id);
     const paymentID = query.paymentID || query.paymentId || query.payment_id || query.PaymentID;
     const responseCode = query.responseCode || query.response_code || query.ResponseCode || query.resposneCode;
 
     this.logger.log(`[callback/success] internalOrderId=${internalOrderId} bankOrderId=${bankOrderId} paymentID=${paymentID}`);
 
     try {
-      await this.creditService.handlePaymentCallback(internalOrderId || bankOrderId, responseCode, paymentID, query.opaque);
-      return res.redirect(302, `${this.appScheme}://refill?status=success`);
+      await this.creditService.handlePaymentCallback(
+        internalOrderId || bankOrderId,
+        responseCode,
+        paymentID,
+        query.opaque,
+      );
+      return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('success'));
     } catch (error: any) {
       this.logger.error(`[callback/success] processing failed: ${error.message}`);
-      return res.redirect(302, `${this.appScheme}://refill?status=error`);
+      return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('error'));
     }
   }
 
   @Get('refill/callback/failure')
   async paymentCallbackFailure(@Query() query: any, @Res() res: Response) {
-    const internalOrderId = query.internalOrderId;
-    this.logger.log(`[callback/failure] internalOrderId=${internalOrderId}`);
-    return res.redirect(302, `${this.appScheme}://refill?status=error`);
+    this.logger.log(`[callback/failure] internalOrderId=${query.internalOrderId}`);
+    return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('error'));
   }
 
   // ── Transactions ─────────────────────────────────────────────────────────────
@@ -126,4 +126,15 @@ export class CreditController {
     }
     return this.creditService.refundPayment(body.paymentID, body.orderID, body.amount);
   }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function deepLinkPage(status: 'success' | 'error'): string {
+  const scheme = process.env.APP_DEEPLINK_SCHEME || 'jobportalmobile';
+  const url = `${scheme}://refill?status=${status}`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta http-equiv="refresh" content="0; url=${url}">
+<script>window.location='${url}';</script>
+</head><body></body></html>`;
 }
