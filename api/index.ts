@@ -1,4 +1,4 @@
-import * as express from "express";
+import express from "express";
 import { ExpressAdapter } from "@nestjs/platform-express";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
