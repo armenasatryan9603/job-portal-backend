@@ -132,7 +132,7 @@ export class CreditController {
 
 function deepLinkPage(status: 'success' | 'error'): string {
   const scheme = process.env.APP_DEEPLINK_SCHEME || 'jobportalmobile';
-  const url = `${scheme}://refill?status=${status}`;
+  const url = `${scheme}://profile/payment/payments?refillStatus=${status}`;
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <meta http-equiv="refresh" content="0; url=${url}">
 <script>window.location='${url}';</script>
