@@ -131,27 +131,25 @@ export class FastBankPaymentProvider implements PaymentProvider {
   }
 
   private mapStatus(raw: any): PaymentStatus {
-    const status =
-      raw?.status ||
-      raw?.Status ||
-      raw?.paymentStatus ||
-      raw?.PaymentStatus ||
-      raw?.state ||
-      raw?.State;
+    // FastBank getOrderStatus.do returns:
+    //   errorCode: 0 = no error
+    //   orderStatus: 0=registered, 1=pre-auth, 2=approved, 3=cancelled, 4=refunded, 6=declined
+    //   PaymentState: string e.g. "payment_approved"
+    if (raw?.errorCode === 0 && raw?.orderStatus === 2) return "approved";
+    if (raw?.orderStatus === 3 || raw?.orderStatus === 6) return "declined";
+    if (raw?.orderStatus === 0 || raw?.orderStatus === 1 || raw?.orderStatus === 5) return "pending";
 
-    const normalized = typeof status === "string" ? status.toLowerCase() : "";
+    // Fallback: check PaymentState string
+    const paymentState: string = (raw?.PaymentState || "").toLowerCase();
+    if (paymentState === "payment_approved") return "approved";
+    if (paymentState === "payment_declined" || paymentState === "payment_error") return "declined";
+    if (paymentState === "payment_registered" || paymentState === "payment_processing") return "pending";
 
-    if (normalized === "approved" || normalized === "success" || normalized === "succeeded") {
-      return "approved";
-    }
-
-    if (normalized === "declined" || normalized === "failed" || normalized === "error") {
-      return "declined";
-    }
-
-    if (normalized === "pending" || normalized === "processing") {
-      return "pending";
-    }
+    // Fallback: generic status strings
+    const status = (raw?.status || raw?.Status || raw?.paymentStatus || "").toLowerCase();
+    if (status === "approved" || status === "success" || status === "succeeded") return "approved";
+    if (status === "declined" || status === "failed" || status === "error") return "declined";
+    if (status === "pending" || status === "processing") return "pending";
 
     return "error";
   }
@@ -334,10 +332,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
       throw new Error(
         "FASTBANK_PAYMENT_STATUS_URL is not configured. Please set it in the environment."
       );
-    }
-
-    console.log('444444444444444444444444444444444444444444444444444444444444444');
-    
+    }    
 
     // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
     const body: Record<string, any> = {

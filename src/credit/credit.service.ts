@@ -207,13 +207,16 @@ export class CreditService {
     }
 
     // Verify payment status with FastBank using their mdOrder UUID
-    const paymentDetails = await this.getPaymentDetails(bankOrderId);
+    const paymentResult = await this.getPaymentDetails(bankOrderId);
+    const paymentDetails = paymentResult.raw ?? {};  // raw FastBank response fields
 
-    if (paymentDetails.PaymentState !== "payment_approved") {
+    this.logger.log(`[handlePaymentCallback] status=${paymentResult.status} raw=${JSON.stringify(paymentDetails)}`);
+
+    if (paymentResult.status !== "approved") {
       const errorMsg =
         paymentDetails.Description ||
         paymentDetails.TrxnDescription ||
-        `Payment failed or is not approved. State: ${paymentDetails.PaymentState}`;
+        `Payment failed or is not approved. State: ${paymentDetails.PaymentState} (mapped: ${paymentResult.status})`;
       throw new Error(errorMsg);
     }
 
@@ -315,6 +318,7 @@ export class CreditService {
         bankOrderId,
         responseCode,
         paymentState: paymentDetails.PaymentState,
+        mappedStatus: paymentResult.status,
         paymentAmount,
         conversionMetadata,
       },
@@ -332,7 +336,7 @@ export class CreditService {
     this.logger.log(
       `PaymentDetails BindingID: ${paymentDetails.BindingID}, CardHolderID: ${paymentDetails.CardHolderID}`
     );
-    
+
     let bindingId: string | null = null;
     let cardHolderId: string | null = null;
     let cardNumber = "";
@@ -340,29 +344,27 @@ export class CreditService {
 
     // Try to infer binding information from payment details when saveCard was requested
     if (saveCard) {
-      const rawDetails: any = paymentDetails;
-
       bindingId =
-        rawDetails.bindingId ||
-        rawDetails.BindingID ||
-        rawDetails.cardToken ||
-        rawDetails.card_token ||
+        paymentDetails.bindingId ||
+        paymentDetails.BindingID ||
+        paymentDetails.cardToken ||
+        paymentDetails.card_token ||
         null;
 
       cardHolderId =
-        rawDetails.cardHolderId ||
-        rawDetails.CardHolderID ||
+        paymentDetails.cardHolderId ||
+        paymentDetails.CardHolderID ||
         null;
 
       cardNumber =
-        rawDetails.cardNumber ||
-        rawDetails.CardNumber ||
+        paymentDetails.cardNumber ||
+        paymentDetails.CardNumber ||
         "";
 
       expDate =
-        rawDetails.expiryDate ||
-        rawDetails.expirationDate ||
-        rawDetails.ExpDate ||
+        paymentDetails.expiryDate ||
+        paymentDetails.expirationDate ||
+        paymentDetails.ExpDate ||
         "";
 
       if (bindingId && cardHolderId) {
@@ -665,6 +667,8 @@ export class CreditService {
     this.logger.log(`Getting payment details for PaymentID: ${paymentID}`);
 
     const result = await this.paymentProvider.getPaymentDetails(paymentID);
+
+    this.logger.log(`9999999999999: ${result}`);
     const raw = result.raw || {};
 
     const paymentState =

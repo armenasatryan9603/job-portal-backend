@@ -63,7 +63,7 @@ export class CreditController {
       : (query.orderId || query.orderID || query.order_id);
     const responseCode = query.responseCode || query.response_code || query.ResponseCode || query.resposneCode;
 
-    this.logger.log(`[callback/success] internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
+    this.logger.log(`[callback/success] ${query} internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
 
     try {
       await this.creditService.handlePaymentCallback(
