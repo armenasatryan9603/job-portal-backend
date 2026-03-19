@@ -191,24 +191,23 @@ export class CreditService {
   }
 
   async handlePaymentCallback(
-    orderID: string,
-    responseCode: string,
-    paymentID: string,
+    internalOrderId: string,  // our own ID used to look up conversion metadata
+    bankOrderId: string,      // FastBank's mdOrder UUID used to query payment status
+    responseCode?: string,
   ) {
     this.logger.log(
-      `Payment callback received - OrderID: ${orderID}, PaymentID: ${paymentID}, ResponseCode: ${responseCode}`
+      `Payment callback received - internalOrderId: ${internalOrderId}, bankOrderId: ${bankOrderId}, responseCode: ${responseCode}`
     );
 
-    // Validate required parameters
-    if (!orderID || !paymentID) {
+    if (!internalOrderId || !bankOrderId) {
       this.logger.error(
-        `Payment callback missing required parameters - OrderID: ${orderID}, PaymentID: ${paymentID}`
+        `Payment callback missing required parameters - internalOrderId: ${internalOrderId}, bankOrderId: ${bankOrderId}`
       );
       throw new Error("Payment callback missing required parameters");
     }
 
-    // Always verify payment result with provider status
-    const paymentDetails = await this.getPaymentDetails(paymentID);
+    // Verify payment status with FastBank using their mdOrder UUID
+    const paymentDetails = await this.getPaymentDetails(bankOrderId);
 
     if (paymentDetails.PaymentState !== "payment_approved") {
       const errorMsg =
@@ -218,8 +217,8 @@ export class CreditService {
       throw new Error(errorMsg);
     }
 
-    // Retrieve conversion metadata first (needed for test mode where orderID is numeric)
-    const configKey = `credit_refill_${orderID}`;
+    // Retrieve conversion metadata stored during payment initiation
+    const configKey = `credit_refill_${internalOrderId}`;
     let conversionMetadata: {
       userId?: number;
       currency: string;
@@ -240,27 +239,22 @@ export class CreditService {
       }
     } catch (error) {
       this.logger.warn(
-        `Failed to retrieve conversion metadata for ${orderID}: ${error}`
+        `Failed to retrieve conversion metadata for ${internalOrderId}: ${error}`
       );
     }
 
-    // Resolve userId: from metadata (test mode numeric orderID) or from orderID format userId-timestamp-random
+    // Resolve userId from our internalOrderId format: userId-timestamp-random
     let userId: number;
     if (conversionMetadata?.userId != null) {
       userId = conversionMetadata.userId;
-    } else if (orderID.includes("-")) {
-      userId = parseInt(orderID.split("-")[0]);
+    } else if (internalOrderId.includes("-")) {
+      userId = parseInt(internalOrderId.split("-")[0]);
     } else {
-      const orderIdFromDetails = paymentDetails.OrderID?.toString() || "";
-      if (orderIdFromDetails.includes("-")) {
-        userId = parseInt(orderIdFromDetails.split("-")[0]);
-      } else {
-        throw new Error(`Cannot determine userId from orderID: ${orderID}`);
-      }
+      throw new Error(`Cannot determine userId from internalOrderId: ${internalOrderId}`);
     }
 
     if (isNaN(userId)) {
-      throw new Error(`Invalid userId extracted from orderID: ${orderID}`);
+      throw new Error(`Invalid userId extracted from internalOrderId: ${internalOrderId}`);
     }
 
     // Verify user exists
@@ -309,7 +303,7 @@ export class CreditService {
       description: conversionMetadata
         ? `Credit refill: ${conversionMetadata.originalAmount} ${conversionMetadata.currency} = ${creditAmount} ${this.BASE_CURRENCY}`
         : `Credit refill of ${creditAmount} ${this.BASE_CURRENCY}`,
-      referenceId: paymentID,
+      referenceId: bankOrderId,
       referenceType: "payment",
       currency: conversionMetadata?.currency || this.BASE_CURRENCY,
       baseCurrency: this.BASE_CURRENCY,
@@ -317,11 +311,11 @@ export class CreditService {
       originalAmount: conversionMetadata?.originalAmount || creditAmount,
       convertedAmount: creditAmount,
       metadata: {
-        orderID,
-        paymentID,
+        internalOrderId,
+        bankOrderId,
         responseCode,
         paymentState: paymentDetails.PaymentState,
-        paymentAmount, // Amount paid in payment gateway currency
+        paymentAmount,
         conversionMetadata,
       },
     });
@@ -330,7 +324,7 @@ export class CreditService {
     // Check if saveCard was requested and fetch binding info if needed
     const saveCard = conversionMetadata?.saveCard === true;
     this.logger.log(
-      `Checking for binding info. saveCard flag: ${saveCard}, PaymentID: ${paymentID}, OrderID: ${orderID}`
+      `Checking for binding info. saveCard flag: ${saveCard}, bankOrderId: ${bankOrderId}, internalOrderId: ${internalOrderId}`
     );
     this.logger.log(
       `PaymentDetails keys: ${Object.keys(paymentDetails).join(", ")}`
@@ -652,7 +646,7 @@ export class CreditService {
       }
     } else if (saveCard) {
       this.logger.warn(
-        `⚠️ saveCard was true but no binding info was retrieved. PaymentID: ${paymentID}, OrderID: ${orderID}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
+        `⚠️ saveCard was true but no binding info was retrieved. bankOrderId: ${bankOrderId}, internalOrderId: ${internalOrderId}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
       );
     } else {
       this.logger.log(

@@ -339,12 +339,15 @@ export class FastBankPaymentProvider implements PaymentProvider {
     console.log('444444444444444444444444444444444444444444444444444444444444444');
     
 
+    // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
     const body: Record<string, any> = {
-      paymentId,
+      orderId: paymentId,
+      userName: this.apiKey || '',
+      password: this.apiSecret || '',
     };
 
     const response = await this.http.post(this.statusUrl, body, {
-      headers: this.getAuthHeaders(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
     const data = response.data || {};
