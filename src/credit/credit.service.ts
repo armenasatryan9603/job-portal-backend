@@ -206,22 +206,28 @@ export class CreditService {
       throw new Error("Payment callback missing required parameters");
     }
 
+    console.log('ssssssssssssssssssssssssssssssssssssssssssss', internalOrderId, bankOrderId);
+
     // Verify payment status with FastBank using their mdOrder UUID
     const paymentResult = await this.getPaymentDetails(bankOrderId);
-    const paymentDetails = paymentResult.raw ?? {};  // raw FastBank response fields
+    // const paymentDetails = paymentResult.raw ?? {};  // raw FastBank response fields
 
-    this.logger.log(`[handlePaymentCallback] status=${paymentResult.status} raw=${JSON.stringify(paymentDetails)}`);
+    // this.logger.log(`[handlePaymentCallback] status=${paymentResult.status} raw=${JSON.stringify(paymentDetails)}`);
+    
+    
 
     if (paymentResult.status !== "approved") {
       const errorMsg =
-        paymentDetails.Description ||
-        paymentDetails.TrxnDescription ||
-        `Payment failed or is not approved. State: ${paymentDetails.PaymentState} (mapped: ${paymentResult.status})`;
+        paymentResult.ErrorMessage ||
+        paymentResult.actionCodeDescription ||
+        `Payment failed. OrderStatus: ${paymentResult.OrderStatus}, ErrorCode: ${paymentResult.ErrorCode} (mapped: ${paymentResult.status})`;
       throw new Error(errorMsg);
     }
 
+
+
     // Retrieve conversion metadata stored during payment initiation
-    const configKey = `credit_refill_${internalOrderId}`;
+    const configKey = `credit_refill_${paymentResult.OrderNumber}`;
     let conversionMetadata: {
       userId?: number;
       currency: string;
@@ -236,6 +242,7 @@ export class CreditService {
       const config = await this.prisma.systemConfig.findUnique({
         where: { key: configKey },
       });
+
       if (config) {
         conversionMetadata = JSON.parse(config.value);
         await this.prisma.systemConfig.delete({ where: { key: configKey } });
@@ -269,20 +276,22 @@ export class CreditService {
       throw new Error(`User with ID ${userId} not found`);
     }
 
+    
+
     // Determine amount to add to credits
-    // If we have conversion metadata, use converted amount (in base currency)
-    // Otherwise, use payment amount (assume it's already in base currency)
+    // FastBank returns depositAmount (captured) and Amount (authorised), both in minor units.
+    // If we have conversion metadata (stored at initiation), use that as source of truth.
+    const rawPaymentAmount = paymentResult.depositAmount ?? paymentResult.Amount;
     const creditAmount = conversionMetadata
       ? conversionMetadata.convertedAmount
-      : paymentDetails.DepositedAmount || paymentDetails.Amount;
+      : rawPaymentAmount;
 
-    // Get payment amount in user's currency (for logging)
-    const paymentAmount =
-      paymentDetails.DepositedAmount || paymentDetails.Amount;
+    // For logging only — the amount in the user's currency
+    const paymentAmount = rawPaymentAmount;
 
     if (!creditAmount || creditAmount <= 0) {
       this.logger.error(
-        `Invalid credit amount: ${creditAmount}. PaymentDetails: ${JSON.stringify(paymentDetails)}`
+        `Invalid credit amount: ${creditAmount}. PaymentDetails: ${JSON.stringify(paymentResult)}`
       );
       throw new Error(
         `Invalid credit amount: ${creditAmount}. Payment may not have been completed.`
@@ -317,7 +326,8 @@ export class CreditService {
         internalOrderId,
         bankOrderId,
         responseCode,
-        paymentState: paymentDetails.PaymentState,
+        orderStatus: paymentResult.OrderStatus,
+        errorCode: paymentResult.ErrorCode,
         mappedStatus: paymentResult.status,
         paymentAmount,
         conversionMetadata,
@@ -331,10 +341,10 @@ export class CreditService {
       `Checking for binding info. saveCard flag: ${saveCard}, bankOrderId: ${bankOrderId}, internalOrderId: ${internalOrderId}`
     );
     this.logger.log(
-      `PaymentDetails keys: ${Object.keys(paymentDetails).join(", ")}`
+      `PaymentDetails keys: ${Object.keys(paymentResult).join(", ")}`
     );
     this.logger.log(
-      `PaymentDetails BindingID: ${paymentDetails.BindingID}, CardHolderID: ${paymentDetails.CardHolderID}`
+      `PaymentDetails bindingId: ${paymentResult.bindingId}, BindingID: ${paymentResult.BindingID}, Pan: ${paymentResult.Pan}, expiration: ${paymentResult.expiration}`
     );
 
     let bindingId: string | null = null;
@@ -345,26 +355,30 @@ export class CreditService {
     // Try to infer binding information from payment details when saveCard was requested
     if (saveCard) {
       bindingId =
-        paymentDetails.bindingId ||
-        paymentDetails.BindingID ||
-        paymentDetails.cardToken ||
-        paymentDetails.card_token ||
+        paymentResult.bindingId ||
+        paymentResult.BindingID ||
+        paymentResult.cardToken ||
+        paymentResult.card_token ||
         null;
 
       cardHolderId =
-        paymentDetails.cardHolderId ||
-        paymentDetails.CardHolderID ||
+        paymentResult.cardHolderId ||
+        paymentResult.CardHolderID ||
         null;
 
+      // FastBank returns the masked PAN as `Pan` (e.g. "408306**6475")
       cardNumber =
-        paymentDetails.cardNumber ||
-        paymentDetails.CardNumber ||
+        paymentResult.Pan ||
+        paymentResult.cardNumber ||
+        paymentResult.CardNumber ||
         "";
 
+      // FastBank returns expiry as `expiration` in YYYYMM format (e.g. "202701")
       expDate =
-        paymentDetails.expiryDate ||
-        paymentDetails.expirationDate ||
-        paymentDetails.ExpDate ||
+        paymentResult.expiration ||
+        paymentResult.expiryDate ||
+        paymentResult.expirationDate ||
+        paymentResult.ExpDate ||
         "";
 
       if (bindingId && cardHolderId) {
@@ -659,33 +673,26 @@ export class CreditService {
     this.logger.log(`Credits added: user ${userId}, amount ${creditAmount} ${this.BASE_CURRENCY}`);
     return {
       message: "Credits added successfully",
-      paymentDetails,
+      paymentResult,
     };
   }
 
-  async getPaymentDetails(paymentID: string) {
-    this.logger.log(`Getting payment details for PaymentID: ${paymentID}`);
-
-    const result = await this.paymentProvider.getPaymentDetails(paymentID);
-
-    this.logger.log(`9999999999999: ${result}`);
+  async getPaymentDetails(orderId: string) {
+    // this.logger.log(`Getting payment details for orderId: ${orderId}`);
+    
+    
+    const result = await this.paymentProvider.getPaymentDetails(orderId);
+    
+    console.log(`9999999999999: ${JSON.stringify(result)}`);
     const raw = result.raw || {};
-
-    const paymentState =
-      result.status === "approved"
-        ? "payment_approved"
-        : result.status === "declined"
-        ? "payment_declined"
-        : result.status === "pending"
-        ? "payment_pending"
-        : "payment_error";
 
     return {
       ...raw,
-      PaymentState: raw.PaymentState || paymentState,
-      Amount: raw.Amount ?? result.amount,
-      DepositedAmount: raw.DepositedAmount ?? result.amount,
-      Currency: raw.Currency ?? result.currency,
+      paymentState: result.status,
+      amount: result.amount,
+      depositedAmount: result.amount,
+      currency: result.currency,
+      status: result.status,
     };
   }
 

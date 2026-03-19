@@ -58,13 +58,12 @@ export class CreditController {
   async paymentCallbackSuccess(@Query() query: any, @Res() res: Response) {
     const internalOrderId = query.internalOrderId;
     // FastBank appends its mdOrder UUID as orderId to the returnUrl
-    const bankOrderId = Array.isArray(query.orderId)
-      ? query.orderId[query.orderId.length - 1]
-      : (query.orderId || query.orderID || query.order_id);
+    const bankOrderId = query.orderId;
     const responseCode = query.responseCode || query.response_code || query.ResponseCode || query.resposneCode;
-
-    this.logger.log(`[callback/success] ${query} internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
-
+    
+    // this.logger.log(`[callback/success] ${query} internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
+    
+    // console.log('11111111111111111111111111111111111');
     try {
       await this.creditService.handlePaymentCallback(
         internalOrderId,
@@ -73,6 +72,8 @@ export class CreditController {
       );
       return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('success'));
     } catch (error: any) {
+      console.log('444444444444444', error);
+      
       this.logger.error(`[callback/success] processing failed: ${error.message}`);
       return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('error'));
     }

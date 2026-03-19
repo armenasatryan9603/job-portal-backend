@@ -131,25 +131,17 @@ export class FastBankPaymentProvider implements PaymentProvider {
   }
 
   private mapStatus(raw: any): PaymentStatus {
-    // FastBank getOrderStatus.do returns:
-    //   errorCode: 0 = no error
-    //   orderStatus: 0=registered, 1=pre-auth, 2=approved, 3=cancelled, 4=refunded, 6=declined
-    //   PaymentState: string e.g. "payment_approved"
-    if (raw?.errorCode === 0 && raw?.orderStatus === 2) return "approved";
-    if (raw?.orderStatus === 3 || raw?.orderStatus === 6) return "declined";
-    if (raw?.orderStatus === 0 || raw?.orderStatus === 1 || raw?.orderStatus === 5) return "pending";
+    // Actual FastBank getOrderStatus.do response fields:
+    //   ErrorCode: string  — '0' = success, anything else = error
+    //   OrderStatus: number — 2=approved, 3=cancelled, 4=refunded, 6=declined, 0/1/5=pending
+    const errorCode: string | undefined = raw?.ErrorCode;
+    const orderStatus: number | undefined = raw?.OrderStatus;
 
-    // Fallback: check PaymentState string
-    const paymentState: string = (raw?.PaymentState || "").toLowerCase();
-    if (paymentState === "payment_approved") return "approved";
-    if (paymentState === "payment_declined" || paymentState === "payment_error") return "declined";
-    if (paymentState === "payment_registered" || paymentState === "payment_processing") return "pending";
-
-    // Fallback: generic status strings
-    const status = (raw?.status || raw?.Status || raw?.paymentStatus || "").toLowerCase();
-    if (status === "approved" || status === "success" || status === "succeeded") return "approved";
-    if (status === "declined" || status === "failed" || status === "error") return "declined";
-    if (status === "pending" || status === "processing") return "pending";
+    if (errorCode === '0' && orderStatus === 2) return "approved";
+    if (errorCode !== undefined && errorCode !== '0') return "declined";
+    if (orderStatus === 2) return "approved";
+    if (orderStatus === 3 || orderStatus === 4 || orderStatus === 6) return "declined";
+    if (orderStatus === 0 || orderStatus === 1 || orderStatus === 5) return "pending";
 
     return "error";
   }
@@ -336,22 +328,29 @@ export class FastBankPaymentProvider implements PaymentProvider {
 
     // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
     const body: Record<string, any> = {
-      orderId: paymentId,
+      // orderId: paymentId,
+      orderId: 'f61879d6-92d3-400c-a280-6379ddb71175',
       userName: this.apiKey || '',
       password: this.apiSecret || '',
     };
+
+    console.log('3333333-----', this.statusUrl, body);
+    
 
     const response = await this.http.post(this.statusUrl, body, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
+    
     const data = response.data || {};
     const status = this.mapStatus(data);
-
-    const amount =
-      data.amount || data.totalAmount || data.depositedAmount || undefined;
-    const currency = data.currency || data.Currency || undefined;
-
+    
+    // FastBank returns amounts in minor units (e.g. AMD tiyn).
+    // depositAmount = actually captured; Amount = authorized.
+    const amount = data.Amount ?? undefined;
+    const currency = data.currency || undefined;
+    console.log('444444444-----', data, status, amount, currency);
+    
     return {
       status,
       amount,
