@@ -328,8 +328,8 @@ export class FastBankPaymentProvider implements PaymentProvider {
 
     // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
     const body: Record<string, any> = {
-      // orderId: paymentId,
-      orderId: 'f61879d6-92d3-400c-a280-6379ddb71175',
+      orderId: paymentId,
+      // orderId: 'f61879d6-92d3-400c-a280-6379ddb71175',
       userName: this.apiKey || '',
       password: this.apiSecret || '',
     };
