@@ -63,14 +63,14 @@ export class CreditController {
     const paymentID = query.paymentID || query.paymentId || query.payment_id || query.PaymentID;
     const responseCode = query.responseCode || query.response_code || query.ResponseCode || query.resposneCode;
 
+    this.logger.log(`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa${JSON.stringify(query, null, 2)}`);
+    
     this.logger.log(`[callback/success] internalOrderId=${internalOrderId} bankOrderId=${bankOrderId} paymentID=${paymentID}`);
-
     try {
       await this.creditService.handlePaymentCallback(
         internalOrderId || bankOrderId,
         responseCode,
         paymentID,
-        query.opaque,
       );
       return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('success'));
     } catch (error: any) {

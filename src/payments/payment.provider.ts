@@ -98,12 +98,13 @@ export class FastBankPaymentProvider implements PaymentProvider {
       process.env.FASTBANK_BINDING_INIT_URL || this.initUrl;
     this.bindingPaymentUrl =
       process.env.FASTBANK_BINDING_PAYMENT_URL || this.initUrl;
+      
     this.cancelUrl = process.env.FASTBANK_CANCEL_URL || "";
     this.refundUrl = process.env.FASTBANK_REFUND_URL || "";
 
     this.apiKey = process.env.FASTBANK_API_KEY;
     this.apiSecret = process.env.FASTBANK_API_SECRET;
-    this.merchantId = process.env.FASTBANK_MERCHANT_ID;
+    // this.merchantId = process.env.FASTBANK_MERCHANT_ID;
 
     this.http = axios.create({
       timeout: 30000,
@@ -179,7 +180,6 @@ export class FastBankPaymentProvider implements PaymentProvider {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
     });
-    console.log('333333333333333333333', body, this.initUrl, response.data);
 
     const data = response.data || {};
 
@@ -281,7 +281,6 @@ export class FastBankPaymentProvider implements PaymentProvider {
   async makeBindingPayment(
     params: BindingPaymentParams
   ): Promise<BindingPaymentResult> {
-    console.log('3333333333333333333333333333333333333333333333333333333333333333333333333');
     if (!this.bindingPaymentUrl) {
       throw new Error(
         "FASTBANK_BINDING_PAYMENT_URL is not configured. Please set it in the environment."

@@ -194,7 +194,6 @@ export class CreditService {
     orderID: string,
     responseCode: string,
     paymentID: string,
-    opaque?: string
   ) {
     this.logger.log(
       `Payment callback received - OrderID: ${orderID}, PaymentID: ${paymentID}, ResponseCode: ${responseCode}`
