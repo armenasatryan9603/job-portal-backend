@@ -163,6 +163,9 @@ export class FastBankPaymentProvider implements PaymentProvider {
       failUrl: params.failUrl,
       userName: this.apiKey || '',
       password: this.apiSecret || '',
+      // clientId ties the payment to a customer so FastBank returns a bindingId
+      // in the getOrderStatus.do response, enabling future saved-card payments.
+      clientId: params.userId.toString(),
     };
 
     const response = await this.http.post(this.initUrl, body, {
@@ -329,27 +332,21 @@ export class FastBankPaymentProvider implements PaymentProvider {
     // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
     const body: Record<string, any> = {
       orderId: paymentId,
-      // orderId: 'f61879d6-92d3-400c-a280-6379ddb71175',
       userName: this.apiKey || '',
       password: this.apiSecret || '',
     };
-
-    console.log('3333333-----', this.statusUrl, body);
-    
 
     const response = await this.http.post(this.statusUrl, body, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
-    
     const data = response.data || {};
     const status = this.mapStatus(data);
-    
+
     // FastBank returns amounts in minor units (e.g. AMD tiyn).
     // depositAmount = actually captured; Amount = authorized.
     const amount = data.Amount ?? undefined;
     const currency = data.currency || undefined;
-    console.log('444444444-----', data, status, amount, currency);
     
     return {
       status,

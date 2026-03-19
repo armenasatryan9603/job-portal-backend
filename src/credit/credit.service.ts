@@ -333,43 +333,30 @@ export class CreditService {
       `Checking for binding info in payment response. bankOrderId: ${bankOrderId}`
     );
 
-    const bindingId: string | null =
-      paymentResult.bindingId ||
-      paymentResult.BindingID ||
-      paymentResult.cardToken ||
-      paymentResult.card_token ||
-      null;
+    const bindingId: string | null = paymentResult.bindingId || null;
 
-    const cardHolderId: string | null =
-      paymentResult.cardHolderId ||
-      paymentResult.CardHolderID ||
-      null;
+    // FastBank does not return a cardHolderId; only bindingId is used for future payments.
+    const cardHolderId: string | null = null;
 
     // FastBank returns the masked PAN as `Pan` (e.g. "408306**6475")
-    const cardNumber: string =
-      paymentResult.Pan ||
-      paymentResult.cardNumber ||
-      paymentResult.CardNumber ||
-      "";
+    const cardNumber: string = paymentResult.Pan || "";
 
-    // FastBank returns expiry as `expiration` in YYYYMM format (e.g. "202701")
-    const expDate: string =
-      paymentResult.expiration ||
-      paymentResult.expiryDate ||
-      paymentResult.expirationDate ||
-      paymentResult.ExpDate ||
-      "";
+    // FastBank returns expiry in YYYYMM format (e.g. "202701" → Jan 2027)
+    const expDate: string = paymentResult.expiration || "";
 
-    if (bindingId && cardHolderId) {
+    // FastBank returns the cardholder name as `cardholderName`
+    const cardholderName: string = paymentResult.cardholderName || "";
+
+    if (bindingId) {
       this.logger.log(
-        `✅ Binding info found — will save card: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+        `✅ Binding info found — will save card: bindingId=${bindingId}, Pan=${cardNumber}, expiration=${expDate}`
       );
     } else {
-      this.logger.log(`No binding info in response — card will not be saved.`);
+      this.logger.log(`No bindingId in response — card will not be saved.`);
     }
 
     // Save binding info if we have it
-    if (bindingId && cardHolderId) {
+    if (bindingId) {
       this.logger.log(
         `Attempting to save binding: bindingId=${bindingId}, cardHolderId=${cardHolderId}, userId=${userId}`
       );
@@ -461,19 +448,12 @@ export class CreditService {
           else if (cardNumber.match(/^3[47]/)) brand = "amex";
           else if (cardNumber.match(/^6(?:011|5)/)) brand = "discover";
 
-          // Parse expiry date (format: MMYY or MM/YY)
+          // Parse expiry date — FastBank returns YYYYMM (e.g. "202701" → year=2027, month=01)
           let expMonth: number | null = null;
           let expYear: number | null = null;
-          if (expDate) {
-            const cleanExp = expDate.replace(/\//g, "");
-            if (cleanExp.length >= 4) {
-              expMonth = parseInt(cleanExp.slice(0, 2), 10);
-              const yearPart = cleanExp.slice(2, 4);
-              const currentYear = new Date().getFullYear();
-              const currentCentury = Math.floor(currentYear / 100) * 100;
-              expYear = parseInt(yearPart, 10) + currentCentury;
-              if (expYear < currentYear) expYear += 100; // Handle Y2K
-            }
+          if (expDate && expDate.length === 6) {
+            expYear  = parseInt(expDate.slice(0, 4), 10);
+            expMonth = parseInt(expDate.slice(4, 6), 10);
           }
 
           // Check if user has any cards
@@ -510,7 +490,7 @@ export class CreditService {
               }>>`
                 INSERT INTO "Card" (
                   "userId", "paymentMethodId", "brand", "last4", 
-                  "expMonth", "expYear", "binding_id", "card_holder_id", 
+                  "expMonth", "expYear", "holderName", "binding_id", "card_holder_id", 
                   "isDefault", "isActive", "createdAt", "updatedAt"
                 )
                 VALUES (
@@ -519,7 +499,8 @@ export class CreditService {
                   ${brand}, 
                   ${last4}, 
                   ${finalExpMonth}, 
-                  ${finalExpYear}, 
+                  ${finalExpYear},
+                  ${cardholderName || null},
                   ${bindingId}, 
                   ${cardHolderId}, 
                   ${isDefault}, 
@@ -650,8 +631,6 @@ export class CreditService {
     
     
     const result = await this.paymentProvider.getPaymentDetails(orderId);
-    
-    console.log(`getPaymentDetails - 9999999999999: ${JSON.stringify(result)}`);
     const raw = result.raw || {};
 
     return {
