@@ -206,16 +206,11 @@ export class CreditService {
       throw new Error("Payment callback missing required parameters");
     }
 
-    console.log('ssssssssssssssssssssssssssssssssssssssssssss', internalOrderId, bankOrderId);
-
+    
     // Verify payment status with FastBank using their mdOrder UUID
     const paymentResult = await this.getPaymentDetails(bankOrderId);
-    // const paymentDetails = paymentResult.raw ?? {};  // raw FastBank response fields
-
-    // this.logger.log(`[handlePaymentCallback] status=${paymentResult.status} raw=${JSON.stringify(paymentDetails)}`);
-    
-    
-
+    console.log('handlePaymentCallback ssssssssssssss', internalOrderId, bankOrderId, paymentResult);
+  
     if (paymentResult.status !== "approved") {
       const errorMsg =
         paymentResult.ErrorMessage ||
@@ -223,8 +218,6 @@ export class CreditService {
         `Payment failed. OrderStatus: ${paymentResult.OrderStatus}, ErrorCode: ${paymentResult.ErrorCode} (mapped: ${paymentResult.status})`;
       throw new Error(errorMsg);
     }
-
-
 
     // Retrieve conversion metadata stored during payment initiation
     const configKey = `credit_refill_${paymentResult.OrderNumber}`;
@@ -235,7 +228,6 @@ export class CreditService {
       convertedAmount: number;
       exchangeRate: number;
       baseCurrency: string;
-      saveCard?: boolean;
     } | null = null;
 
     try {
@@ -334,62 +326,46 @@ export class CreditService {
       },
     });
 
-    // Extract and save BindingID if present (for card binding)
-    // Check if saveCard was requested and fetch binding info if needed
-    const saveCard = conversionMetadata?.saveCard === true;
+    // If FastBank returned binding info in the payment response the user opted in
+    // to save their card on the hosted payment page — persist it automatically.
+    // No explicit saveCard flag is needed; presence of bindingId drives the decision.
     this.logger.log(
-      `Checking for binding info. saveCard flag: ${saveCard}, bankOrderId: ${bankOrderId}, internalOrderId: ${internalOrderId}`
-    );
-    this.logger.log(
-      `PaymentDetails keys: ${Object.keys(paymentResult).join(", ")}`
-    );
-    this.logger.log(
-      `PaymentDetails bindingId: ${paymentResult.bindingId}, BindingID: ${paymentResult.BindingID}, Pan: ${paymentResult.Pan}, expiration: ${paymentResult.expiration}`
+      `Checking for binding info in payment response. bankOrderId: ${bankOrderId}`
     );
 
-    let bindingId: string | null = null;
-    let cardHolderId: string | null = null;
-    let cardNumber = "";
-    let expDate = "";
+    const bindingId: string | null =
+      paymentResult.bindingId ||
+      paymentResult.BindingID ||
+      paymentResult.cardToken ||
+      paymentResult.card_token ||
+      null;
 
-    // Try to infer binding information from payment details when saveCard was requested
-    if (saveCard) {
-      bindingId =
-        paymentResult.bindingId ||
-        paymentResult.BindingID ||
-        paymentResult.cardToken ||
-        paymentResult.card_token ||
-        null;
+    const cardHolderId: string | null =
+      paymentResult.cardHolderId ||
+      paymentResult.CardHolderID ||
+      null;
 
-      cardHolderId =
-        paymentResult.cardHolderId ||
-        paymentResult.CardHolderID ||
-        null;
+    // FastBank returns the masked PAN as `Pan` (e.g. "408306**6475")
+    const cardNumber: string =
+      paymentResult.Pan ||
+      paymentResult.cardNumber ||
+      paymentResult.CardNumber ||
+      "";
 
-      // FastBank returns the masked PAN as `Pan` (e.g. "408306**6475")
-      cardNumber =
-        paymentResult.Pan ||
-        paymentResult.cardNumber ||
-        paymentResult.CardNumber ||
-        "";
+    // FastBank returns expiry as `expiration` in YYYYMM format (e.g. "202701")
+    const expDate: string =
+      paymentResult.expiration ||
+      paymentResult.expiryDate ||
+      paymentResult.expirationDate ||
+      paymentResult.ExpDate ||
+      "";
 
-      // FastBank returns expiry as `expiration` in YYYYMM format (e.g. "202701")
-      expDate =
-        paymentResult.expiration ||
-        paymentResult.expiryDate ||
-        paymentResult.expirationDate ||
-        paymentResult.ExpDate ||
-        "";
-
-      if (bindingId && cardHolderId) {
-        this.logger.log(
-          `✅ Binding info found in payment details: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
-        );
-      } else {
-        this.logger.warn(
-          `saveCard was true but no binding info could be inferred from payment details.`
-        );
-      }
+    if (bindingId && cardHolderId) {
+      this.logger.log(
+        `✅ Binding info found — will save card: BindingID=${bindingId}, CardHolderID=${cardHolderId}`
+      );
+    } else {
+      this.logger.log(`No binding info in response — card will not be saved.`);
     }
 
     // Save binding info if we have it
@@ -660,14 +636,6 @@ export class CreditService {
           `Binding save error details: bindingId=${bindingId}, cardHolderId=${cardHolderId}, userId=${userId}`
         );
       }
-    } else if (saveCard) {
-      this.logger.warn(
-        `⚠️ saveCard was true but no binding info was retrieved. bankOrderId: ${bankOrderId}, internalOrderId: ${internalOrderId}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
-      );
-    } else {
-      this.logger.log(
-        `ℹ️ Not saving binding: saveCard=${saveCard}, bindingId=${bindingId}, cardHolderId=${cardHolderId}`
-      );
     }
 
     this.logger.log(`Credits added: user ${userId}, amount ${creditAmount} ${this.BASE_CURRENCY}`);
@@ -683,7 +651,7 @@ export class CreditService {
     
     const result = await this.paymentProvider.getPaymentDetails(orderId);
     
-    console.log(`9999999999999: ${JSON.stringify(result)}`);
+    console.log(`getPaymentDetails - 9999999999999: ${JSON.stringify(result)}`);
     const raw = result.raw || {};
 
     return {
