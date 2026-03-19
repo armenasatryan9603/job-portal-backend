@@ -63,7 +63,7 @@ export class CreditController {
     
     // this.logger.log(`[callback/success] ${query} internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
     
-    // console.log('11111111111111111111111111111111111');
+    console.log('paymentCallbackSuccess 11111111111111111111111111111111111', query);
     try {
       await this.creditService.handlePaymentCallback(
         internalOrderId,
