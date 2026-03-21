@@ -107,6 +107,15 @@ export class CreditService {
       exchangeRate = 1;
     }
 
+    // Convert amount to AMD for the bank (ARCA only accepts AMD / currency code 051)
+    let amdAmount: number;
+    try {
+      amdAmount = await this.toAmd(amount, normalizedCurrency);
+    } catch (error: any) {
+      this.logger.error(`Failed to convert to AMD: ${error.message}`);
+      throw new Error('Cannot process payment: currency conversion to AMD failed');
+    }
+
     // Generate unique order ID
     const timestamp = Date.now();
     const randomSuffix = Math.floor(Math.random() * 1000);
@@ -118,12 +127,12 @@ export class CreditService {
     const failUrl = `${backendUrl}/credit/refill/callback/failure?internalOrderId=${encodeURIComponent(orderId)}`;
 
     this.logger.log(
-      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}, cardId=${cardId}`
+      `Initiating Fast Bank payment: orderId=${orderId}, amdAmount=${amdAmount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}, cardId=${cardId}`
     );
 
     const initResult = await this.paymentProvider.initCreditRefill({
       userId,
-      amount,
+      amount: amdAmount,
       currency: normalizedCurrency,
       orderId,
       returnUrl,
@@ -669,17 +678,26 @@ export class CreditService {
       exchangeRate = 1;
     }
 
+    // Convert amount to AMD for the bank (ARCA only accepts AMD / currency code 051)
+    let amdAmount: number;
+    try {
+      amdAmount = await this.toAmd(amount, normalizedCurrency);
+    } catch (error: any) {
+      this.logger.error(`Failed to convert to AMD: ${error.message}`);
+      throw new Error('Cannot process payment: currency conversion to AMD failed');
+    }
+
     // Build callback URL (for completeness, though binding payments are usually server-side)
     const backendUrl = process.env.BACKEND_URL;
     const backUrl = `${backendUrl}/credit/refill/callback`;
 
     this.logger.log(
-      `Making binding payment via Fast Bank: userId=${userId}, amount=${amount}, currency=${normalizedCurrency}, bindingToken=${bindingId}, backUrl=${backUrl}`
+      `Making binding payment via Fast Bank: userId=${userId}, amdAmount=${amdAmount}, currency=${normalizedCurrency}, bindingToken=${bindingId}, backUrl=${backUrl}`
     );
 
     const providerResult = await this.paymentProvider.makeBindingPayment({
       userId,
-      amount,
+      amount: amdAmount,
       currency: normalizedCurrency,
       bindingToken: bindingId,
     });
@@ -802,6 +820,20 @@ export class CreditService {
           : "Payment refunded successfully",
       response: result.raw,
     };
+  }
+
+  /**
+   * Convert an amount from the given currency to AMD (ARCA bank currency, ISO 4217 code 051).
+   * Rounds to the nearest integer since AMD has no sub-units.
+   * Throws if the conversion rate cannot be fetched.
+   */
+  private async toAmd(amount: number, fromCurrency: string): Promise<number> {
+    const BANK_CURRENCY = 'AMD';
+    if (fromCurrency === BANK_CURRENCY) return amount;
+    const rate = await this.exchangeRateService.getExchangeRate(fromCurrency, BANK_CURRENCY);
+    const amdAmount = Math.round(amount * rate);
+    this.logger.log(`AMD conversion: ${amount} ${fromCurrency} = ${amdAmount} ${BANK_CURRENCY} (rate: ${rate})`);
+    return amdAmount;
   }
 
   // Legacy webhook handler (kept for backward compatibility)
