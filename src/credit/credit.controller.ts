@@ -45,6 +45,7 @@ export class CreditController {
       req.user.userId,
       body.amount,
       currency,
+      body.cardId,
     );
   }
 

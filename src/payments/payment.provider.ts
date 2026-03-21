@@ -252,7 +252,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
       password: this.apiSecret || '',
       mdOrder,
       bindingId: params.bindingToken,
-      clientBrowserInfo: {
+      clientBrowserInfo: JSON.stringify({
         userAgent: "...",
         colorDepth: "24",
         screenHeight: 720,
@@ -263,7 +263,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
         browserAcceptHeader: "...",
         browserIpAddress: "1.2.3.4",
         javascriptEnabled: true
-      }
+      })
     };
 
     console.log('3333333333333333333333333333333333', payBody, this.bindingPaymentUrl);

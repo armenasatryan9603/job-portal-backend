@@ -7,6 +7,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
+import { log } from "console";
 
 @Injectable()
 export class CreditService {
@@ -26,7 +27,53 @@ export class CreditService {
     userId: number,
     amount: number,
     currency: string = "USD",
+    cardId?: string,
   ) {
+    // If cardId is provided, use saved card payment (no webview)
+    if (cardId) {
+      const cards = await this.prisma.$queryRaw<
+        Array<{
+          id: number;
+          binding_id: string | null;
+          card_holder_id: string | null;
+        }>
+      >`
+        SELECT id, "binding_id", "card_holder_id" 
+        FROM "Card" 
+        WHERE id = ${parseInt(cardId, 10)} 
+          AND "userId" = ${userId} 
+          AND "isActive" = true
+        LIMIT 1
+      `;
+
+      const card = cards.length > 0 ? cards[0] : null;
+
+      if (!card) {
+        this.logger.error(`Card ${cardId} not found for user ${userId}`);
+        throw new Error(
+          "Card not found. Please use a different card or add a new one."
+        );
+      }
+
+      if (!card.binding_id) {
+        this.logger.error(`Card ${cardId} missing binding token`);
+        throw new Error(
+          "Card does not have a saved payment token. Please save the card during a payment first."
+        );
+      }
+
+      this.logger.log(
+        `Using saved card for payment: id=${card.id}, binding_token=${card.binding_id}`
+      );
+
+      return this.makeBindingPayment(
+        userId,
+        amount,
+        currency,
+        card.binding_id,
+      );
+    }
+
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -71,7 +118,7 @@ export class CreditService {
     const failUrl = `${backendUrl}/credit/refill/callback/failure?internalOrderId=${encodeURIComponent(orderId)}`;
 
     this.logger.log(
-      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}`
+      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}, cardId=${cardId}`
     );
 
     const initResult = await this.paymentProvider.initCreditRefill({
@@ -590,6 +637,7 @@ export class CreditService {
     amount: number,
     currency: string,
     bindingId: string,
+    // cardHolderId: string,
   ) {
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
