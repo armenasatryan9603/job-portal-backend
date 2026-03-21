@@ -723,25 +723,6 @@ export class OrdersService {
     budgetMax?: number,
     budgetCurrency?: string
   ) {
-
-    console.log("findAll orders with params:", {
-      page,
-      limit,
-      status,
-      categoryId,
-      categoryIds,
-      clientId,
-      isAdmin,
-      userId,
-      orderType,
-      country,
-      startDate,
-      endDate,
-      budgetMin,
-      budgetMax,
-      budgetCurrency
-    });
-    
     const skip = (page - 1) * limit;
     const where: any = { deletedAt: null };
 

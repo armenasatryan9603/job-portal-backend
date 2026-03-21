@@ -6,7 +6,6 @@ export interface InitCreditRefillParams {
   userId: number;
   amount: number;
   currency: string;
-  saveCard: boolean;
   orderId: string;
   returnUrl: string;
   failUrl: string;
@@ -111,6 +110,16 @@ export class FastBankPaymentProvider implements PaymentProvider {
     });
   }
 
+  private toForm(obj: Record<string, string | number | undefined>): URLSearchParams {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        params.append(key, String(value));
+      }
+    }
+    return params;
+  }
+
   private getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -131,14 +140,15 @@ export class FastBankPaymentProvider implements PaymentProvider {
   }
 
   private mapStatus(raw: any): PaymentStatus {
-    // Actual FastBank getOrderStatus.do response fields:
-    //   ErrorCode: string  — '0' = success, anything else = error
-    //   OrderStatus: number — 2=approved, 3=cancelled, 4=refunded, 6=declined, 0/1/5=pending
-    const errorCode: string | undefined = raw?.ErrorCode;
-    const orderStatus: number | undefined = raw?.OrderStatus;
+    const rawErrorCode = raw?.errorCode ?? raw?.ErrorCode;
+    const errorCodeNum = rawErrorCode !== undefined ? Number(rawErrorCode) : undefined;
 
-    if (errorCode === '0' && orderStatus === 2) return "approved";
-    if (errorCode !== undefined && errorCode !== '0') return "declined";
+    const orderStatus: number | undefined =
+      raw?.orderStatusCode ?? raw?.OrderStatus ?? raw?.orderStatus;
+
+    if (errorCodeNum === 0 && orderStatus === 2) return "approved";
+    if (errorCodeNum === 0) return "approved";
+    if (errorCodeNum !== undefined && errorCodeNum !== 0) return "declined";
     if (orderStatus === 2) return "approved";
     if (orderStatus === 3 || orderStatus === 4 || orderStatus === 6) return "declined";
     if (orderStatus === 0 || orderStatus === 1 || orderStatus === 5) return "pending";
@@ -163,12 +173,10 @@ export class FastBankPaymentProvider implements PaymentProvider {
       failUrl: params.failUrl,
       userName: this.apiKey || '',
       password: this.apiSecret || '',
-      // clientId ties the payment to a customer so FastBank returns a bindingId
-      // in the getOrderStatus.do response, enabling future saved-card payments.
-      clientId: params.userId.toString(),
+      clientId: process.env.FASTBANK_BINDING_API_KEY || '',
     };
 
-    const response = await this.http.post(this.initUrl, body, {
+    const response = await this.http.post(this.initUrl, this.toForm(body), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
@@ -192,132 +200,90 @@ export class FastBankPaymentProvider implements PaymentProvider {
     };
   }
 
-  /**
-   * Create a FastBank binding using full card details (PAN, expiry, CVV).
-   * NOTE: This requires the backend to handle PCI-sensitive data and must be
-   * aligned with the actual FastBank / EPG binding API specification.
-   */
-  async createCardBindingFromDetails(params: {
-    userId: number;
-    cardNumber: string;
-    expMonth: number;
-    expYear: number;
-    cvv: string;
-  }): Promise<{
-    bindingId: string;
-    cardHolderId?: string;
-    maskedPan?: string;
-    expDate?: string;
-    raw: any;
-  }> {
-    if (!this.bindingInitUrl) {
-      throw new Error(
-        "FASTBANK_BINDING_INIT_URL is not configured. Please set it in the environment."
-      );
-    }
-
-    const body: Record<string, any> = {
-      // These field names are placeholders; update them to match
-      // the FastBank binding API you have from the acquirer.
-      pan: params.cardNumber,
-      expMonth: params.expMonth,
-      expYear: params.expYear,
-      cvv: params.cvv,
-      customerId: params.userId.toString(),
-      mode: "bind_only",
-    };
-
-    const response = await this.http.post(this.bindingInitUrl, body, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-    });
-
-    const data = response.data || {};
-
-    const bindingId =
-      data.bindingId ||
-      data.BindingID ||
-      data.cardToken ||
-      data.card_token;
-
-    if (!bindingId || typeof bindingId !== "string") {
-      throw new Error(
-        "Fast Bank binding response did not contain a binding identifier (expected one of bindingId, BindingID, cardToken, card_token)."
-      );
-    }
-
-    const cardHolderId =
-      data.cardHolderId ||
-      data.CardHolderID ||
-      data.card_holder_id;
-
-    const maskedPan =
-      data.cardNumber ||
-      data.CardNumber ||
-      data.maskedPan;
-
-    const expDate =
-      data.expiryDate ||
-      data.expirationDate ||
-      data.ExpDate;
-
-    return {
-      bindingId,
-      cardHolderId,
-      maskedPan,
-      expDate,
-      raw: data,
-    };
-  }
-
   async makeBindingPayment(
     params: BindingPaymentParams
   ): Promise<BindingPaymentResult> {
+    if (!this.initUrl) {
+      throw new Error(
+        "FASTBANK_PAYMENT_INIT_URL is not configured. Please set it in the environment."
+      );
+    }
     if (!this.bindingPaymentUrl) {
       throw new Error(
         "FASTBANK_BINDING_PAYMENT_URL is not configured. Please set it in the environment."
       );
     }
 
-    
+    // Step 1: register the order via register.do to obtain mdOrder
+    const backendUrl = process.env.BACKEND_URL;
+    const returnUrl = `${backendUrl}/credit/refill/callback`;
 
-    const body: Record<string, any> = {
+    const registerBody: Record<string, string | number> = {
       amount: params.amount,
-      currency: params.currency,
-      bindingToken: params.bindingToken,
-      customerId: params.userId.toString(),
+      currency: '051',
+      orderNumber: `binding-${params.userId}-${Date.now()}`,
+      returnUrl,
+      failUrl: returnUrl,
+      userName: process.env.FASTBANK_BINDING_API_KEY || '',
+      password: this.apiSecret || '',
+      clientId: process.env.FASTBANK_BINDING_API_KEY || '',
     };
 
-    const response = await this.http.post(this.bindingPaymentUrl, body, {
-      headers: this.getAuthHeaders(),
+    console.log('11111111111111111111111111111111111', registerBody, this.initUrl);
+
+    const registerResponse = await this.http.post(this.initUrl, this.toForm(registerBody), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+
+    const registerData = registerResponse.data || {};
+
+    console.log('22222222222222222222222222222222222', registerData);
+
+    const mdOrder = registerData.orderId;
+    if (!mdOrder) {
+      throw new Error(
+        `Failed to register order for binding payment: ${registerData.errorMessage || JSON.stringify(registerData)}`
+      );
+    }
+
+    // Step 2: charge the saved card via paymentOrderBinding.do
+    const payBody: Record<string, string | any> = {
+      userName: process.env.FASTBANK_BINDING_API_KEY || '',
+      password: this.apiSecret || '',
+      mdOrder,
+      bindingId: params.bindingToken,
+      clientBrowserInfo: {
+        userAgent: "...",
+        colorDepth: "24",
+        screenHeight: 720,
+        screenWidth: 1280,
+        javaEnabled: false,
+        browserLanguage: "en-US",
+        browserTimeZoneOffset: -180,
+        browserAcceptHeader: "...",
+        browserIpAddress: "1.2.3.4",
+        javascriptEnabled: true
+      }
+    };
+
+    console.log('3333333333333333333333333333333333', payBody, this.bindingPaymentUrl);
+
+    const response = await this.http.post(this.bindingPaymentUrl, payBody, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
     const data = response.data || {};
-    const status = this.mapStatus(data);
+    console.log('makeBindingPayment PAY RESPONSE:', JSON.stringify(data));
+    
+    const success = data.errorCode === 0;
 
-    const success =
-      data.success === true ||
-      status === "approved";
-
-    const amountCharged =
-      data.amount ||
-      data.chargedAmount ||
-      data.totalAmount ||
-      params.amount;
-
-    const message =
-      data.message ||
-      data.description ||
-      data.info ||
-      (success ? "Payment successful" : "Payment failed");
+    const message = data.info;
 
     return {
       success,
       message,
-      providerPaymentId:
-        data.paymentId || data.PaymentId || data.paymentID || data.PaymentID,
-      amountCharged,
+      providerPaymentId: mdOrder,
+      amountCharged: params.amount,
       raw: data,
     };
   }

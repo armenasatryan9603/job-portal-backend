@@ -7,7 +7,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
-import { log } from "console";
 
 @Injectable()
 export class CreditService {
@@ -27,56 +26,7 @@ export class CreditService {
     userId: number,
     amount: number,
     currency: string = "USD",
-    cardId?: string,
-    saveCard: boolean = false,
-    isFallback: boolean = false // Prevent infinite recursion
   ) {
-    // If cardId is provided, use saved card payment (no webview)
-    if (cardId && !isFallback) {
-      const cards = await this.prisma.$queryRaw<
-        Array<{
-          id: number;
-          binding_id: string | null;
-          card_holder_id: string | null;
-        }>
-      >`
-        SELECT id, "binding_id", "card_holder_id" 
-        FROM "Card" 
-        WHERE id = ${parseInt(cardId, 10)} 
-          AND "userId" = ${userId} 
-          AND "isActive" = true
-        LIMIT 1
-      `;
-
-      const card = cards.length > 0 ? cards[0] : null;
-
-      if (!card) {
-        this.logger.error(`Card ${cardId} not found for user ${userId}`);
-        throw new Error(
-          "Card not found. Please use a different card or add a new one."
-        );
-      }
-
-      if (!card.binding_id) {
-        this.logger.error(`Card ${cardId} missing binding token`);
-        throw new Error(
-          "Card does not have a saved payment token. Please save the card during a payment first."
-        );
-      }
-
-      this.logger.log(
-        `Using saved card for payment: id=${card.id}, binding_token=${card.binding_id}`
-      );
-
-      return this.makeBindingPayment(
-        userId,
-        amount,
-        currency,
-        card.binding_id,
-        card.card_holder_id || ""
-      );
-    }
-
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -116,27 +66,22 @@ export class CreditService {
     const orderId = `${userId}-${timestamp}-${randomSuffix}`;
 
     // Build separate return/fail callback URLs
-    const port = process.env.PORT || "8080";
-    const backendUrl = (process.env.BACKEND_URL || `http://localhost:${port}`).replace(/\/$/, '');
+    const backendUrl = process.env.BACKEND_URL;
     const returnUrl = `${backendUrl}/credit/refill/callback/success?internalOrderId=${encodeURIComponent(orderId)}`;
     const failUrl = `${backendUrl}/credit/refill/callback/failure?internalOrderId=${encodeURIComponent(orderId)}`;
 
     this.logger.log(
-      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}, saveCard=${saveCard}`
+      `Initiating Fast Bank payment: orderId=${orderId}, amount=${amount}, currency=${normalizedCurrency}, returnUrl=${returnUrl}`
     );
 
     const initResult = await this.paymentProvider.initCreditRefill({
       userId,
       amount,
       currency: normalizedCurrency,
-      saveCard,
       orderId,
       returnUrl,
       failUrl,
     });
-
-    console.log('initResultinitResultinitResultinitResultinitResult', initResult);
-    
 
     // Store conversion metadata temporarily in SystemConfig for callback retrieval
     const configKey = `credit_refill_${orderId}`;
@@ -151,7 +96,6 @@ export class CreditService {
             convertedAmount,
             exchangeRate: exchangeRate ?? 1,
             baseCurrency: this.BASE_CURRENCY,
-            saveCard,
           }),
         },
         create: {
@@ -163,7 +107,6 @@ export class CreditService {
             convertedAmount,
             exchangeRate: exchangeRate ?? 1,
             baseCurrency: this.BASE_CURRENCY,
-            saveCard,
           }),
           description: `Temporary storage for credit refill conversion metadata`,
         },
@@ -186,7 +129,6 @@ export class CreditService {
         exchangeRate,
         baseCurrency: this.BASE_CURRENCY,
       },
-      saveCard,
     };
   }
 
@@ -206,11 +148,9 @@ export class CreditService {
       throw new Error("Payment callback missing required parameters");
     }
 
-    
     // Verify payment status with FastBank using their mdOrder UUID
     const paymentResult = await this.getPaymentDetails(bankOrderId);
-    console.log('handlePaymentCallback ssssssssssssss', internalOrderId, bankOrderId, paymentResult);
-  
+
     if (paymentResult.status !== "approved") {
       const errorMsg =
         paymentResult.ErrorMessage ||
@@ -267,8 +207,6 @@ export class CreditService {
     if (!userExists) {
       throw new Error(`User with ID ${userId} not found`);
     }
-
-    
 
     // Determine amount to add to credits
     // FastBank returns depositAmount (captured) and Amount (authorised), both in minor units.
@@ -651,8 +589,7 @@ export class CreditService {
     userId: number,
     amount: number,
     currency: string,
-    bindingId: string, // Stored for reference/logging only, not sent in API request
-    cardHolderId: string // Used by API to identify the binding
+    bindingId: string,
   ) {
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
@@ -685,9 +622,8 @@ export class CreditService {
     }
 
     // Build callback URL (for completeness, though binding payments are usually server-side)
-    const port = process.env.PORT || "8080";
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${port}`;
-    const backUrl = `${backendUrl}credit/refill/callback`;
+    const backendUrl = process.env.BACKEND_URL;
+    const backUrl = `${backendUrl}/credit/refill/callback`;
 
     this.logger.log(
       `Making binding payment via Fast Bank: userId=${userId}, amount=${amount}, currency=${normalizedCurrency}, bindingToken=${bindingId}, backUrl=${backUrl}`
@@ -735,7 +671,7 @@ export class CreditService {
         paymentAmount: amount,
         providerResponse: providerResult.raw,
         callbackUrl: backUrl,
-        cardHolderId,
+        cardHolderId: '',
       },
     });
 

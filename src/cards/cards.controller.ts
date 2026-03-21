@@ -1,10 +1,8 @@
 import {
   Controller,
-  Post,
   Get,
   Delete,
   Patch,
-  Body,
   Param,
   Request,
   UseGuards,
@@ -13,17 +11,11 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CardsService } from './cards.service';
-import { AddCardDto } from './dto/add-card.dto';
 
 @Controller('cards')
 @UseGuards(JwtAuthGuard)
 export class CardsController {
   constructor(private cardsService: CardsService) {}
-
-  @Post()
-  async addCard(@Request() req: { user: { userId: number } }, @Body() body: AddCardDto) {
-    return this.cardsService.addCard(req.user.userId, body);
-  }
 
   @Get()
   async listCards(@Request() req: { user: { userId: number } }) {

@@ -33,7 +33,7 @@ export class CreditController {
   @Post('refill/initiate')
   async initiate(
     @Request() req,
-    @Body() body: { amount: number; currency?: string; cardId?: string; saveCard?: boolean },
+    @Body() body: { amount: number; currency?: string; cardId?: string },
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.userId },
@@ -45,8 +45,6 @@ export class CreditController {
       req.user.userId,
       body.amount,
       currency,
-      body.cardId,
-      body.saveCard ?? false,
     );
   }
 
@@ -60,10 +58,7 @@ export class CreditController {
     // FastBank appends its mdOrder UUID as orderId to the returnUrl
     const bankOrderId = query.orderId;
     const responseCode = query.responseCode || query.response_code || query.ResponseCode || query.resposneCode;
-    
-    // this.logger.log(`[callback/success] ${query} internalOrderId=${internalOrderId} bankOrderId=${bankOrderId}`);
-    
-    console.log('paymentCallbackSuccess 11111111111111111111111111111111111', query);
+
     try {
       await this.creditService.handlePaymentCallback(
         internalOrderId,
@@ -72,8 +67,6 @@ export class CreditController {
       );
       return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('success'));
     } catch (error: any) {
-      console.log('444444444444444', error);
-      
       this.logger.error(`[callback/success] processing failed: ${error.message}`);
       return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('error'));
     }
