@@ -30,6 +30,11 @@ export interface BindingPaymentResult {
   providerPaymentId?: string;
   amountCharged: number;
   raw: any;
+  // 3DS challenge fields — present when the bank requires OTP verification
+  requires3ds?: boolean;
+  challengeUrl?: string;
+  cReq?: string;
+  orderNumber?: string;
 }
 
 export interface PaymentDetailsResult {
@@ -60,7 +65,7 @@ export interface PaymentProvider {
     params: BindingPaymentParams
   ): Promise<BindingPaymentResult>;
 
-  getPaymentDetails(paymentId: string): Promise<PaymentDetailsResult>;
+  getPaymentDetails(paymentId: string, apiKey?: string): Promise<PaymentDetailsResult>;
 
 //   cancelPayment(
 //     paymentId: string,

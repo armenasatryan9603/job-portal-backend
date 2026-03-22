@@ -101,9 +101,6 @@ export class FastBankPaymentProvider implements PaymentProvider {
       clientId: process.env.FASTBANK_BINDING_API_KEY || '',
     };
 
-    console.log("sssssssssssssss", body, this.initUrl);
-    
-
     const response = await this.http.post(this.initUrl, this.toForm(body), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -113,9 +110,10 @@ export class FastBankPaymentProvider implements PaymentProvider {
     const data = response.data || {};
 
     if (!data.formUrl || typeof data.formUrl !== "string") {
+      const errCode = data.errorCode !== undefined ? data.errorCode : '';
+      const errMsg = data.errorMessage || data.description || data.error || '';
       throw new Error(
-        `aaaaaaaaaaaaaaaaaaaaaaaa ${this.initUrl}`,body
-        // "Fast Bank init response did not contain a redirect URL (expected one of redirectUrl, paymentUrl, url, checkoutUrl)."
+        `Payment initiation failed${errCode !== '' ? ` (errorCode: ${errCode})` : ''}: ${errMsg || 'No payment URL returned'}`
       );
     }
 
@@ -158,15 +156,11 @@ export class FastBankPaymentProvider implements PaymentProvider {
       clientId: process.env.FASTBANK_BINDING_API_KEY || '',
     };
 
-    console.log('11111111111111111111111111111111111', registerBody, this.initUrl);
-
     const registerResponse = await this.http.post(this.initUrl, this.toForm(registerBody), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
     const registerData = registerResponse.data || {};
-
-    console.log('22222222222222222222222222222222222', registerData);
 
     const mdOrder = registerData.orderId;
     if (!mdOrder) {
@@ -176,62 +170,59 @@ export class FastBankPaymentProvider implements PaymentProvider {
     }
 
     // Step 2: charge the saved card via paymentOrderBinding.do
-    const payBody: Record<string, string | any> = {
+    const payBody: Record<string, string> = {
       userName: process.env.FASTBANK_BINDING_API_KEY || '',
       password: this.apiSecret || '',
       mdOrder,
       bindingId: params.bindingToken,
-      clientBrowserInfo: JSON.stringify({
-        userAgent: "...",
-        colorDepth: "24",
-        screenHeight: 720,
-        screenWidth: 1280,
-        javaEnabled: false,
-        browserLanguage: "en-US",
-        browserTimeZoneOffset: -180,
-        browserAcceptHeader: "...",
-        browserIpAddress: "1.2.3.4",
-        javascriptEnabled: true
-      })
     };
 
-    console.log('3333333333333333333333333333333333', payBody, this.bindingPaymentUrl);
-
-    const response = await this.http.post(this.bindingPaymentUrl, payBody, {
+    const response = await this.http.post(this.bindingPaymentUrl, this.toForm(payBody), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
     const data = response.data || {};
-    console.log('makeBindingPayment PAY RESPONSE:', JSON.stringify(data));
-    
-    const success = data.errorCode === 0;
+    const orderNumber = registerBody.orderNumber as string;
 
-    const message = data.info;
+    // 3DS challenge — bank requires OTP verification before completing payment
+    if (data.acsUrl) {
+      return {
+        success: false,
+        message: data.info || 'Requires 3DS authentication',
+        providerPaymentId: mdOrder,
+        amountCharged: params.amount,
+        raw: data,
+        requires3ds: true,
+        challengeUrl: data.acsUrl,
+        cReq: data.cReq,
+        orderNumber,
+      };
+    }
 
     return {
-      success,
-      message,
+      success: Number(data.errorCode) === 0,
+      message: data.info || (Number(data.errorCode) === 0 ? 'Payment successful' : 'Payment failed'),
       providerPaymentId: mdOrder,
       amountCharged: params.amount,
       raw: data,
+      orderNumber,
     };
   }
 
-  async getPaymentDetails(paymentId: string): Promise<PaymentDetailsResult> {
+  async getPaymentDetails(paymentId: string, apiKey?: string): Promise<PaymentDetailsResult> {
     if (!this.statusUrl) {
       throw new Error(
         "FASTBANK_PAYMENT_STATUS_URL is not configured. Please set it in the environment."
       );
-    }    
+    }
 
-    // FastBank's getOrderStatus.do expects `orderId` (the mdOrder UUID)
-    const body: Record<string, any> = {
+    const body: Record<string, string> = {
       orderId: paymentId,
-      userName: this.apiKey || '',
+      userName: apiKey || this.apiKey || '',
       password: this.apiSecret || '',
     };
 
-    const response = await this.http.post(this.statusUrl, body, {
+    const response = await this.http.post(this.statusUrl, this.toForm(body), {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
 
