@@ -699,6 +699,58 @@ export class CreditService {
       currency: normalizedCurrency,
       bindingToken: bindingId,
     });
+    
+    console.log('ssssssssssssssssssssssssssssssssssssssssssssssssss', providerResult);
+    
+
+    // 3DS challenge — store conversion metadata then return the challenge URL to the caller.
+    // The mobile app will open a WebView; when the user completes OTP the bank calls
+    // our /credit/refill/callback endpoint and handleBindingCallback finishes the flow.
+    if (providerResult.requires3ds && providerResult.challengeUrl) {
+      const orderNumber = providerResult.orderNumber!;
+      const mdOrder = providerResult.providerPaymentId!;
+      const metadataValue = JSON.stringify({
+        userId,
+        currency: normalizedCurrency,
+        originalAmount,
+        convertedAmount,
+        exchangeRate: exchangeRate ?? 1,
+        baseCurrency: this.BASE_CURRENCY,
+        orderNumber,
+        mdOrder,
+      });
+      try {
+        await Promise.all(
+          [`credit_refill_${orderNumber}`, `credit_refill_bank_${mdOrder}`].map((key) =>
+            this.prisma.systemConfig.upsert({
+              where: { key },
+              update: { value: metadataValue },
+              create: { key, value: metadataValue, description: 'Temporary 3DS binding payment metadata' },
+            })
+          )
+        );
+      } catch (dbErr: any) {
+        this.logger.error(`Failed to store 3DS metadata: ${dbErr.message}`);
+      }
+      return {
+        success: false,
+        requires3ds: true,
+        challengeUrl: providerResult.challengeUrl,
+        cReq: providerResult.cReq,
+        orderNumber,
+        message: providerResult.message,
+        orderId: undefined,
+        paymentId: mdOrder,
+        amount: convertedAmount,
+        conversionInfo: {
+          currency: normalizedCurrency,
+          originalAmount,
+          convertedAmount,
+          exchangeRate: exchangeRate ?? 1,
+          baseCurrency: this.BASE_CURRENCY,
+        },
+      };
+    }
 
     if (!providerResult.success) {
       throw new Error(providerResult.message || "Payment failed");
@@ -819,6 +871,110 @@ export class CreditService {
   //     response: result.raw,
   //   };
   // }
+
+  /**
+   * Called by GET /credit/refill/callback after the user completes 3DS OTP for a binding payment.
+   * Looks up stored conversion metadata by the bank's mdOrder UUID, verifies payment status,
+   * and credits the user's account.
+   */
+  async handleBindingCallback(bankOrderId: string) {
+    if (!bankOrderId) {
+      throw new Error('Missing bankOrderId in binding callback');
+    }
+
+    // Retrieve conversion metadata stored when the 3DS challenge was issued
+    type StoredMeta = {
+      userId: number;
+      currency: string;
+      originalAmount: number;
+      convertedAmount: number;
+      exchangeRate: number;
+      baseCurrency: string;
+      orderNumber?: string;
+    };
+
+    let meta: StoredMeta | null = null;
+    const metaKey = `credit_refill_bank_${bankOrderId}`;
+
+    try {
+      const config = await this.prisma.systemConfig.findUnique({ where: { key: metaKey } });
+      if (config) {
+        await this.prisma.systemConfig.delete({ where: { key: metaKey } });
+        meta = JSON.parse(config.value) as StoredMeta;
+      }
+    } catch { /* non-fatal */ }
+
+    // Also clean up the orderNumber-keyed entry
+    if (meta?.orderNumber) {
+      try {
+        await this.prisma.systemConfig.deleteMany({ where: { key: `credit_refill_${meta.orderNumber}` } });
+      } catch { /* non-fatal */ }
+    }
+
+    // Verify payment with ARCA using the binding API key
+    const statusResult = await this.paymentProvider.getPaymentDetails(
+      bankOrderId,
+      process.env.FASTBANK_BINDING_API_KEY,
+    );
+
+    if (statusResult.status !== 'approved') {
+      const raw = statusResult.raw || {};
+      throw new Error(
+        raw.ErrorMessage || raw.actionCodeDescription ||
+        `Binding payment not approved (status: ${statusResult.status})`
+      );
+    }
+
+    // Resolve userId and credit amount
+    let userId: number;
+    let creditAmount: number;
+
+    if (meta) {
+      userId = meta.userId;
+      creditAmount = meta.convertedAmount;
+    } else {
+      // Fallback: try to parse userId from orderNumber echoed by ARCA
+      const raw = statusResult.raw || {};
+      const orderNumber: string = raw.OrderNumber || raw.orderNumber || '';
+      // orderNumber format: binding-{userId}-{timestamp}
+      userId = parseInt(orderNumber.split('-')[1] || '', 10);
+      creditAmount = (statusResult.amount ?? 0) / 100; // minor units → major
+    }
+
+    if (!userId || isNaN(userId)) {
+      throw new Error('Cannot determine userId from binding callback');
+    }
+    if (!creditAmount || creditAmount <= 0) {
+      throw new Error('Cannot determine credit amount from binding callback');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { creditBalance: { increment: creditAmount } },
+      select: { creditBalance: true },
+    });
+
+    await this.creditTransactionsService.logTransaction({
+      userId,
+      amount: creditAmount,
+      balanceAfter: updatedUser.creditBalance,
+      type: 'refill',
+      status: 'completed',
+      description: meta
+        ? `Credit refill: ${meta.originalAmount} ${meta.currency} = ${creditAmount} ${this.BASE_CURRENCY} (saved card 3DS)`
+        : `Credit refill of ${creditAmount} ${this.BASE_CURRENCY} (saved card 3DS)`,
+      referenceId: bankOrderId,
+      referenceType: 'payment',
+      currency: meta?.currency || this.BASE_CURRENCY,
+      baseCurrency: this.BASE_CURRENCY,
+      exchangeRate: meta?.exchangeRate || 1,
+      originalAmount: meta?.originalAmount || creditAmount,
+      convertedAmount: creditAmount,
+      metadata: { bankOrderId },
+    });
+
+    this.logger.log(`Binding 3DS payment completed: user ${userId}, credits ${creditAmount}`);
+  }
 
   /**
    * Convert an amount from the given currency to AMD (ARCA bank currency, ISO 4217 code 051).

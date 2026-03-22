@@ -49,9 +49,42 @@ export class CreditController {
     );
   }
 
+  // ── 3DS challenge bridge ─────────────────────────────────────────────────────
+  // The ACS endpoint (bank OTP page) requires a POST with `creq`.
+  // expo-web-browser can only open URLs via GET, so we serve an auto-submitting
+  // HTML form that forwards the browser to the ACS URL via POST.
+
+  @Get('3ds/challenge')
+  threeDsChallenge(@Query() query: any, @Res() res: Response) {
+    const { acsUrl, cReq } = query;
+    if (!acsUrl || !cReq) {
+      return res.status(400).send('Missing acsUrl or cReq');
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+<form id="f" method="POST" action="${acsUrl}">
+  <input type="hidden" name="creq" value="${cReq}">
+</form>
+<script>document.getElementById('f').submit();</script>
+</body></html>`;
+    return res.setHeader('Content-Type', 'text/html').send(html);
+  }
+
   // ── Payment callbacks ────────────────────────────────────────────────────────
   // FastBank redirects the user's browser here after payment.
   // We process the result then open the app via custom URL scheme.
+
+  // Unified callback for binding payments (clean URL, no query params in returnUrl)
+  @Get('refill/callback')
+  async bindingPaymentCallback(@Query() query: any, @Res() res: Response) {
+    const bankOrderId = query.orderId || query.mdOrder || query.orderID;
+    try {
+      await this.creditService.handleBindingCallback(bankOrderId);
+      return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('success'));
+    } catch (error: any) {
+      this.logger.error(`[refill/callback] binding payment failed: ${error.message}`);
+      return res.setHeader('Content-Type', 'text/html').send(deepLinkPage('error', error.message));
+    }
+  }
 
   @Get('refill/callback/success')
   async paymentCallbackSuccess(@Query() query: any, @Res() res: Response) {
@@ -124,9 +157,12 @@ export class CreditController {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function deepLinkPage(status: 'success' | 'error'): string {
+function deepLinkPage(status: 'success' | 'error', errorMsg?: string): string {
   const scheme = process.env.APP_DEEPLINK_SCHEME || 'jobportalmobile';
-  const url = `${scheme}://profile/payment/payments?refillStatus=${status}`;
+  let url = `${scheme}://profile/payment/payments?refillStatus=${status}`;
+  if (status === 'error' && errorMsg) {
+    url += `&errorDetail=${encodeURIComponent(errorMsg)}`;
+  }
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <meta http-equiv="refresh" content="0; url=${url}">
 <script>window.location='${url}';</script>
