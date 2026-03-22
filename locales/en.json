@@ -1337,6 +1337,7 @@
   "previewYourAvailability": "Preview your availability. Marked dates show when you'll be available.",
   "workingDay": "Working Day",
   "dayOff": "Day Off",
+  "selectPaymentMethod": "Select Payment Method",
   "selectDate": "Select Date",
   "availableSlots": "Available Slots",
   "noSlotsAvailable": "No slots available for this date",
