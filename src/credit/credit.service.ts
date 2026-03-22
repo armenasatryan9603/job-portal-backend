@@ -752,6 +752,55 @@ export class CreditService {
       };
     }
 
+    // 3DS challenge — store conversion metadata then return the challenge URL to the caller.
+    // The mobile app will open a WebView; when the user completes OTP the bank calls
+    // our /credit/refill/callback endpoint and handleBindingCallback finishes the flow.
+    if (providerResult.requires3ds && providerResult.challengeUrl) {
+      const orderNumber = providerResult.orderNumber!;
+      const mdOrder = providerResult.providerPaymentId!;
+      const metadataValue = JSON.stringify({
+        userId,
+        currency: normalizedCurrency,
+        originalAmount,
+        convertedAmount,
+        exchangeRate: exchangeRate ?? 1,
+        baseCurrency: this.BASE_CURRENCY,
+        orderNumber,
+        mdOrder,
+      });
+      try {
+        await Promise.all(
+          [`credit_refill_${orderNumber}`, `credit_refill_bank_${mdOrder}`].map((key) =>
+            this.prisma.systemConfig.upsert({
+              where: { key },
+              update: { value: metadataValue },
+              create: { key, value: metadataValue, description: 'Temporary 3DS binding payment metadata' },
+            })
+          )
+        );
+      } catch (dbErr: any) {
+        this.logger.error(`Failed to store 3DS metadata: ${dbErr.message}`);
+      }
+      return {
+        success: false,
+        requires3ds: true,
+        challengeUrl: providerResult.challengeUrl,
+        cReq: providerResult.cReq,
+        orderNumber,
+        message: providerResult.message,
+        orderId: undefined,
+        paymentId: mdOrder,
+        amount: convertedAmount,
+        conversionInfo: {
+          currency: normalizedCurrency,
+          originalAmount,
+          convertedAmount,
+          exchangeRate: exchangeRate ?? 1,
+          baseCurrency: this.BASE_CURRENCY,
+        },
+      };
+    }
+
     if (!providerResult.success) {
       throw new Error(providerResult.message || "Payment failed");
     }
