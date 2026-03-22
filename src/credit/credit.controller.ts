@@ -97,29 +97,29 @@ export class CreditController {
 
   // ── Payment management ───────────────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard)
-  @Post('payment/cancel')
-  async cancelPayment(
-    @Request() req,
-    @Body() body: { paymentID: string; orderID: string },
-  ) {
-    if (!body.paymentID || !body.orderID) {
-      throw new BadRequestException('paymentID and orderID are required');
-    }
-    return this.creditService.cancelPayment(body.paymentID, body.orderID);
-  }
+//   @UseGuards(JwtAuthGuard)
+//   @Post('payment/cancel')
+//   async cancelPayment(
+//     @Request() req,
+//     @Body() body: { paymentID: string; orderID: string },
+//   ) {
+//     if (!body.paymentID || !body.orderID) {
+//       throw new BadRequestException('paymentID and orderID are required');
+//     }
+//     return this.creditService.cancelPayment(body.paymentID, body.orderID);
+//   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('payment/refund')
-  async refundPayment(
-    @Request() req,
-    @Body() body: { paymentID: string; orderID: string; amount?: number },
-  ) {
-    if (!body.paymentID || !body.orderID) {
-      throw new BadRequestException('paymentID and orderID are required');
-    }
-    return this.creditService.refundPayment(body.paymentID, body.orderID, body.amount);
-  }
+//   @UseGuards(JwtAuthGuard)
+//   @Post('payment/refund')
+//   async refundPayment(
+//     @Request() req,
+//     @Body() body: { paymentID: string; orderID: string; amount?: number },
+//   ) {
+//     if (!body.paymentID || !body.orderID) {
+//       throw new BadRequestException('paymentID and orderID are required');
+//     }
+//     return this.creditService.refundPayment(body.paymentID, body.orderID, body.amount);
+//   }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

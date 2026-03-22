@@ -1,13 +1,11 @@
-import {
-  FastBankPaymentProvider,
-  PaymentProvider,
-} from "../payments/payment.provider";
+import { FastBankPaymentProvider } from "../payments/payment.provider";
 import { Injectable, Logger } from "@nestjs/common";
 
 import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
 import { log } from "console";
+import { PaymentProvider } from "src/payments/types";
 
 @Injectable()
 export class CreditService {
@@ -766,61 +764,61 @@ export class CreditService {
   /**
    * Cancel a payment using Fast Bank
    */
-  async cancelPayment(paymentID: string, orderID: string) {
-    const result = await this.paymentProvider.cancelPayment(paymentID, orderID);
+  // async cancelPayment(paymentID: string, orderID: string) {
+  //   const result = await this.paymentProvider.cancelPayment(paymentID, orderID);
 
-    if (!result.success) {
-      throw new Error(result.message || "Payment cancel failed");
-    }
+  //   if (!result.success) {
+  //     throw new Error(result.message || "Payment cancel failed");
+  //   }
 
-    return {
-      success: true,
-      message: result.message || "Payment canceled successfully",
-      response: result.raw,
-    };
-  }
+  //   return {
+  //     success: true,
+  //     message: result.message || "Payment canceled successfully",
+  //     response: result.raw,
+  //   };
+  // }
 
-  /**
-   * Refund a payment using Fast Bank
-   * Supports both full refund (omit amount) and partial refund (provide amount)
-   */
-  async refundPayment(paymentID: string, orderID: string, amount?: number) {
-    let refundAmount: number | undefined = amount;
+  // /**
+  //  * Refund a payment using Fast Bank
+  //  * Supports both full refund (omit amount) and partial refund (provide amount)
+  //  */
+  // async refundPayment(paymentID: string, orderID: string, amount?: number) {
+  //   let refundAmount: number | undefined = amount;
 
-    if (refundAmount !== undefined && refundAmount !== null) {
-      if (refundAmount <= 0) {
-        throw new Error("Refund amount must be greater than 0");
-      }
-    } else {
-      const paymentDetails = await this.getPaymentDetails(paymentID);
-      refundAmount =
-        paymentDetails.DepositedAmount || paymentDetails.Amount;
-      if (!refundAmount || refundAmount <= 0) {
-        throw new Error(
-          "Could not determine original payment amount for full refund"
-        );
-      }
-    }
+  //   if (refundAmount !== undefined && refundAmount !== null) {
+  //     if (refundAmount <= 0) {
+  //       throw new Error("Refund amount must be greater than 0");
+  //     }
+  //   } else {
+  //     const paymentDetails = await this.getPaymentDetails(paymentID);
+  //     refundAmount =
+  //       paymentDetails.DepositedAmount || paymentDetails.Amount;
+  //     if (!refundAmount || refundAmount <= 0) {
+  //       throw new Error(
+  //         "Could not determine original payment amount for full refund"
+  //       );
+  //     }
+  //   }
 
-    const result = await this.paymentProvider.refundPayment(
-      paymentID,
-      orderID,
-      refundAmount
-    );
+  //   const result = await this.paymentProvider.refundPayment(
+  //     paymentID,
+  //     orderID,
+  //     refundAmount
+  //   );
 
-    if (!result.success) {
-      throw new Error(result.message || "Payment refund failed");
-    }
+  //   if (!result.success) {
+  //     throw new Error(result.message || "Payment refund failed");
+  //   }
 
-    return {
-      success: true,
-      message:
-        refundAmount !== undefined
-          ? `Payment refunded successfully (amount: ${refundAmount})`
-          : "Payment refunded successfully",
-      response: result.raw,
-    };
-  }
+  //   return {
+  //     success: true,
+  //     message:
+  //       refundAmount !== undefined
+  //         ? `Payment refunded successfully (amount: ${refundAmount})`
+  //         : "Payment refunded successfully",
+  //     response: result.raw,
+  //   };
+  // }
 
   /**
    * Convert an amount from the given currency to AMD (ARCA bank currency, ISO 4217 code 051).
