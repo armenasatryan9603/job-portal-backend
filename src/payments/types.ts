@@ -17,11 +17,20 @@ export interface InitCreditRefillResult {
   raw: any;
 }
 
+export interface ClientBrowserInfo {
+  screenWidth: number;
+  screenHeight: number;
+  browserLanguage: string;
+  browserTimeZoneOffset: number;
+}
+
 export interface BindingPaymentParams {
   userId: number;
   amount: number;
   currency: string;
   bindingToken: string;
+  clientIp?: string;
+  clientBrowserInfo?: ClientBrowserInfo;
 }
 
 export interface BindingPaymentResult {

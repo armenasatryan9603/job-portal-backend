@@ -33,7 +33,17 @@ export class CreditController {
   @Post('refill/initiate')
   async initiate(
     @Request() req,
-    @Body() body: { amount: number; currency?: string; cardId?: string },
+    @Body() body: {
+      amount: number;
+      currency?: string;
+      cardId?: string;
+      clientBrowserInfo?: {
+        screenWidth: number;
+        screenHeight: number;
+        browserLanguage: string;
+        browserTimeZoneOffset: number;
+      };
+    },
   ) {
     const user = await this.prisma.user.findUnique({
       where: { id: req.user.userId },
@@ -41,11 +51,18 @@ export class CreditController {
     });
     const currency = body.currency || user?.currency || 'USD';
 
+    const clientIp: string | undefined =
+      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      req.ip ||
+      undefined;
+
     return this.creditService.initiatePayment(
       req.user.userId,
       body.amount,
       currency,
       body.cardId,
+      clientIp,
+      body.clientBrowserInfo,
     );
   }
 

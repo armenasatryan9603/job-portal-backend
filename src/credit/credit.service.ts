@@ -5,7 +5,7 @@ import { CreditTransactionsService } from "./credit-transactions.service";
 import { ExchangeRateService } from "../exchange-rate/exchange-rate.service";
 import { PrismaService } from "../prisma.service";
 import { log } from "console";
-import { PaymentProvider } from "src/payments/types";
+import { ClientBrowserInfo, PaymentProvider } from "src/payments/types";
 
 @Injectable()
 export class CreditService {
@@ -26,6 +26,8 @@ export class CreditService {
     amount: number,
     currency: string = "USD",
     cardId?: string,
+    clientIp?: string,
+    clientBrowserInfo?: ClientBrowserInfo,
   ) {
     // If cardId is provided, use saved card payment (no webview)
     if (cardId) {
@@ -69,6 +71,8 @@ export class CreditService {
         amount,
         currency,
         card.binding_id,
+        clientIp,
+        clientBrowserInfo,
       );
     }
 
@@ -644,7 +648,8 @@ export class CreditService {
     amount: number,
     currency: string,
     bindingId: string,
-    // cardHolderId: string,
+    clientIp?: string,
+    clientBrowserInfo?: ClientBrowserInfo,
   ) {
     // Get user's currency preference
     const user = await this.prisma.user.findUnique({
@@ -698,6 +703,8 @@ export class CreditService {
       amount: amdAmount,
       currency: normalizedCurrency,
       bindingToken: bindingId,
+      clientIp,
+      clientBrowserInfo,
     });
     
     console.log('ssssssssssssssssssssssssssssssssssssssssssssssssss', providerResult);
