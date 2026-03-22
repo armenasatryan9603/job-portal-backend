@@ -91,7 +91,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
     }
 
     const body: Record<string, string | number> = {
-      amount: params.amount,
+      amount: params.amount * 100,
       currency: '051',
       orderNumber: params.orderId + Math.random().toString(36).substring(2, 15),
       returnUrl: params.returnUrl,
@@ -146,7 +146,7 @@ export class FastBankPaymentProvider implements PaymentProvider {
     const returnUrl = `${backendUrl}/credit/refill/callback`;
 
     const registerBody: Record<string, string | number> = {
-      amount: params.amount,
+      amount: params.amount * 100,
       currency: '051',
       orderNumber: `binding-${params.userId}-${Date.now()}`,
       returnUrl,
