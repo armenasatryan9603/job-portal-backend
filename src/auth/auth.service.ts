@@ -11,7 +11,7 @@ import { JwtService } from "@nestjs/jwt";
 import { PhoneVerificationService } from "../phone-verification/phone-verification.service";
 import { PrismaService } from "../prisma.service";
 import { ReferralsService } from "../referrals/referrals.service";
-import { UniClient } from "uni-sdk";
+import Twilio from "twilio";
 
 /** Separator for location: "address__ISO" */
 const LOCATION_COUNTRY_SEPARATOR = "__";
@@ -232,11 +232,8 @@ function countryCodeToIso(countryCode: string): string | null {
 
 @Injectable()
 export class AuthService {
-  private unimtxClient: UniClient | null = null;
-  private unimtxAccessKeyId: string;
-  private unimtxAccessKeySecret: string;
-  private unimtxTemplateId: string;
-  private unimtxSenderId: string;
+  private twilioClient: ReturnType<typeof Twilio> | null = null;
+  private twilioVerifyServiceSid: string;
   private smsEnabled: boolean;
 
   constructor(
@@ -245,23 +242,19 @@ export class AuthService {
     private phoneVerificationService: PhoneVerificationService,
     private referralsService: ReferralsService
   ) {
-    // Initialize Unimtx SMS
-    this.unimtxAccessKeyId = process.env.UNIMTX_ACCESS_KEY_ID || "";
-    this.unimtxAccessKeySecret = process.env.UNIMTX_ACCESS_KEY_SECRET || "";
-    this.unimtxTemplateId = process.env.UNIMTX_TEMPLATE_ID || "f781135d";
-    this.unimtxSenderId = process.env.UNIMTX_SENDER_ID || "GorcKa";
+    // Initialize Twilio SMS
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID || "";
+    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN || "";
+    this.twilioVerifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID || "";
 
-    this.smsEnabled = !!this.unimtxAccessKeyId && !!this.unimtxAccessKeySecret;
+    this.smsEnabled = !!twilioAccountSid && !!twilioAuthToken && !!this.twilioVerifyServiceSid;
 
     if (this.smsEnabled) {
-      this.unimtxClient = new UniClient({
-        accessKeyId: this.unimtxAccessKeyId,
-        accessKeySecret: this.unimtxAccessKeySecret,
-      });
-      console.log("✅ Unimtx SMS service initialized");
+      this.twilioClient = Twilio(twilioAccountSid, twilioAuthToken);
+      console.log("✅ Twilio SMS service initialized");
     } else {
       console.log(
-        "⚠️  Unimtx SMS not configured - OTP will be logged to console only"
+        "⚠️  Twilio SMS not configured - OTP will be logged to console only"
       );
     }
   }
@@ -699,43 +692,25 @@ export class AuthService {
       };
     }
 
-    // Send OTP via Unimtx if configured, otherwise generate and store locally
-    if (this.smsEnabled && this.unimtxClient) {
+    // Send OTP via Twilio if configured, otherwise generate and store locally
+    if (this.smsEnabled && this.twilioClient) {
       try {
-        const response = await this.unimtxClient.otp.send({
-          to: cleanPhone,
-          templateId: this.unimtxTemplateId,
-          signature: this.unimtxSenderId,
-        });
+        const verification = await this.twilioClient.verify.v2
+          .services(this.twilioVerifyServiceSid)
+          .verifications.create({ to: cleanPhone, channel: "sms" });
 
-        // Check Unimtx response structure: code "0" means success
-        const responseData = response as any;
-        if (responseData && responseData.code === "0" && responseData.data) {
-          const messageId = responseData.data.id;
-          if (messageId) {
-            console.log(
-              `📱 OTP sent to ${phone} via Unimtx (MessageId: ${messageId})`
-            );
-            return {
-              success: true,
-              message: "OTP sent successfully",
-            };
-          } else {
-            throw new Error("No MessageId in Unimtx response data");
-          }
-        } else if (responseData && responseData.code !== "0") {
-          throw new Error(`Unimtx API error: code ${responseData.code}`);
-        } else {
-          throw new Error("Invalid response structure from Unimtx");
-        }
+        console.log(`📱 OTP sent to ${phone} via Twilio (SID: ${verification.sid})`);
+        return {
+          success: true,
+          message: "OTP sent successfully",
+        };
       } catch (error) {
-        console.error("❌ Failed to send OTP via Unimtx:", error.message);
-        // Fall back to console logging
+        console.error("❌ Failed to send OTP via Twilio:", error.message);
         console.log(`OTP for ${phone}: ${otp}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
     } else {
-      // Unimtx not configured - log OTP to console
+      // Twilio not configured - log OTP to console
       console.log(`OTP for ${phone}: ${otp}`);
 
       return {
@@ -766,28 +741,27 @@ export class AuthService {
     if (isSimulator) {
       console.log(`🧪 [SIMULATOR] Verifying OTP locally for ${phone}`);
       // Fall through to local verification below
-    } else if (this.smsEnabled && this.unimtxClient) {
-      // Verify OTP via Unimtx if configured and not simulator
+    } else if (this.smsEnabled && this.twilioClient) {
+      // Verify OTP via Twilio if configured and not simulator
       try {
-        const response = await this.unimtxClient.otp.verify({
-          to: cleanPhone,
-          code: otp,
-        });
+        const check = await this.twilioClient.verify.v2
+          .services(this.twilioVerifyServiceSid)
+          .verificationChecks.create({ to: cleanPhone, code: otp });
 
-        if (!response.valid) {
+        if (check.status !== "approved") {
           throw new Error("Invalid OTP");
         }
 
-        console.log(`✅ OTP verified successfully for ${phone} via Unimtx`);
+        console.log(`✅ OTP verified successfully for ${phone} via Twilio`);
       } catch (error) {
-        console.error("❌ Failed to verify OTP via Unimtx:", error.message);
+        console.error("❌ Failed to verify OTP via Twilio:", error.message);
         throw new Error("Invalid OTP");
       }
     }
 
     // Local verification (used for simulator or when Unimtx is not configured)
-    if (isSimulator || !this.smsEnabled || !this.unimtxClient) {
-      // Fallback to local verification when Unimtx is not configured
+    if (isSimulator || !this.smsEnabled || !this.twilioClient) {
+      // Fallback to local verification when Twilio is not configured
       // Use cleanPhone for consistency
       const user = await this.prisma.user.findFirst({
         where: { phone: cleanPhone, deletedAt: null },
@@ -992,33 +966,19 @@ export class AuthService {
     }
 
     // Send SMS if configured, otherwise log to console
-    if (this.smsEnabled && this.unimtxClient) {
+    if (this.smsEnabled && this.twilioClient) {
       try {
-        const response = await this.unimtxClient.otp.send({
-          to: cleanPhone,
-          templateId: this.unimtxTemplateId,
-          signature: this.unimtxSenderId,
-        });
+        const verification = await this.twilioClient.verify.v2
+          .services(this.twilioVerifyServiceSid)
+          .verifications.create({ to: cleanPhone, channel: "sms" });
 
-        const responseData = response as any;
-        if (responseData && responseData.code === "0" && responseData.data) {
-          const messageId = responseData.data.id;
-          if (messageId) {
-            console.log(
-              `📱 Reset OTP sent to ${phone} via Unimtx (MessageId: ${messageId})`
-            );
-            return {
-              success: true,
-              message: "OTP reset and new OTP sent successfully",
-            };
-          } else {
-            throw new Error("No MessageId in Unimtx response data");
-          }
-        } else {
-          throw new Error(`Unimtx API error: code ${responseData?.code}`);
-        }
+        console.log(`📱 Reset OTP sent to ${phone} via Twilio (SID: ${verification.sid})`);
+        return {
+          success: true,
+          message: "OTP reset and new OTP sent successfully",
+        };
       } catch (error) {
-        console.error("❌ Failed to send reset OTP via Unimtx:", error.message);
+        console.error("❌ Failed to send reset OTP via Twilio:", error.message);
         console.log(`Reset OTP for ${phone}: ${otp}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
