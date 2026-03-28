@@ -40,8 +40,6 @@ async function bootstrap() {
       ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
       : [
           "http://localhost:3000",
-          "http://localhost:3001",
-          "http://localhost:5173",
         ];
 
     console.log("CORS origins:", corsOrigins);
@@ -60,10 +58,7 @@ async function bootstrap() {
 
         // In development, allow all localhost origins
         const isLocalhost =
-          trimmedOrigin.startsWith("http://localhost:") ||
-          trimmedOrigin.startsWith("https://localhost:") ||
-          trimmedOrigin.startsWith("http://127.0.0.1:") ||
-          trimmedOrigin.startsWith("https://127.0.0.1:");
+          trimmedOrigin.startsWith("http://localhost:");
 
         // Check if origin is in allowed list or if wildcard is enabled or localhost
         const isAllowed =
