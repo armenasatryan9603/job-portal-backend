@@ -40,6 +40,7 @@ async function bootstrap() {
       ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
       : [
           "http://localhost:3000",
+          "https://www.hotwork.app",
         ];
 
     console.log("CORS origins:", corsOrigins);
