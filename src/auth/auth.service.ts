@@ -706,12 +706,12 @@ export class AuthService {
         };
       } catch (error) {
         console.error("❌ Failed to send OTP via Twilio:", error.message);
-        console.log(`OTP for ${phone}: ${otp}`);
+        console.log(`OTP for country ${countryCode}, phone ${phone}: ${otp}`);
         throw new Error("Failed to send verification code. Please try again.");
       }
     } else {
       // Twilio not configured - log OTP to console
-      console.log(`OTP for ${phone}: ${otp}`);
+      console.log(`Twilio not configured: OTP for country ${countryCode}, phone ${phone}: ${otp}`);
 
       return {
         success: true,
