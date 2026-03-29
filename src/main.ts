@@ -36,12 +36,21 @@ async function bootstrap() {
     // Files are now served directly from Vercel Blob
 
     // Enable CORS
-    const corsOrigins = process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
-      : [
-          "http://localhost:3000",
-          "https://www.hotwork.app",
-        ];
+    // Always-allowed origins (production + local dev)
+    const BASE_ORIGINS = [
+      "http://localhost:3000",
+      "http://localhost:3001",
+      "http://localhost:8081",
+      "https://hotwork.app",
+      "https://www.hotwork.app",
+    ];
+
+    // CORS_ORIGIN env var is additive (e.g. Vercel preview URLs)
+    const extraOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean)
+      : [];
+
+    const corsOrigins = [...new Set([...BASE_ORIGINS, ...extraOrigins])];
 
     console.log("CORS origins:", corsOrigins);
 
