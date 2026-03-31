@@ -711,6 +711,7 @@ export class AuthService {
       }
     } else {
       // Twilio not configured - log OTP to console
+      console.log(`this.smsEnabled && this.twilioClient ${this.smsEnabled}, ${this.twilioClient}`);
       console.log(`Twilio not configured: OTP for country ${countryCode}, phone ${phone}: ${otp}`);
 
       return {
