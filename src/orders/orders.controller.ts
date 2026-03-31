@@ -15,6 +15,7 @@ import {
 } from "@nestjs/common";
 import type { Request as ExpressRequest, Response } from "express";
 import { OrdersService } from "./orders.service";
+import { BackfillService } from "./backfill.service";
 import { AIService } from "../ai/ai.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
@@ -24,6 +25,7 @@ import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
 export class OrdersController {
   constructor(
     private ordersService: OrdersService,
+    private backfillService: BackfillService,
     private aiService: AIService
   ) {}
 
@@ -267,6 +269,52 @@ export class OrdersController {
       parsedCategoryIds && parsedCategoryIds.length > 0
         ? parsedCategoryIds
         : undefined,
+      orderType,
+      country,
+      budgetMinNum,
+      budgetMaxNum,
+      budgetCurrency?.trim() || undefined
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("search/ai")
+  async semanticSearchOrders(
+    @Request() req,
+    @Query("q") query: string,
+    @Query("page") page: string = "1",
+    @Query("limit") limit: string = "10",
+    @Query("categoryIds") categoryIds?: string,
+    @Query("orderType") orderType?: string,
+    @Query("country") country?: string,
+    @Query("budgetMin") budgetMin?: string,
+    @Query("budgetMax") budgetMax?: string,
+    @Query("budgetCurrency") budgetCurrency?: string
+  ) {
+    if (!query) {
+      return {
+        orders: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      };
+    }
+
+    let parsedCategoryIds: number[] | undefined;
+    if (categoryIds) {
+      parsedCategoryIds = categoryIds
+        .split(",")
+        .map((id) => parseInt(id.trim()))
+        .filter((id) => !isNaN(id));
+    }
+
+    const budgetMinNum = budgetMin != null && budgetMin !== "" ? parseFloat(budgetMin) : undefined;
+    const budgetMaxNum = budgetMax != null && budgetMax !== "" ? parseFloat(budgetMax) : undefined;
+
+    return this.ordersService.semanticSearchOrders(
+      query,
+      req.user.userId,
+      parseInt(page),
+      parseInt(limit),
+      parsedCategoryIds && parsedCategoryIds.length > 0 ? parsedCategoryIds : undefined,
       orderType,
       country,
       budgetMinNum,
@@ -684,6 +732,12 @@ export class OrdersController {
         detectedLanguage: enhanced.detectedLanguage,
       },
     };
+  }
+
+  @UseGuards(AdminGuard)
+  @Post("admin/backfill-embeddings")
+  async backfillEmbeddings() {
+    return this.backfillService.backfillAll();
   }
 
   @UseGuards(AdminGuard)

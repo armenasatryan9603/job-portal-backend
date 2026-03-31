@@ -6,9 +6,12 @@ import { PortfolioService } from "./portfolio.service";
 import { UserCleanupService } from "./user-cleanup.service";
 import { StorageModule } from "../storage/storage.module";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { AIModule } from "../ai/ai.module";
+import { CreditModule } from "../credit/credit.module";
+import { SubscriptionsModule } from "../subscriptions/subscriptions.module";
 
 @Module({
-  imports: [StorageModule, NotificationsModule],
+  imports: [StorageModule, NotificationsModule, AIModule, CreditModule, SubscriptionsModule],
   controllers: [UsersController],
   providers: [
     UsersService,

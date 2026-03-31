@@ -187,6 +187,27 @@ Ensure all outputs are professional, clear, and grammatically correct in their r
   }
 
   /**
+   * Generate an embedding vector for semantic search using text-embedding-3-small.
+   * Returns a 1536-dimensional float array.
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.openai) {
+      throw new BadRequestException(
+        "AI service is not configured. Please set OPENAI_API_KEY environment variable."
+      );
+    }
+
+    const input = text.replace(/\n/g, " ").trim().slice(0, 8000);
+
+    const response = await this.openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input,
+    });
+
+    return response.data[0].embedding;
+  }
+
+  /**
    * Check if AI service is available
    */
   isAvailable(): boolean {

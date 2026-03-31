@@ -74,6 +74,7 @@ model User {
   MarketMediaFiles         MarketMediaFile[]         @relation("MarketMediaUploader")
   MarketSubscriptions      MarketSubscription[]
   deletedAt                DateTime?
+  embedding                Unsupported("vector(1536)")?
 
   @@index([deletedAt])
   @@index([country])
@@ -232,6 +233,7 @@ model Order {
   Bookings                Booking[]
   Markets                 MarketOrder[]
   deletedAt               DateTime?
+  embedding               Unsupported("vector(1536)")?
 
   @@index([status])
   @@index([orderType])

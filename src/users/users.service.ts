@@ -8,18 +8,27 @@ import {
 } from "@nestjs/common";
 import { UserLanguage, isValidUserLanguage } from "../types/user-languages";
 
+import { AIService } from "../ai/ai.service";
+import { CreditTransactionsService } from "../credit/credit-transactions.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma.service";
 import { PusherService } from "../pusher/pusher.service";
+import { SubscriptionsService } from "../subscriptions/subscriptions.service";
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly SEARCH_CREDIT_COST = parseFloat(
+    process.env.SEARCH_CREDIT_COST || "1"
+  );
 
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private pusherService: PusherService
+    private pusherService: PusherService,
+    private aiService: AIService,
+    private subscriptionsService: SubscriptionsService,
+    private creditTransactionsService: CreditTransactionsService
   ) {}
 
   async findAll(page: number = 1, limit: number = 10, role?: string) {
@@ -175,7 +184,7 @@ export class UsersService {
     // Prepare update data
     const dataToUpdate: any = { ...updateData };
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id },
       data: dataToUpdate,
       select: {
@@ -192,6 +201,13 @@ export class UsersService {
         createdAt: true,
       },
     });
+
+    // Regenerate embedding asynchronously when name or bio changes (non-blocking)
+    if (updateData.name !== undefined || updateData.bio !== undefined) {
+      this.storeUserEmbedding(id).catch(() => {});
+    }
+
+    return updatedUser;
   }
 
   async remove(id: number) {
@@ -1217,6 +1233,9 @@ export class UsersService {
       },
     });
 
+    // Regenerate embedding since specialist categories changed (non-blocking)
+    this.storeUserEmbedding(userId).catch(() => {});
+
     return userCategory;
   }
 
@@ -1329,5 +1348,204 @@ export class UsersService {
         Category: uc.Category,
       })),
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Semantic (AI) search — costs credits, uses pgvector embeddings
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Deduct search credits from the user.
+   * Returns true if credits were deducted, false if user has freeSearch subscription.
+   * Throws BadRequestException when balance is insufficient.
+   */
+  private async deductSearchCredits(userId: number): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, creditBalance: true },
+    });
+    if (!user) throw new BadRequestException("User not found");
+
+    const activeSubscription =
+      await this.subscriptionsService.getUserActiveSubscription(userId);
+    const hasFreeSearch = this.subscriptionsService.hasFeature(
+      activeSubscription,
+      "freeSearch"
+    );
+
+    if (hasFreeSearch) return false;
+
+    if (user.creditBalance < this.SEARCH_CREDIT_COST) {
+      throw new BadRequestException(
+        `Insufficient credit balance. Required: ${this.SEARCH_CREDIT_COST} credits, Available: ${user.creditBalance} credits`
+      );
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { creditBalance: { decrement: this.SEARCH_CREDIT_COST } },
+      select: { creditBalance: true },
+    });
+
+    await this.creditTransactionsService.logTransaction({
+      userId,
+      amount: -this.SEARCH_CREDIT_COST,
+      type: "ai_search",
+      balanceAfter: updated.creditBalance,
+    });
+
+    return true;
+  }
+
+  async semanticSearchSpecialists(
+    query: string,
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    categoryId?: number,
+    country?: string,
+    priceMin?: number,
+    priceMax?: number
+  ) {
+    // Deduct credits (throws if insufficient)
+    await this.deductSearchCredits(userId);
+
+    // Generate query embedding
+    const embedding = await this.aiService.generateEmbedding(query);
+    const vectorLiteral = `[${embedding.join(",")}]`;
+
+    // Vector similarity search — only rows that have an embedding and are close enough.
+    // Cosine distance threshold: 0 = identical, 1 = unrelated. 0.65 keeps only relevant results.
+    const SIMILARITY_THRESHOLD = parseFloat(process.env.SEARCH_SIMILARITY_THRESHOLD ?? "0.65");
+
+    const vectorResults: Array<{ id: number }> = await this.prisma.$queryRawUnsafe(
+      `SELECT id FROM "User"
+       WHERE "deletedAt" IS NULL
+         AND role = 'specialist'
+         AND embedding IS NOT NULL
+         AND id != $3
+         AND (embedding <=> $1::vector) < $2::float8
+       ORDER BY embedding <=> $1::vector
+       LIMIT 50`,
+      vectorLiteral,
+      SIMILARITY_THRESHOLD,
+      userId
+    );
+
+    // Fallback: no embeddings exist yet (backfill not run) — use keyword search instead
+    if (!vectorResults.length) {
+      this.logger.warn("semanticSearchSpecialists: no embeddings found, falling back to keyword search");
+      return this.searchSpecialists(query, page, limit);
+    }
+
+    const orderedIds = vectorResults.map((r) => r.id);
+
+    // Build hard filters on top of vector candidates
+    const where: any = {
+      id: { in: orderedIds },
+      role: "specialist",
+      deletedAt: null,
+    };
+
+    if (country) {
+      where.country = { equals: country.trim().toUpperCase().slice(0, 2) };
+    }
+
+    if (priceMin != null || priceMax != null) {
+      where.priceMin = {};
+      if (priceMin != null) where.priceMin.gte = priceMin;
+      if (priceMax != null) where.priceMin.lte = priceMax;
+    }
+
+    if (categoryId) {
+      where.UserCategories = { some: { categoryId } };
+    }
+
+    const users = await this.prisma.user.findMany({
+      where,
+      include: { _count: { select: { Proposals: true } } },
+    });
+
+    // Restore semantic ordering
+    const idToUser = new Map(users.map((u) => [u.id, u]));
+    const ordered = orderedIds
+      .map((id) => idToUser.get(id))
+      .filter(Boolean) as typeof users;
+
+    // Add ratings
+    const specialistsWithRatings = await Promise.all(
+      ordered.map(async (user) => {
+        const reviews = await this.prisma.review.findMany({
+          where: { specialistId: user.id },
+          select: { rating: true },
+        });
+        const averageRating =
+          reviews.length > 0
+            ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+            : 0;
+        return {
+          ...user,
+          averageRating: Math.round(averageRating * 10) / 10,
+          reviewCount: reviews.length,
+        };
+      })
+    );
+
+    const total = specialistsWithRatings.length;
+    const skip = (page - 1) * limit;
+    const paged = specialistsWithRatings.slice(skip, skip + limit);
+
+    return {
+      specialists: paged,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Store an embedding for a user/specialist (fire-and-forget, non-blocking).
+   */
+  async storeUserEmbedding(userId: number): Promise<void> {
+    try {
+      if (!this.aiService.isAvailable()) return;
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          UserCategories: { include: { Category: true } },
+        },
+      });
+      if (!user) return;
+
+      const categoryNames = (user.UserCategories ?? [])
+        .map((uc: any) => uc.Category?.name || "")
+        .filter(Boolean)
+        .join(", ");
+
+      const text = [user.name || "", user.bio || "", categoryNames]
+        .filter(Boolean)
+        .join(" ");
+
+      if (!text.trim()) return;
+
+      const embedding = await this.aiService.generateEmbedding(text);
+      const vectorLiteral = `[${embedding.join(",")}]`;
+
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "User" SET embedding = $1::vector WHERE id = $2`,
+        vectorLiteral,
+        userId
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to store embedding for user ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }

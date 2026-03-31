@@ -103,6 +103,7 @@ export class SubscriptionsService {
       prioritySupport: "Priority customer support",
       advancedFilters: "Access to advanced search filters",
       featuredProfile: "Featured specialist profile",
+      freeSearch: "Free AI semantic search (no credit cost per search)",
     };
 
     const descriptions: Array<{ key: string; label: string }> = [];

@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { PrismaService } from "../prisma.service";
 import { OrdersService } from "./orders.service";
 import { OrdersController } from "./orders.controller";
+import { BackfillService } from "./backfill.service";
 import { AuthModule } from "../auth/auth.module"; // needed for JwtAuthGuard
 import { MediaFilesModule } from "../media-files/media-files.module";
 import { OrderPricingModule } from "../order-pricing/order-pricing.module";
@@ -11,10 +12,12 @@ import { CreditModule } from "../credit/credit.module";
 import { SkillsModule } from "../skills/skills.module";
 import { SubscriptionsModule } from "../subscriptions/subscriptions.module";
 import { ExchangeRateModule } from "../exchange-rate/exchange-rate.module";
+import { UsersModule } from "../users/users.module";
 
 @Module({
-  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule, SubscriptionsModule, ExchangeRateModule], // so we can use JwtAuthGuard, MediaFilesService, OrderPricingService, NotificationsService, AIService, CreditTransactionsService, SkillsService, and SubscriptionsService
+  imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule, SubscriptionsModule, ExchangeRateModule, UsersModule],
   controllers: [OrdersController],
-  providers: [OrdersService, PrismaService],
+  providers: [OrdersService, BackfillService, PrismaService],
+  exports: [OrdersService],
 })
 export class OrdersModule {}

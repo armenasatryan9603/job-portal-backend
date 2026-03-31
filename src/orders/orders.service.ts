@@ -703,6 +703,9 @@ export class OrdersService {
     // ✅ Notifications will be sent when order is approved (status changes to "open")
     // Do not send notifications here because order is still "pending_review"
 
+    // Generate and store embedding asynchronously (non-blocking)
+    this.storeOrderEmbedding(order.id).catch(() => {});
+
     return order;
   }
 
@@ -1733,7 +1736,7 @@ export class OrdersService {
       }
     }
 
-    return this.prisma.order.update({
+    const updatedForReturn = await this.prisma.order.update({
       where: { id: Number(id) },
       data: updateData,
       include: {
@@ -1761,6 +1764,11 @@ export class OrdersService {
         },
       } as any,
     });
+
+    // Regenerate embedding asynchronously (non-blocking)
+    this.storeOrderEmbedding(Number(id)).catch(() => {});
+
+    return updatedForReturn;
   }
 
   async remove(id: number) {
@@ -3617,5 +3625,236 @@ export class OrdersService {
       workDurationPerClient: order.workDurationPerClient,
       availableSlots,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Semantic (AI) search — costs credits, uses pgvector embeddings
+  // ---------------------------------------------------------------------------
+
+  private readonly SEARCH_CREDIT_COST = parseFloat(
+    process.env.SEARCH_CREDIT_COST || "1"
+  );
+
+  /**
+   * Deduct search credits from the user.
+   * Returns true if credits were deducted, false if user has freeSearch subscription.
+   * Throws BadRequestException when balance is insufficient.
+   */
+  private async deductSearchCredits(userId: number): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, creditBalance: true },
+    });
+
+    if (!user) throw new BadRequestException("User not found");
+
+    const activeSubscription =
+      await this.subscriptionsService.getUserActiveSubscription(userId);
+    const hasFreeSearch = this.subscriptionsService.hasFeature(
+      activeSubscription,
+      "freeSearch"
+    );
+
+    if (hasFreeSearch) return false;
+
+    if (user.creditBalance < this.SEARCH_CREDIT_COST) {
+      throw new BadRequestException(
+        `Insufficient credit balance. Required: ${this.SEARCH_CREDIT_COST} credits, Available: ${user.creditBalance} credits`
+      );
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { creditBalance: { decrement: this.SEARCH_CREDIT_COST } },
+      select: { creditBalance: true },
+    });
+
+    await this.creditTransactionsService.logTransaction({
+      userId,
+      amount: -this.SEARCH_CREDIT_COST,
+      type: "ai_search",
+      balanceAfter: updated.creditBalance,
+    });
+
+    return true;
+  }
+
+  async semanticSearchOrders(
+    query: string,
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    categoryIds?: number[],
+    orderType?: string,
+    country?: string,
+    budgetMin?: number,
+    budgetMax?: number,
+    budgetCurrency?: string
+  ) {
+    // Deduct credits (throws if insufficient)
+    await this.deductSearchCredits(userId);
+
+    // Generate query embedding
+    const embedding = await this.aiService.generateEmbedding(query);
+    const vectorLiteral = `[${embedding.join(",")}]`;
+
+    // Vector similarity search — only rows that have an embedding and are close enough.
+    // Cosine distance threshold: 0 = identical, 1 = unrelated. 0.65 keeps only relevant results.
+    const SIMILARITY_THRESHOLD = parseFloat(process.env.SEARCH_SIMILARITY_THRESHOLD ?? "0.65");
+
+    const vectorResults: Array<{ id: number }> = await this.prisma.$queryRawUnsafe(
+      `SELECT id FROM "Order"
+       WHERE "deletedAt" IS NULL
+         AND status NOT IN ('draft', 'pending_review', 'rejected')
+         AND embedding IS NOT NULL
+         AND "clientId" != $3
+         AND (embedding <=> $1::vector) < $2::float8
+       ORDER BY embedding <=> $1::vector
+       LIMIT 50`,
+      vectorLiteral,
+      SIMILARITY_THRESHOLD,
+      userId
+    );
+
+    // Fallback: no embeddings exist yet (backfill not run) — use keyword search instead
+    if (!vectorResults.length) {
+      this.logger.warn("semanticSearchOrders: no embeddings found, falling back to keyword search");
+      return this.searchOrders(query, page, limit, categoryIds, orderType, country, budgetMin, budgetMax, budgetCurrency);
+    }
+
+    // Preserve semantic ordering
+    const orderedIds = vectorResults.map((r) => r.id);
+
+    // Build hard filters on top of the vector candidates
+    const where: any = {
+      id: { in: orderedIds },
+      deletedAt: null,
+      status: { notIn: ["draft", "pending_review", "rejected"] },
+    };
+
+    if (categoryIds && categoryIds.length > 0) {
+      where.categoryId = { in: categoryIds };
+    }
+    if (orderType === "one_time" || orderType === "permanent") {
+      where.orderType = orderType;
+    }
+    if (country) {
+      const code = normalizeCountryCode(country);
+      if (code) where.country = code;
+    }
+
+    const include: any = {
+      Client: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      Category: true,
+      BannerImage: { select: { id: true, fileUrl: true, fileType: true } },
+      OrderSkills: { include: { Skill: true } },
+      Proposals: { take: 3, orderBy: { createdAt: "desc" }, include: {} },
+      questions: { orderBy: { order: "asc" } },
+      _count: { select: { Proposals: true, Reviews: true } },
+    };
+
+    let allFiltered = await this.prisma.order.findMany({ where, include });
+
+    // Restore semantic order from vector search
+    const idToOrder = new Map(allFiltered.map((o) => [o.id, o]));
+    allFiltered = orderedIds
+      .map((id) => idToOrder.get(id))
+      .filter(Boolean) as typeof allFiltered;
+
+    // Budget filter in memory (same as existing searchOrders)
+    const needsBudgetFilter =
+      budgetMin != null &&
+      budgetMax != null &&
+      budgetCurrency &&
+      Number.isFinite(budgetMin) &&
+      Number.isFinite(budgetMax);
+
+    if (needsBudgetFilter) {
+      const [minUsd, maxUsd] = await Promise.all([
+        this.amountToUsd(budgetMin!, budgetCurrency!),
+        this.amountToUsd(budgetMax!, budgetCurrency!),
+      ]);
+      const budgetsUsd = await Promise.all(
+        allFiltered.map((o) => this.amountToUsd(o.budget ?? 0, (o as any).currency ?? "USD"))
+      );
+      allFiltered = allFiltered.filter((_, i) => {
+        const o = allFiltered[i];
+        if (o.budget == null) return true;
+        return budgetsUsd[i] >= minUsd && budgetsUsd[i] <= maxUsd;
+      });
+    }
+
+    const total = allFiltered.length;
+    const skip = (page - 1) * limit;
+    const paged = allFiltered.slice(skip, skip + limit);
+
+    const ordersWithCreditCost = await Promise.all(
+      paged.map(async (order) => {
+        const pricingConfig = await this.orderPricingService.getPricingConfig(order.budget || 0);
+        const skills = (order as any).OrderSkills
+          ? (order as any).OrderSkills.map((os: any) =>
+              os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || ""
+            ).filter((n: string) => n)
+          : [];
+        return { ...order, creditCost: pricingConfig.creditCost, refundPercentage: pricingConfig.refundPercentage, skills };
+      })
+    );
+
+    return {
+      orders: ordersWithCreditCost,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  /**
+   * Store an embedding for an order (fire-and-forget, non-blocking).
+   * Called after create/update. Silently logs errors to avoid disrupting the main flow.
+   */
+  async storeOrderEmbedding(orderId: number): Promise<void> {
+    try {
+      if (!this.aiService.isAvailable()) return;
+
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: { Category: true, OrderSkills: { include: { Skill: true } } },
+      });
+      if (!order) return;
+
+      const skillNames = (order.OrderSkills ?? [])
+        .map((os: any) => os.Skill?.nameEn || os.Skill?.nameRu || os.Skill?.nameHy || "")
+        .filter(Boolean)
+        .join(", ");
+
+      const text = [
+        order.titleEn || order.title || "",
+        order.descriptionEn || order.description || "",
+        order.titleRu || "",
+        order.titleHy || "",
+        order.Category?.name || "",
+        skillNames,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      if (!text.trim()) return;
+
+      const embedding = await this.aiService.generateEmbedding(text);
+      const vectorLiteral = `[${embedding.join(",")}]`;
+
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "Order" SET embedding = $1::vector WHERE id = $2`,
+        vectorLiteral,
+        orderId
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to store embedding for order ${orderId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

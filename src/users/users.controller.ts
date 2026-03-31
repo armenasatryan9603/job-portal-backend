@@ -10,6 +10,7 @@ import {
   UseGuards,
   BadRequestException,
   ForbiddenException,
+  Request,
   Req,
   Res,
   UseInterceptors,
@@ -221,6 +222,37 @@ export class UsersController {
       query,
       parseInt(page),
       parseInt(limit)
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("specialists/search/ai")
+  async semanticSearchSpecialists(
+    @Request() req,
+    @Query("q") query: string,
+    @Query("page") page: string = "1",
+    @Query("limit") limit: string = "10",
+    @Query("categoryId") categoryId?: string,
+    @Query("country") country?: string,
+    @Query("priceMin") priceMin?: string,
+    @Query("priceMax") priceMax?: string
+  ) {
+    if (!query) {
+      return {
+        specialists: [],
+        pagination: { page: 1, limit: 10, total: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false },
+      };
+    }
+
+    return this.usersService.semanticSearchSpecialists(
+      query,
+      req.user.userId,
+      parseInt(page),
+      parseInt(limit),
+      categoryId ? parseInt(categoryId) : undefined,
+      country,
+      priceMin != null && priceMin !== "" ? parseFloat(priceMin) : undefined,
+      priceMax != null && priceMax !== "" ? parseFloat(priceMax) : undefined
     );
   }
 
