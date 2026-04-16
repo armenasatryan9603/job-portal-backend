@@ -4,10 +4,11 @@ import { HiringController } from "./hiring.controller";
 import { HiringService } from "./hiring.service";
 import { OrderPricingModule } from "../order-pricing/order-pricing.module";
 import { NotificationsModule } from "../notifications/notifications.module";
+import { ConfigService } from "../config/config.service";
 
 @Module({
   imports: [NotificationsModule, OrderPricingModule],
   controllers: [HiringController],
-  providers: [HiringService, PrismaService],
+  providers: [HiringService, PrismaService, ConfigService],
 })
 export class HiringModule {}

@@ -14,10 +14,14 @@ import {
 } from "@nestjs/common";
 import { OrderProposalsService } from "./order-proposals.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { ConfigService } from "../config/config.service";
 
 @Controller("order-proposals")
 export class OrderProposalsController {
-  constructor(private readonly orderProposalsService: OrderProposalsService) {}
+  constructor(
+    private readonly orderProposalsService: OrderProposalsService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -78,6 +82,9 @@ export class OrderProposalsController {
         throw new BadRequestException("Invalid order ID");
       }
 
+      const platform = req.headers?.["x-platform"] as string | undefined;
+      const paymentEnabled = this.configService.isPaymentEnabledForPlatform(platform);
+
       return await this.orderProposalsService.createWithCreditDeduction({
         orderId: orderId,
         message: createOrderProposalDto.message,
@@ -85,6 +92,7 @@ export class OrderProposalsController {
         questionAnswers: createOrderProposalDto.questionAnswers,
         peerIds: createOrderProposalDto.peerIds,
         teamId: createOrderProposalDto.teamId,
+        paymentEnabled,
       });
     } catch (error) {
       console.error("Error in createWithCreditDeduction:", error);

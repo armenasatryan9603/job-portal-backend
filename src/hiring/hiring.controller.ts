@@ -8,12 +8,16 @@ import {
 } from '@nestjs/common';
 import { HiringService } from './hiring.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ConfigService } from '../config/config.service';
 
 @Controller('hiring')
 export class HiringController {
   private readonly logger = new Logger(HiringController.name);
 
-  constructor(private hiringService: HiringService) {}
+  constructor(
+    private hiringService: HiringService,
+    private configService: ConfigService,
+  ) {}
 
   @Post('check-status')
   @UseGuards(JwtAuthGuard)
@@ -63,9 +67,13 @@ export class HiringController {
         `Hiring attempt: Client ${req.user.userId} trying to hire specialist ${hireData.specialistId} for order ${hireData.orderId}`,
       );
 
+      const platform = req.headers?.['x-platform'] as string | undefined;
+      const paymentEnabled = this.configService.isPaymentEnabledForPlatform(platform);
+
       const result = await this.hiringService.hireSpecialist({
         ...hireData,
         clientId: req.user.userId,
+        paymentEnabled,
       });
 
       // Log successful hiring
@@ -103,9 +111,13 @@ export class HiringController {
         `Hiring attempt: Client ${req.user.userId} trying to hire team ${hireData.teamId} for order ${hireData.orderId}`,
       );
 
+      const platform = req.headers?.['x-platform'] as string | undefined;
+      const paymentEnabled = this.configService.isPaymentEnabledForPlatform(platform);
+
       const result = await this.hiringService.hireTeam({
         ...hireData,
         clientId: req.user.userId,
+        paymentEnabled,
       });
 
       // Log successful hiring

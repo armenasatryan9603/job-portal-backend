@@ -26,6 +26,7 @@ export class HiringService {
     message: string;
     orderId: number;
     clientId: number;
+    paymentEnabled?: boolean;
   }) {
     try {
       // Validate input data
@@ -99,7 +100,7 @@ export class HiringService {
         order.budget || 0
       );
 
-      if (hiringCost > 0) {
+      if (hiringCost > 0 && hireData.paymentEnabled !== false) {
         // Check if client has sufficient credits
         if (order.Client.creditBalance < hiringCost) {
           throw new BadRequestException({
@@ -183,8 +184,8 @@ export class HiringService {
         };
       }
 
-      // Deduct credits if hiring has a cost
-      if (hiringCost > 0) {
+      // Deduct credits if hiring has a cost and payment is enabled
+      if (hiringCost > 0 && hireData.paymentEnabled !== false) {
         await this.prisma.user.update({
           where: { id: hireData.clientId },
           data: { creditBalance: { decrement: hiringCost } },
@@ -522,6 +523,7 @@ export class HiringService {
     message: string;
     orderId: number;
     clientId: number;
+    paymentEnabled?: boolean;
   }) {
     try {
       // Validate input data
@@ -678,7 +680,7 @@ export class HiringService {
         order.budget || 0
       );
 
-      if (hiringCost > 0) {
+      if (hiringCost > 0 && hireData.paymentEnabled !== false) {
         // Check if client has sufficient credits
         if (order.Client.creditBalance < hiringCost) {
           throw new BadRequestException({
@@ -791,8 +793,8 @@ export class HiringService {
         };
       }
 
-      // Deduct credits if hiring has a cost
-      if (hiringCost > 0) {
+      // Deduct credits if hiring has a cost and payment is enabled
+      if (hiringCost > 0 && hireData.paymentEnabled !== false) {
         await this.prisma.user.update({
           where: { id: hireData.clientId },
           data: { creditBalance: { decrement: hiringCost } },

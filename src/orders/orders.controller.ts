@@ -20,13 +20,15 @@ import { AIService } from "../ai/ai.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
+import { ConfigService } from "../config/config.service";
 
 @Controller("orders")
 export class OrdersController {
   constructor(
     private ordersService: OrdersService,
     private backfillService: BackfillService,
-    private aiService: AIService
+    private aiService: AIService,
+    private configService: ConfigService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -794,6 +796,8 @@ export class OrdersController {
     if (isNaN(orderId)) {
       throw new BadRequestException(`Invalid order ID: ${id}`);
     }
-    return this.ordersService.publishPermanentOrder(orderId, req.user.userId);
+    const platform = req.headers?.["x-platform"] as string | undefined;
+    const paymentEnabled = this.configService.isPaymentEnabledForPlatform(platform);
+    return this.ordersService.publishPermanentOrder(orderId, req.user.userId, paymentEnabled);
   }
 }

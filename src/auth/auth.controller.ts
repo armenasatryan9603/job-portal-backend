@@ -11,10 +11,14 @@ import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AuthGuard } from "@nestjs/passport";
 import { UserLanguage } from "../types/user-languages";
+import { ConfigService } from "../config/config.service";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
 
   @Post("signup")
   async signup(
@@ -102,6 +106,7 @@ export class AuthController {
       currency: user.currency || "USD",
       rateUnit: user.rateUnit,
       portfolio: user.Portfolio || [],
+      paymentConfig: this.configService.getPaymentConfig(),
     };
   }
 

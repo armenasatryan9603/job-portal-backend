@@ -8,6 +8,7 @@ import { PhoneVerificationModule } from "../phone-verification/phone-verificatio
 import { ReferralsModule } from "../referrals/referrals.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PrismaService } from "../prisma.service";
+import { ConfigService } from "../config/config.service";
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { PrismaService } from "../prisma.service";
     ReferralsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PrismaService],
+  providers: [AuthService, JwtStrategy, PrismaService, ConfigService],
   exports: [AuthService],
 })
 export class AuthModule {}

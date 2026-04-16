@@ -3364,7 +3364,7 @@ export class OrdersService {
   /**
    * Publish a permanent order (requires subscription)
    */
-  async publishPermanentOrder(orderId: number, userId: number) {
+  async publishPermanentOrder(orderId: number, userId: number, paymentEnabled: boolean = true) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -3438,17 +3438,19 @@ export class OrdersService {
     }
 
     // Check if user has active subscription with publishPermanentOrders feature
-    const hasFeature = order.Client.Subscriptions?.some(
-      (sub) =>
-        sub.status === "active" &&
-        new Date(sub.endDate) > new Date() &&
-        (sub.Plan?.features as any)?.publishPermanentOrders === true
-    );
-
-    if (!hasFeature) {
-      throw new BadRequestException(
-        "A subscription with 'publishPermanentOrders' feature is required to publish permanent orders."
+    if (paymentEnabled) {
+      const hasFeature = order.Client.Subscriptions?.some(
+        (sub) =>
+          sub.status === "active" &&
+          new Date(sub.endDate) > new Date() &&
+          (sub.Plan?.features as any)?.publishPermanentOrders === true
       );
+
+      if (!hasFeature) {
+        throw new BadRequestException(
+          "A subscription with 'publishPermanentOrders' feature is required to publish permanent orders."
+        );
+      }
     }
 
     // Check if order was previously approved by admin

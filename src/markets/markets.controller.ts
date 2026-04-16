@@ -19,11 +19,13 @@ import { MarketsService } from "./markets.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { AdminGuard } from "../auth/admin.guard";
 import { OptionalJwtAuthGuard } from "../auth/optional-jwt-auth.guard";
+import { ConfigService } from "../config/config.service";
 
 @Controller("markets")
 export class MarketsController {
   constructor(
-    private marketsService: MarketsService
+    private marketsService: MarketsService,
+    private configService: ConfigService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -64,7 +66,10 @@ export class MarketsController {
       throw new BadRequestException("User not authenticated");
     }
 
-    return this.marketsService.publishMarket(marketId, req.user.userId);
+    const platform = req.headers?.["x-platform"] as string | undefined;
+    const paymentEnabled = this.configService.isPaymentEnabledForPlatform(platform);
+
+    return this.marketsService.publishMarket(marketId, req.user.userId, paymentEnabled);
   }
 
   @UseGuards(OptionalJwtAuthGuard)

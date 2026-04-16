@@ -226,9 +226,16 @@ export class MarketsService {
   /**
    * Publish a market (requires subscription)
    */
-  async publishMarket(marketId: number, userId: number) {
-    // Validate publishing
-    await this.validateMarketPublishing(marketId, userId);
+  async publishMarket(marketId: number, userId: number, paymentEnabled: boolean = true) {
+    // Validate publishing (subscription check skipped when payment is disabled)
+    if (paymentEnabled) {
+      await this.validateMarketPublishing(marketId, userId);
+    } else {
+      // Still validate ownership even when payment is disabled
+      const market = await this.prisma.market.findUnique({ where: { id: marketId } });
+      if (!market) throw new NotFoundException(`Market with ID ${marketId} not found`);
+      if (market.createdBy !== userId) throw new ForbiddenException("You can only publish your own markets");
+    }
 
     // Check if already published
     const market = await this.prisma.market.findUnique({

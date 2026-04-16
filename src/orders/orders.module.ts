@@ -13,11 +13,12 @@ import { SkillsModule } from "../skills/skills.module";
 import { SubscriptionsModule } from "../subscriptions/subscriptions.module";
 import { ExchangeRateModule } from "../exchange-rate/exchange-rate.module";
 import { UsersModule } from "../users/users.module";
+import { ConfigService } from "../config/config.service";
 
 @Module({
   imports: [AuthModule, MediaFilesModule, OrderPricingModule, NotificationsModule, AIModule, CreditModule, SkillsModule, SubscriptionsModule, ExchangeRateModule, UsersModule],
   controllers: [OrdersController],
-  providers: [OrdersService, BackfillService, PrismaService],
+  providers: [OrdersService, BackfillService, PrismaService, ConfigService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

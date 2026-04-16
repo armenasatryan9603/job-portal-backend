@@ -46,6 +46,39 @@ export class ConfigService {
   }
 
   /**
+   * Get payment configuration from environment variables.
+   * Returns which platforms have payments enabled (default true if not set).
+   */
+  getPaymentConfig(): { web: boolean; android: boolean; ios: boolean } {
+    const parse = (val: string | undefined): boolean =>
+      val === undefined ? true : val.toLowerCase() !== "false";
+
+    return {
+      web: parse(process.env.ALLOW_PAYMENT_WEB),
+      android: parse(process.env.ALLOW_PAYMENT_ANDROID),
+      ios: parse(process.env.ALLOW_PAYMENT_IOS),
+    };
+  }
+
+  /**
+   * Returns whether payments are enabled for the given platform string.
+   * Accepted values: "ios", "android", "web". Unknown platforms default to true.
+   */
+  isPaymentEnabledForPlatform(platform: string | undefined): boolean {
+    const config = this.getPaymentConfig();
+    switch ((platform || "").toLowerCase()) {
+      case "ios":
+        return config.ios;
+      case "android":
+        return config.android;
+      case "web":
+        return config.web;
+      default:
+        return true;
+    }
+  }
+
+  /**
    * Set max peers per application
    */
   async setMaxPeersPerApplication(value: number): Promise<void> {

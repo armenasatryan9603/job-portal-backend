@@ -141,6 +141,7 @@ export class OrderProposalsService {
     questionAnswers?: Array<{ questionId: number; answer: string }>;
     peerIds?: number[];
     teamId?: number;
+    paymentEnabled?: boolean;
   }) {
     console.log("Starting createWithCreditDeduction:", {
       orderId: createOrderProposalDto.orderId,
@@ -270,7 +271,10 @@ export class OrderProposalsService {
               );
 
               let shouldDeductCredits = true;
-              if (
+              if (createOrderProposalDto.paymentEnabled === false) {
+                // Payment disabled for this platform — all applications are free
+                shouldDeductCredits = false;
+              } else if (
                 activeSubscription &&
                 this.subscriptionsService.hasFeature(
                   activeSubscription,
