@@ -405,6 +405,8 @@ export class UsersController {
       priceMax?: number;
       location?: string;
       country?: string;
+      currency?: string;
+      rateUnit?: string;
     }
   ) {
     return this.usersService.updateSpecialistProfile(+id, specialistData);

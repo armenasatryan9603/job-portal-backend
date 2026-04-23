@@ -1043,6 +1043,8 @@ export class UsersService {
       priceMax?: number;
       location?: string;
       country?: string;
+      currency?: string;
+      rateUnit?: string;
     }
   ) {
     // Check if user exists and is a specialist
@@ -1082,6 +1084,10 @@ export class UsersService {
     const data: any = { ...specialistData };
     if (specialistData.country !== undefined) {
       data.country = specialistData.country.trim().toUpperCase().slice(0, 2) || null;
+    }
+    if (specialistData.currency !== undefined) {
+      const cur = specialistData.currency.trim().toUpperCase().slice(0, 8);
+      data.currency = cur.length > 0 ? cur : null;
     }
 
     return this.prisma.user.update({
