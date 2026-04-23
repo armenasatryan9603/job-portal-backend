@@ -10,6 +10,7 @@ import {
 import { PrismaService } from "../prisma.service";
 import { OrderPricingService } from "../order-pricing/order-pricing.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { ChatService } from "../chat/chat.service";
 
 @Injectable()
 export class HiringService {
@@ -18,7 +19,8 @@ export class HiringService {
   constructor(
     private prisma: PrismaService,
     private orderPricingService: OrderPricingService,
-    private notificationsService: NotificationsService
+    private notificationsService: NotificationsService,
+    private chatService: ChatService
   ) {}
 
   async hireSpecialist(hireData: {
@@ -430,40 +432,49 @@ export class HiringService {
         }
       }
 
-      // Create notification for hired specialist with push notification
-      await this.notificationsService.createNotificationWithPush(
-        hireData.specialistId,
-        "hiring_approved",
-        "notificationHiringApprovedTitle",
-        "notificationHiringApprovedMessage",
-        {
-          orderId: hireData.orderId,
-          clientId: hireData.clientId,
-          conversationId: conversation.id,
-        },
-        {
-          orderTitle: order.title || "",
-        }
-      );
-
-      // Process refunds for rejected applicants
       try {
-        await this.orderPricingService.processRefundsForRejectedApplicants(
+        const proposalId =
+          await this.getOrCreatePendingProposalForDirectHireIndividual({
+            orderId: hireData.orderId,
+            specialistId: hireData.specialistId,
+            message: hireData.message,
+          });
+        await this.chatService.chooseApplication(
           hireData.orderId,
-          conversation.id, // This will be the selected proposal ID
-          order.budget || 0
+          hireData.clientId,
+          proposalId
         );
-      } catch (refundError) {
+      } catch (finalizeError) {
         this.logger.error(
-          `Error processing refunds for order ${hireData.orderId}:`,
-          refundError
+          `Failed to finalize direct hire (proposal / choose) for order ${hireData.orderId}:`,
+          finalizeError
         );
-        // Don't fail the hiring process if refunds fail
+        if (finalizeError instanceof BadRequestException) {
+          throw finalizeError;
+        }
+        const msg =
+          finalizeError instanceof Error
+            ? finalizeError.message
+            : "Failed to finalize hiring";
+        throw new BadRequestException({
+          error: "HIRE_FINALIZE_FAILED",
+          message: msg,
+          details:
+            "Conversation was created but the order could not be moved to in progress. You may be able to choose the specialist from chat.",
+        });
+      }
+
+      const orderFresh = await this.prisma.order.findUnique({
+        where: { id: hireData.orderId },
+        select: { status: true },
+      });
+      if (conversation.Order && orderFresh) {
+        conversation.Order.status = orderFresh.status;
       }
 
       return {
         success: true,
-        message: "Hiring request sent successfully",
+        message: "Specialist hired and order is now in progress",
         conversation,
       };
     } catch (error) {
@@ -959,7 +970,49 @@ export class HiringService {
         });
       }
 
-      // Create notifications for all team members
+      try {
+        const proposalId = await this.getOrCreatePendingProposalForDirectHireTeam(
+          {
+            orderId: hireData.orderId,
+            teamId: hireData.teamId,
+            leadUserId: team.createdBy,
+            message: hireData.message,
+          }
+        );
+        await this.chatService.chooseApplication(
+          hireData.orderId,
+          hireData.clientId,
+          proposalId
+        );
+      } catch (finalizeError) {
+        this.logger.error(
+          `Failed to finalize direct team hire for order ${hireData.orderId}:`,
+          finalizeError
+        );
+        if (finalizeError instanceof BadRequestException) {
+          throw finalizeError;
+        }
+        const msg =
+          finalizeError instanceof Error
+            ? finalizeError.message
+            : "Failed to finalize hiring";
+        throw new BadRequestException({
+          error: "HIRE_FINALIZE_FAILED",
+          message: msg,
+          details:
+            "Conversation was created but the order could not be moved to in progress. You may be able to choose the team from chat.",
+        });
+      }
+
+      const orderFreshTeam = await this.prisma.order.findUnique({
+        where: { id: hireData.orderId },
+        select: { status: true },
+      });
+      if (conversation.Order && orderFreshTeam) {
+        conversation.Order.status = orderFreshTeam.status;
+      }
+
+      // Notify team members (hiring outreach — choose flow also sends acceptance)
       for (const memberId of teamMemberIds) {
         await this.notificationsService.createNotificationWithPush(
           memberId,
@@ -979,24 +1032,9 @@ export class HiringService {
         );
       }
 
-      // Process refunds for rejected applicants
-      try {
-        await this.orderPricingService.processRefundsForRejectedApplicants(
-          hireData.orderId,
-          conversation.id,
-          order.budget || 0
-        );
-      } catch (refundError) {
-        this.logger.error(
-          `Error processing refunds for order ${hireData.orderId}:`,
-          refundError
-        );
-        // Don't fail the hiring process if refunds fail
-      }
-
       return {
         success: true,
-        message: "Hiring request sent successfully",
+        message: "Team hired and order is now in progress",
         conversation,
       };
     } catch (error) {
@@ -1090,6 +1128,109 @@ export class HiringService {
         message: "Unable to check hiring status",
       };
     }
+  }
+
+  /**
+   * Ensures a pending OrderProposal exists for a client-initiated specialist hire, then choose uses it.
+   */
+  private async getOrCreatePendingProposalForDirectHireIndividual(params: {
+    orderId: number;
+    specialistId: number;
+    message: string;
+  }): Promise<number> {
+    const { orderId, specialistId, message } = params;
+
+    const pending = await this.prisma.orderProposal.findFirst({
+      where: { orderId, userId: specialistId, status: "pending" },
+    });
+    if (pending) {
+      return pending.id;
+    }
+
+    const existing = await this.prisma.orderProposal.findFirst({
+      where: { orderId, userId: specialistId },
+    });
+    if (existing) {
+      if (
+        existing.status === "rejected" ||
+        existing.status === "canceled" ||
+        existing.status === "cancelled"
+      ) {
+        await this.prisma.orderProposal.update({
+          where: { id: existing.id },
+          data: { status: "pending", message },
+        });
+        return existing.id;
+      }
+      throw new BadRequestException({
+        error: "PROPOSAL_ALREADY_EXISTS",
+        message: "This specialist already has an application on this order",
+        details: `Existing proposal status: ${existing.status}`,
+      });
+    }
+
+    const created = await this.prisma.orderProposal.create({
+      data: {
+        orderId,
+        userId: specialistId,
+        message,
+        status: "pending",
+      },
+    });
+    return created.id;
+  }
+
+  /**
+   * Ensures a pending OrderProposal exists for a client-initiated team hire.
+   */
+  private async getOrCreatePendingProposalForDirectHireTeam(params: {
+    orderId: number;
+    teamId: number;
+    leadUserId: number;
+    message: string;
+  }): Promise<number> {
+    const { orderId, teamId, leadUserId, message } = params;
+
+    const pending = await this.prisma.orderProposal.findFirst({
+      where: { orderId, teamId, status: "pending" },
+    });
+    if (pending) {
+      return pending.id;
+    }
+
+    const existing = await this.prisma.orderProposal.findFirst({
+      where: { orderId, teamId },
+    });
+    if (existing) {
+      if (
+        existing.status === "rejected" ||
+        existing.status === "canceled" ||
+        existing.status === "cancelled"
+      ) {
+        await this.prisma.orderProposal.update({
+          where: { id: existing.id },
+          data: { status: "pending", message },
+        });
+        return existing.id;
+      }
+      throw new BadRequestException({
+        error: "PROPOSAL_ALREADY_EXISTS",
+        message: "This team already has an application on this order",
+        details: `Existing proposal status: ${existing.status}`,
+      });
+    }
+
+    const created = await this.prisma.orderProposal.create({
+      data: {
+        orderId,
+        userId: leadUserId,
+        leadUserId,
+        teamId,
+        message,
+        status: "pending",
+      },
+    });
+    return created.id;
   }
 
   private validateHireData(hireData: {

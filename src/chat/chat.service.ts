@@ -217,6 +217,10 @@ export class ChatService {
             title: true,
             status: true,
             clientId: true,
+            Proposals: {
+              where: { status: "pending" },
+              select: { id: true },
+            },
           },
         },
       },
@@ -1598,8 +1602,13 @@ export class ChatService {
 
   /**
    * Choose application
+   * @param preferredProposalId When set (e.g. direct hire), that pending proposal is accepted instead of the first in list order.
    */
-  async chooseApplication(orderId: number, clientId: number) {
+  async chooseApplication(
+    orderId: number,
+    clientId: number,
+    preferredProposalId?: number
+  ) {
     return this.prisma
       .$transaction(async (tx) => {
         // Verify the client owns this order
@@ -1625,9 +1634,18 @@ export class ChatService {
           throw new Error("No pending proposals found");
         }
 
-        // For now, we'll choose the first proposal
-        // TODO: Allow client to specify which proposal to choose
-        const chosenProposal = order.Proposals[0];
+        let chosenProposal = order.Proposals[0];
+        if (preferredProposalId !== undefined) {
+          const preferred = order.Proposals.find(
+            (p) => p.id === preferredProposalId
+          );
+          if (!preferred) {
+            throw new Error(
+              "Specified proposal not found or is not pending for this order"
+            );
+          }
+          chosenProposal = preferred;
+        }
 
         // Update the chosen proposal to accepted
         await tx.orderProposal.update({
